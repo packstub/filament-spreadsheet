@@ -25,16 +25,17 @@
 | Ctrl + Enter | Add a row (when the sheet is creatable) |
 | Right-click a row | The row menu (delete / keep) |
 
-`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet.
+`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, Ctrl+Z takes the row away.
 
 ## Paste from Excel, Google Sheets or Numbers
 
 Copy a block in your spreadsheet, select the top-left cell in the sheet, Ctrl+V. The block lands there, column by column, each cell read by the column's type ([Columns](columns.md)): `1 234,50` becomes 1234.5 in a number column, `Paint` the option with that label in a select, `yes` a tick, `28/02/2026` a date when the column shows `d/m/Y`. Quoted cells (a newline inside a cell) are read the way Excel writes them.
 
-- A cell that cannot be read (`abc` in a number) is pasted as it is and painted red at once, with the reason on hover; the server would refuse it too. Fix it or undo.
+- A cell that cannot be read (`abc` in a number) is pasted as it is and painted red at once, with the reason on hover, in a new row too; the server would refuse it too. Fix it or undo.
 - A cell that cannot be edited (a read-only column, a locked cell, a row you may not update) is skipped; the toolbar says how many were.
-- Columns past the last one are ignored; rows past the last one become **new rows** when the sheet is `creatable()`, starting from the columns' defaults.
+- Columns past the last one are ignored; rows past the last one become **new rows** when the sheet is `creatable()`, starting from the columns' defaults. New rows stop at the config's `max_rows_per_save` (2,000 by default, counting the changed and deleted rows too), and the toolbar says how many lines were left out: save, then paste the rest.
 - One copied cell pasted over a selection fills the whole selection, as in Excel.
+- A paste is one step for undo: Ctrl+Z takes the whole block back, the rows it created included.
 
 ## Fill down
 

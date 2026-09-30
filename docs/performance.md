@@ -13,11 +13,11 @@ The default page is 100 rows; the toolbar goes up to `max_per_page` (1,000). The
 
 ## Saves
 
-`max_rows_per_save` (2,000) caps a batch. A few hundred rows save in a fraction of a second in either mode; `PerRow` opens one transaction per row, `AllOrNothing` one for all. Heavy `afterSave()` work belongs in a queued job dispatched from the hook or from a `RowsSaved` listener.
+`max_rows_per_save` (2,000) caps a batch; the browser knows the cap, so a paste past the last row stops creating rows there and says how many lines were left out. A few hundred rows save in a fraction of a second in either mode; both run in one transaction, `PerRow` with a savepoint per row. Heavy `afterSave()` work belongs in a queued job dispatched from the hook or from a `RowsSaved` listener.
 
 ## The bundle
 
-Tabulator and the sheet's own code are one minified ES module (about 285 KB, 75 KB gzipped) and one stylesheet (41 KB, 6 KB gzipped), loaded on request only on pages that show a sheet (`x-load`), cached like any Filament asset. Pages without a sheet pay nothing.
+Tabulator and the sheet's own code are one minified ES module (about 291 KB, 74 KB gzipped) and one stylesheet (42 KB, 6 KB gzipped), loaded on request only on pages that show a sheet (`x-load`), cached like any Filament asset. Pages without a sheet pay nothing.
 
 ## Locking
 

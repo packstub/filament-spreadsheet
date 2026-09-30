@@ -35,9 +35,9 @@ The answer carries the saved rows as they are after casts, mutators and database
 
 Both modes run the batch inside one transaction, and `afterSave()` inside it too.
 
-**AllOrNothing** rolls everything back on one refused row (a rule, a policy, a conflict, a database error); every error of every row still comes back, so the user fixes them all and saves once more. Right for data that must stay consistent as a set (prices and their costs, a schedule).
+**AllOrNothing** rolls everything back on one refused row (a rule, a policy, a conflict, a database error); every error of every row still comes back, so the user fixes them all and saves once more. A row the database refuses (a `NOT NULL` column without a `required` rule, a delete blocked by a foreign key) is marked like any other ("This row could not be saved." / "This row could not be deleted.") and the exception is reported; the rows after it are still checked, not written. Right for data that must stay consistent as a set (prices and their costs, a schedule).
 
-**PerRow** writes each row to a savepoint of that transaction: a row the database refuses is rolled back on its own and reported, the good rows are kept and committed with the batch, and stay in the sheet only if refused. Right for long lists where one bad cell should not hold up the rest. An exception after the rows (`afterSave()`'s) still rolls the whole batch back, so the answer "The save did not go through." is always true.
+**PerRow** writes each row to a savepoint of that transaction: a row the database refuses is rolled back on its own, reported and marked the same way, the good rows are kept and committed with the batch, and stay in the sheet only if refused. Right for long lists where one bad cell should not hold up the rest. An exception after the rows (`afterSave()`'s) still rolls the whole batch back, so the answer "The save did not go through." is always true.
 
 In both modes a batch larger than `max_rows_per_save` (2,000 by default) is refused before anything is read, and a row carrying more cells than twice the sheet's columns is refused with one row message rather than an error per key.
 
@@ -49,7 +49,7 @@ Every row the browser loads carries a **version**: the raw value of `updated_at`
 
 ## Refusing a save
 
-`beforeSave()` runs before anything is written and may throw `SaveRejected` with a message the user sees; `afterSave()` runs inside the transaction in both modes (an exception rolls the save back; a `SaveRejected` shows its message, anything else a generic one). Any other exception while writing (the database's, a hook's) is reported to the exception handler and answered with "The save did not go through.": an exception's text is for the log, never for the notification.
+`beforeSave()` runs before anything is written and may throw `SaveRejected` with a message the user sees; `afterSave()` runs inside the transaction in both modes (an exception rolls the save back; a `SaveRejected` shows its message, anything else a generic one). A database refusal while writing a row lands on that row (see above); any other exception (a model observer's, a hook's) is reported to the exception handler and answered with "The save did not go through.": an exception's text is for the log, never for the notification.
 
 ## Deleting through the API
 

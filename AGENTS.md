@@ -38,7 +38,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~289 KB / 74 KB gzip, 42 KB / 6 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~291 KB / 74 KB gzip, 42 KB / 6 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
@@ -60,7 +60,12 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   maps are cast `(object)` in `toArray()` so an id-keyed map never becomes a JSON list.
 - Errors: a `SaveRejected`'s message is shown; any other exception is `report()`ed and answered with the generic
   string (`failed`, `load_failed`, `row_failed`). `Spreadsheet::save()` lets exceptions propagate after the rollback;
-  the trait catches them.
+  the trait catches them. `write()` turns a `QueryException` into a row error in both modes (`row_failed`, or
+  `row_delete_failed` for a delete): in PerRow the savepoint rolls the row back, in AllOrNothing `$writesAborted`
+  stops the later writes (Postgres aborts the transaction after a failed statement) while their checks still run,
+  then `RolledBack` answers with every row marked. Anything that is not a `QueryException` propagates in AllOrNothing.
+- `findRecords()` on an integer key type keeps only keys that fit a 64-bit integer (`isIntegerKey()`); the rest are
+  answered as missing without a query.
 - Every error of a row at once: a cell that fails coercion does not stop the validation of the row's other cells.
   A new row is validated over every editable column; an update over the changed ones (with `unique` ignoring the
   record).
@@ -75,10 +80,19 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   Escape); `selectableRangeColumns` is off (a header click sorts, it must not select the column);
   `selectableRangeClearCells` is off too: Delete, Backspace and Ctrl+X are the component's (`clearSelection()` through
   `S.clearPlan()` / `S.editable()`, Tabulator's cleared locked and computed cells) and `onRangeEdit()` re-checks what the
-  fill handle wrote. Sheet shortcuts other than Ctrl+S apply only while the grid has focus. `refresh()` carries a
-  sequence number; a stale answer is dropped. Anything Tabulator renders from data goes in as an element with
-  `textContent` (select option labels via `itemFormatter`, the placeholder), never as a string it would `innerHTML`.
-  Data calls await `tableBuilt`.
+  fill handle wrote. Sheet shortcuts other than Ctrl+S apply only outside a text field (`input, textarea, select,
+  [contenteditable]`) that is not the grid's own editor: a toolbar button is no such field, and every toolbar action
+  (`undo()`, `redo()`, `addRow()`, `discard()`, `deleteSelected()`, `runMenu()`, the `save()` tail) ends with
+  `refocus()`, which hands the focus back to the grid unless a text field holds it (Ctrl+S from the search box keeps
+  the caret there). `refresh()` carries a sequence number (`_req`); a stale answer is dropped, and `save()` bumps it
+  too: a page request in flight when a save lands is dropped (`loading` reset) and re-run after the save, so its stale
+  rows and versions never cover the saved ones. Undo steps: `edit`, `create`/`uncreate`, `delete`/`undelete`, and the
+  compound `paste` (`S.applyPaste()`: the edits, the created rows with their temp ids and the cells it could not read,
+  replayed together; a paste's new rows stop at `maxRowsPerSave` from the config, `capped` counted in the hint). A
+  `pastePlan` invalid entry for a new row carries `created: k` (the index into `plan.created`), resolved to the temp id
+  by `applyPaste()`. `removeRows()` of many ids runs under `blockRedraw()`. Anything Tabulator renders from data goes in
+  as an element with `textContent` (select option labels via `itemFormatter`, the placeholder), never as a string it
+  would `innerHTML`. Data calls await `tableBuilt`.
 - In the Blade view, an element with `x-show` binds `:style` with the object syntax; nothing stored is interpolated
   into `wire:click` / `x-on:` expressions.
 - Render once: `$spreadsheetRendered` (`#[Locked]`) makes `getSpreadsheetConfig()` skip `rows()` after the render
