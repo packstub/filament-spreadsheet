@@ -29,6 +29,7 @@ export default function packstubSpreadsheet(config) {
         total: 0,
         perPage: config.perPage ?? 100,
         pageSizes: config.pageSizes ?? [100],
+        maxRowsPerSave: Number(config.maxRowsPerSave) > 0 ? Number(config.maxRowsPerSave) : null,
         sort: { ...(config.sort ?? { column: null, direction: 'asc' }) },
         searchable: !! config.searchable,
         creatable: !! config.creatable,
@@ -263,20 +264,15 @@ export default function packstubSpreadsheet(config) {
                 selection: { rows: sel.rows.length, cols: sel.cols.length }, t,
             })
 
-            S.applyEdits(this.buffer, plan.edits, { page: this.page })
-            const added = []
-            for (const c of plan.created) {
-                const temp = S.addCreated(this.buffer, c.values)
-                added.push(temp)
-            }
-            for (const i of plan.invalid) {
-                if (i.id === null) continue
-                this.buffer.errors[i.id] ??= {}
-                this.buffer.errors[i.id][i.col] = i.error
-            }
-            if (added.length) this.grid.addRows(added.map((temp) => this.createdRow(temp)))
+            // One undo step for the whole paste; new rows stop at the server's cap on rows per save.
+            const out = S.applyPaste(this.buffer, plan, { page: this.page, maxRows: this.maxRowsPerSave })
+            if (out.created.length) this.grid.addRows(out.created.map((c) => this.createdRow(c.id)))
             this.repaint(plan.edits.map((e) => e.id))
-            if (plan.skipped) this.flash(choice(t.paste_skipped ?? ':count cells could not be pasted', plan.skipped))
+
+            const hints = []
+            if (out.capped) hints.push(choice(t.paste_capped ?? ':count rows were not added: a save takes at most :max rows.', out.capped, { max: this.maxRowsPerSave }))
+            if (plan.skipped) hints.push(choice(t.paste_skipped ?? ':count cells could not be pasted', plan.skipped))
+            if (hints.length) this.flash(hints.join(' '))
         },
 
         fillDown() {
@@ -291,11 +287,13 @@ export default function packstubSpreadsheet(config) {
         undo() {
             const r = S.undo(this.buffer)
             if (r) this.applyReplay(r)
+            this.refocus()
         },
 
         redo() {
             const r = S.redo(this.buffer)
             if (r) this.applyReplay(r)
+            this.refocus()
         },
 
         applyReplay(r) {
@@ -309,6 +307,7 @@ export default function packstubSpreadsheet(config) {
             const temp = S.addCreated(this.buffer, this.defaults())
             this.grid.addRows([this.createdRow(temp)])
             this.sync()
+            this.refocus()
         },
 
         deleteSelected() {
@@ -319,6 +318,21 @@ export default function packstubSpreadsheet(config) {
             if (! ids.length) return
             if (! window.confirm(choice(t.confirm_delete, ids.length))) return
             this.markDeleted(ids)
+            this.refocus()
+        },
+
+        /**
+         * After a toolbar button or a menu item the keyboard goes back to the grid, so
+         * the next shortcut reaches the sheet (a clicked button keeps the focus, or
+         * drops it on the body when it disables itself). A text field keeps it: Ctrl+S
+         * in the search box must not move the caret into the grid.
+         */
+        refocus() {
+            if (! this.grid) return
+            const el = document.activeElement
+            if (el && el !== document.body && this.$refs.grid?.contains(el)) return
+            if (el && el.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return
+            this.grid.focus()
         },
 
         markDeleted(ids) {
@@ -336,9 +350,25 @@ export default function packstubSpreadsheet(config) {
 
         async save() {
             if (this.saving || this.readOnly) return
-            if (! this.dirty.total) { this.flash(t.nothing_to_save); return }
+            if (! this.dirty.total) { this.flash(t.nothing_to_save); this.refocus(); return }
             if (this.grid.isEditing()) { this.grid.focus(); await new Promise((r) => setTimeout(r, 0)) }
 
+            // A page request still in flight (a debounced search, say) would land after the
+            // save and lay its stale rows and versions over the saved ones: its answer is
+            // dropped here, and the page asked for again once the save is answered.
+            const pending = this.loading
+            this._req++
+            this.loading = false
+
+            try {
+                await this.performSave()
+            } finally {
+                if (pending) this.refresh()
+                this.refocus()
+            }
+        },
+
+        async performSave() {
             const payload = S.buildPayload(this.buffer)
             this.saving = true
             let result
@@ -393,6 +423,7 @@ export default function packstubSpreadsheet(config) {
             if (! window.confirm(t.confirm_discard)) return
             S.discard(this.buffer)
             this.renderPage()
+            this.refocus()
         },
 
         /* ------------------------------------------------------------ navigation */
@@ -431,8 +462,11 @@ export default function packstubSpreadsheet(config) {
 
             if (S.matchesKey(e, keys.save)) { e.preventDefault(); this.save(); return }
 
-            // Outside the grid (the search box, a filter, a toolbar button) every other key keeps its browser meaning: Ctrl+Z there undoes the typing, not the sheet.
-            if (! this.$refs.grid?.contains(e.target)) return
+            // In a text field outside the grid (the search box, a filter) every other key keeps its
+            // browser meaning: Ctrl+Z there undoes the typing, not the sheet. A toolbar button is
+            // no such field: Ctrl+Y right after a click on Undo redoes.
+            const field = e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
+            if (field && ! this.$refs.grid?.contains(field)) return
 
             if (S.matchesKey(e, keys.undo) && ! editing) { e.preventDefault(); this.undo(); return }
             if ((S.matchesKey(e, keys.redo) || S.matchesKey(e, S.parseKeybinding('mod+shift+z'))) && ! editing) { e.preventDefault(); this.redo(); return }
@@ -511,6 +545,7 @@ export default function packstubSpreadsheet(config) {
             if (! id) return
             if (name === 'delete') this.markDeleted([id])
             if (name === 'keep') this.keepRow(id)
+            this.refocus()
         },
 
         closeMenu() {

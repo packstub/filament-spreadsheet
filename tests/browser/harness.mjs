@@ -45,6 +45,8 @@ export const config = {
     ],
     perPage: 100, pageSizes: [25, 50, 100, 200, 500, 1000], sort: { column: 'sku', direction: 'asc' },
     searchable: true, creatable: true, deletable: true, readOnly: false, saveMode: 'all_or_nothing', versioned: true,
+    // The server's cap on rows per save (2,000 by default); small here so the paste-past-the-cap case stays quick.
+    maxRowsPerSave: 300,
     confirmLeave: true, frozenFirstColumn: true, rowHeight: 32, keybindings: {}, locale: 'en', height: '32rem', state: null, i18n,
 }
 

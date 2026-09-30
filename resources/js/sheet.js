@@ -368,6 +368,10 @@ export function applyEdits(buffer, edits, { record = true, page = null } = {}) {
         // The version and page travel with the undo step: a redo of a row's first edit needs them too.
         applied.push({ id: e.id, col: e.col, from: e.from, to: e.to, version: e.version ?? null, page: e.page ?? page ?? 1 })
 
+        // A cell edited again is no longer the one the last save refused: its error and conflict go, on a new row too.
+        if (buffer.errors[e.id]) delete buffer.errors[e.id][e.col]
+        if (buffer.conflicts[e.id]) delete buffer.conflicts[e.id][e.col]
+
         if (isCreated(buffer, e.id)) {
             buffer.created[e.id][e.col] = e.to
             continue
@@ -386,9 +390,6 @@ export function applyEdits(buffer, edits, { record = true, page = null } = {}) {
             buffer.changes[e.id] ??= {}
             buffer.changes[e.id][e.col] = e.to
         }
-
-        if (buffer.errors[e.id]) delete buffer.errors[e.id][e.col]
-        if (buffer.conflicts[e.id]) delete buffer.conflicts[e.id][e.col]
     }
 
     if (record && applied.length) {
@@ -515,9 +516,71 @@ function replay(buffer, step, inverse) {
             }
             break
         }
+        case 'paste': {
+            // One step for the whole paste: the edits and the rows it created go and come back together.
+            if (inverse) {
+                for (const c of [...step.created].reverse()) {
+                    removeCreated(buffer, c.id, { record: false })
+                    out.removed.push(c.id)
+                }
+                out.edits = applyEdits(buffer, [...step.edits].reverse().map((e) => ({ ...e, from: e.to, to: e.from })), { record: false })
+            } else {
+                out.edits = applyEdits(buffer, step.edits, { record: false })
+                for (const c of step.created) {
+                    addCreated(buffer, c.values, { record: false, id: c.id })
+                    out.created.push({ id: c.id, values: { ...c.values } })
+                }
+                paintInvalid(buffer, step.invalid ?? [])
+            }
+            break
+        }
     }
 
     return out
+}
+
+/** @param {Array<{ id: string, col: string, error: string }>} invalid */
+function paintInvalid(buffer, invalid) {
+    for (const i of invalid) {
+        buffer.errors[i.id] ??= {}
+        buffer.errors[i.id][i.col] = i.error
+    }
+}
+
+/**
+ * Apply a paste plan to the buffer as one undo step: the edits, the rows it
+ * creates and the cells it could not read, so Ctrl+Z after a paste that made a
+ * thousand rows takes the whole paste back at once. `maxRows` (the server's
+ * `max_rows_per_save`) caps the rows the buffer may hold: past it no row is
+ * created and `capped` counts the lines left out. Returns { edits, created:
+ * [{ id, values }], invalid: [{ id, col, error }] (the new rows' by their temp
+ * id), capped }.
+ */
+export function applyPaste(buffer, plan, { page = null, maxRows = null } = {}) {
+    const edits = applyEdits(buffer, plan.edits, { record: false, page })
+
+    const s = summary(buffer)
+    const room = maxRows === null || maxRows === undefined ? Infinity : Math.max(0, maxRows - (s.rows + s.created + s.deleted))
+    const created = []
+    for (const c of plan.created.slice(0, room)) {
+        const id = addCreated(buffer, c.values, { record: false })
+        created.push({ id, values: { ...c.values } })
+    }
+    const capped = plan.created.length - created.length
+
+    const invalid = []
+    for (const i of plan.invalid) {
+        if (i.id !== null) invalid.push({ id: i.id, col: i.col, error: i.error })
+        else if (created[i.created]) invalid.push({ id: created[i.created].id, col: i.col, error: i.error })
+    }
+    paintInvalid(buffer, invalid)
+
+    if (edits.length || created.length) {
+        buffer.undo.push({ type: 'paste', edits, created, invalid })
+        buffer.redo = []
+    }
+
+    return { edits, created, invalid, capped }
 }
 
 /** The Save payload: what the server's SavePayload::fromArray() reads. */
@@ -645,7 +708,9 @@ export function editable(column, row, readOnly = false) {
  * rows on the page (each { id, values, locked, readOnly, deleted }) and the
  * visible columns. A single pasted cell over a wider selection fills it (as in
  * Excel); rows past the last one become new rows when creatable. Returns
- * { edits: [{ id, col, from, to }], created: [{ values }], invalid: [{ id, col, error }], skipped: count }.
+ * { edits: [{ id, col, from, to }], created: [{ values }], invalid: [{ id, col, error }], skipped: count };
+ * an unreadable cell of a new row has `id: null` and `created`, its index into `created`
+ * (the row has no id until applyPaste() adds it).
  */
 export function pastePlan({ matrix, startRow, startCol, rows, columns, creatable = false, readOnly = false, defaults = {}, selection = null, t = {} }) {
     let cells = matrix
@@ -674,7 +739,7 @@ export function pastePlan({ matrix, startRow, startCol, rows, columns, creatable
                 if (! column.editable || column.readOnly) { out.skipped++; return }
                 const res = coerce(column, raw, t)
                 fresh.values[column.name] = res.value
-                if (! res.ok) out.invalid.push({ id: null, col: column.name, error: res.error })
+                if (! res.ok) out.invalid.push({ id: null, created: out.created.length - 1, col: column.name, error: res.error })
 
                 return
             }

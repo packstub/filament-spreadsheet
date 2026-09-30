@@ -379,11 +379,18 @@ export function createGrid(element, options) {
             return table.addData(rows, top)
         },
 
+        /** Take rows away; many at once (the undo of a big paste) are removed under one redraw. */
         async removeRows(ids) {
             await ready
-            for (const id of ids) {
-                current.delete(String(id))
-                table.getRow(id)?.delete()
+            const many = ids.length > 1
+            if (many) table.blockRedraw()
+            try {
+                for (const id of ids) {
+                    current.delete(String(id))
+                    table.getRow(id)?.delete()
+                }
+            } finally {
+                if (many) table.restoreRedraw()
             }
         },
 

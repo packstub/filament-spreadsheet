@@ -238,25 +238,58 @@ try {
     s = await state()
     check('the new row is created with its defaults and replaced by the real row', s.dirty.total === 0 && s.total === 251 && (await page.evaluate(() => window.__server.products.at(-1))).sku === 'SKU-NEW' && (await page.locator('.tabulator-row.ps-sheet-row-created').count()) === 0, JSON.stringify({ dirty: s.dirty, total: s.total, call: await page.evaluate(() => window.__server.calls.save.at(-1)), last: await page.evaluate(() => window.__server.products.at(-1)) }))
 
-    // paste past the last row creates rows
+    // a new row the server refuses keeps its red cell until the cell is edited, then it clears (as on an existing row)
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await page.waitForTimeout(50)
+    const refusedRow = page.locator('.tabulator-row.ps-sheet-row-created')
+    await refusedRow.locator('.tabulator-cell[tabulator-field="sku"]').click()
+    await page.keyboard.type('SKU-001')
+    await page.keyboard.press('Tab')
+    await page.waitForTimeout(30)
+    await page.keyboard.type('Taken')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction(() => window.__server.calls.save.length === 6)
+    await page.waitForTimeout(80)
+    s = await state()
+    const refusedTemp = await page.evaluate(() => window.sheet().buffer.createdOrder[0])
+    check('a new row the server refuses is painted red with the message', s.errorCount === 1 && s.dirty.created === 1 && ((await refusedRow.locator('.tabulator-cell[tabulator-field="sku"]').getAttribute('class')) ?? '').includes('ps-sheet-cell-error') && (await refusedRow.locator('.tabulator-cell[tabulator-field="sku"]').getAttribute('title')) === 'The SKU has already been taken.', JSON.stringify({ errors: s.errorCount, dirty: s.dirty }))
+    await refusedRow.locator('.tabulator-cell[tabulator-field="sku"]').click()
+    await page.keyboard.type('SKU-FIXED')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('editing the refused cell of a new row clears its error', s.errorCount === 0 && ! ((await refusedRow.locator('.tabulator-cell[tabulator-field="sku"]').getAttribute('class')) ?? '').includes('ps-sheet-cell-error') && (await page.evaluate((temp) => JSON.stringify(window.sheet().buffer.errors[temp]), refusedTemp)) === '{}', JSON.stringify({ errors: s.errorCount, buffer: await page.evaluate((temp) => window.sheet().buffer.errors[temp], refusedTemp) }))
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(50)
+
+    // paste past the last row creates rows, in one undo step, with unreadable cells of the new rows painted red
     await page.evaluate(() => { const sh = window.sheet(); sh.grid.table.scrollToRow(sh.rows.at(-1).id, 'bottom') })
     await page.waitForTimeout(80)
     const lastIndex = await page.evaluate(() => window.sheet().rows.length - 1)
     await page.locator('.tabulator-tableholder .tabulator-row').last().locator('.tabulator-cell[tabulator-field="sku"]').click()
     await page.evaluate(() => {
         const dt = new DataTransfer()
-        dt.setData('text/plain', 'SKU-P1\tPasted one\nSKU-P2\tPasted two\nSKU-P3\tPasted three')
+        dt.setData('text/plain', 'SKU-P1\tPasted one\tTools\nSKU-P2\tPasted two\tnope\nSKU-P3\tPasted three\tGarden')
         document.querySelector('.ps-sheet .tabulator-tableholder').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
     })
     await page.waitForTimeout(80)
     s = await state()
-    check('a paste past the last row creates rows', s.dirty.created === 2 && s.dirty.cells === 2, JSON.stringify(s.dirty) + ` last ${lastIndex}`)
-    await page.keyboard.press('Control+z')
-    await page.keyboard.press('Control+z')
+    check('a paste past the last row creates rows', s.dirty.created === 2 && s.dirty.cells === 3, JSON.stringify(s.dirty) + ` last ${lastIndex}`)
+    const pastedNew = page.locator('.tabulator-row.ps-sheet-row-created')
+    check('an unreadable cell in a pasted new row is painted red at once', s.errorCount === 1 && ((await pastedNew.first().locator('.tabulator-cell[tabulator-field="category_id"]').getAttribute('class')) ?? '').includes('ps-sheet-cell-error') && (await pastedNew.first().locator('.tabulator-cell[tabulator-field="category_id"]').getAttribute('title')) === 'Not one of the options.' && ! ((await pastedNew.nth(1).locator('.tabulator-cell[tabulator-field="category_id"]').getAttribute('class')) ?? '').includes('ps-sheet-cell-error'), JSON.stringify({ errors: s.errorCount, buffer: await page.evaluate(() => window.sheet().buffer.errors) }))
+    check('the paste is one undo step', (await page.evaluate(() => window.sheet().buffer.undo.length)) === 1)
     await page.keyboard.press('Control+z')
     await page.waitForTimeout(50)
     s = await state()
-    check('undo takes the pasted rows away again', s.dirty.total === 0)
+    check('one undo takes the pasted rows and cells away again', s.dirty.total === 0 && s.errorCount === 0 && ! s.canUndo && s.canRedo && (await pastedNew.count()) === 0, JSON.stringify(s.dirty))
+    await page.keyboard.press('Control+y')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('redo brings the whole paste back, red cell included', s.dirty.created === 2 && s.dirty.cells === 3 && s.errorCount === 1 && (await pastedNew.count()) === 2, JSON.stringify(s.dirty))
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(50)
 
     // delete via the row header and the toolbar
     await page.locator('.tabulator-tableholder .tabulator-row').nth(2).locator('.ps-sheet-rownum').click()
@@ -268,7 +301,7 @@ try {
     s = await state()
     check('Delete rows marks the row (struck through) until Save', s.dirty.deleted === 1 && (await page.locator('.tabulator-row.ps-sheet-row-deleted').count()) === 1)
     await page.keyboard.press('Control+s')
-    await page.waitForFunction(() => window.__server.calls.save.length === 6)
+    await page.waitForFunction(() => window.__server.calls.save.length === 7)
     await page.waitForTimeout(80)
     s = await state()
     check('the row is deleted on save', s.total === 250 && (await page.evaluate(() => window.__server.products.length)) === 250 && s.dirty.total === 0)
@@ -383,6 +416,60 @@ try {
     await page.waitForTimeout(80)
     s = await state()
     check('Ctrl+S in the search box still saves', s.dirty.total === 0 && (await page.evaluate(() => window.__server.products.find((p) => p.id === '1').name)) === 'Zed')
+    check('Ctrl+S in the search box leaves the caret there', (await page.evaluate(() => document.activeElement?.tagName + '.' + document.activeElement?.type)) === 'INPUT.search')
+
+    // a toolbar button hands the keyboard back to the grid: Ctrl+Y right after a click on Undo redoes, Ctrl+Z after Add row removes the row
+    await cell(0, 'name').click()
+    await page.keyboard.type('Edited')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    await page.locator('.ps-sheet-seg-btn[aria-label="Undo"]').click()
+    await page.waitForTimeout(50)
+    s = await state()
+    const focusAfterUndo = await page.evaluate(() => document.activeElement?.tagName + (document.activeElement?.closest('.ps-sheet-grid') ? '.grid' : ''))
+    await page.keyboard.press('Control+y')
+    await page.waitForTimeout(50)
+    const afterRedo = await state()
+    check('a click on Undo undoes and Ctrl+Y right after redoes', s.dirty.total === 0 && s.canRedo && focusAfterUndo === 'DIV.grid' && afterRedo.dirty.total === 1 && afterRedo.dirty.cells === 1, JSON.stringify({ afterClick: s.dirty, focusAfterUndo, afterRedo: afterRedo.dirty }))
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await page.waitForTimeout(50)
+    s = await state()
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(50)
+    const afterUndo = await state()
+    check('a click on Add row adds and Ctrl+Z right after removes the row', s.dirty.created === 1 && afterUndo.dirty.created === 0 && afterUndo.dirty.total === 1, JSON.stringify({ afterClick: s.dirty, afterUndo: afterUndo.dirty }))
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('the sheet is clean again', s.dirty.total === 0, JSON.stringify(s.dirty))
+
+    // a save while a page request is in flight: the stale page is dropped, the page asked for again after the save
+    await cell(0, 'name').click()
+    await page.keyboard.type('Zed2')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    const raceSave = await page.evaluate(async () => {
+        const orig = window.__wire.spreadsheetRows
+        window.__wire.spreadsheetRows = async (req) => { const r = await orig(req); await new Promise((res) => setTimeout(res, 400)); return r }
+        const sh = window.sheet()
+        const rowsCalls = window.__server.calls.rows.length
+        sh.refresh()
+        await new Promise((res) => setTimeout(res, 20))
+        await sh.save()
+        const afterSave = { name: sh.rows[0].values.name, version: sh.rows[0].version, dirty: sh.dirty.total, loading: sh.loading }
+        await new Promise((res) => setTimeout(res, 1000))
+        window.__wire.spreadsheetRows = orig
+        return { afterSave, afterRefresh: { name: sh.rows[0].values.name, version: sh.rows[0].version, loading: sh.loading, text: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText, rowsCalls: window.__server.calls.rows.length - rowsCalls, server: window.__server.products.find((p) => p.id === '1').version } }
+    })
+    check('a save while a page request is in flight keeps the saved values and version', raceSave.afterSave.name === 'Zed2' && raceSave.afterSave.dirty === 0 && raceSave.afterRefresh.name === 'Zed2' && raceSave.afterRefresh.text === 'Zed2' && raceSave.afterRefresh.version === raceSave.afterRefresh.server && ! raceSave.afterRefresh.loading && raceSave.afterRefresh.rowsCalls === 2, JSON.stringify(raceSave))
+    await cell(0, 'price').click()
+    await page.keyboard.type('9')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    const versionCarried = await page.evaluate(() => ({ buffer: window.sheet().buffer.versions['1'], server: window.__server.products.find((p) => p.id === '1').version }))
+    check('the next edit on that row carries the current version, not a stale one', versionCarried.buffer === versionCarried.server, JSON.stringify(versionCarried))
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(50)
 
     // overlapping page requests: the answer of the latest request wins, whatever order they land in
     await page.evaluate(() => {
@@ -403,6 +490,28 @@ try {
 
     await page.locator('.ps-sheet-search input').fill('')
     await page.waitForFunction(() => window.sheet().total === 250)
+
+    // a paste past the last row stops creating rows at the server's cap on rows per save (300 in the harness), and says so
+    await page.locator('.ps-sheet-per-page select').selectOption('25')
+    await page.waitForFunction(() => window.sheet().rows.length === 25)
+    await page.waitForTimeout(60)
+    await page.evaluate(() => { const sh = window.sheet(); sh.grid.table.scrollToRow(sh.rows.at(-1).id, 'bottom') })
+    await page.waitForTimeout(80)
+    await page.locator('.tabulator-tableholder .tabulator-row').last().locator('.tabulator-cell[tabulator-field="name"]').click()
+    await page.evaluate(() => {
+        const lines = []
+        for (let i = 0; i < 320; i++) lines.push(`Name ${i}\tTools\t${i}.5`)
+        const dt = new DataTransfer()
+        dt.setData('text/plain', lines.join('\n') + '\n')
+        document.querySelector('.ps-sheet .tabulator-tableholder').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+    })
+    await page.waitForTimeout(150)
+    s = await state()
+    check('a paste past the cap creates rows up to it and reports the rest', s.dirty.created === 299 && s.dirty.rows === 1 && (await page.evaluate(() => window.sheet().grid.table.getRows().length)) === 324 && (await page.locator('.ps-sheet-hint').innerText()).includes('20 rows were not added: a save takes at most 300 rows.'), JSON.stringify({ dirty: s.dirty, hint: await page.locator('.ps-sheet-hint').innerText() }))
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(150)
+    s = await state()
+    check('one undo takes the capped paste away', s.dirty.total === 0 && (await page.evaluate(() => window.sheet().grid.table.getRows().length)) === 25, JSON.stringify(s.dirty))
 
     // dark mode and RTL screenshots
     await page.goto(`http://127.0.0.1:${port}/?dark`)

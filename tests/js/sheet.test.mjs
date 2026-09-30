@@ -347,7 +347,84 @@ test('a paste lands at the anchor, coerces per column, skips what cannot be edit
         { values: { stock: 2, is_active: true, price: 8, category_id: '2' } },
         { values: { stock: 'Pens', is_active: true, price: 9, category_id: null } },
     ])
-    assert.deepEqual(plan.invalid.filter((i) => i.id === null), [{ id: null, col: 'stock', error: 'NaN!' }])
+    // A new row has no id yet: the invalid cell names the row by its index into `created`.
+    assert.deepEqual(plan.invalid.filter((i) => i.id === null), [{ id: null, created: 1, col: 'stock', error: 'NaN!' }])
+})
+
+test('a paste is one undo step: its edits, its new rows and their red cells go and come back together', () => {
+    const rows = [row(1), row(2)]
+    // Columns 1 and 2 are price and stock; the last three lines fall past the end.
+    const plan = S.pastePlan({ matrix: [['5', 'Paint'], ['6', '4'], ['7', 'x'], ['abc', '2']], startRow: 1, startCol: 1, rows, columns, creatable: true, defaults: { is_active: true }, t: T })
+    const b = S.createBuffer()
+    b.errors['2'] = { price: 'old' }
+
+    const out = S.applyPaste(b, plan, { page: 3 })
+
+    assert.deepEqual(out.edits.map(({ id, col, to }) => ({ id, col, to })), [{ id: '2', col: 'price', to: 5 }, { id: '2', col: 'stock', to: 'Paint' }])
+    assert.deepEqual(out.created.map((c) => c.values), [{ is_active: true, price: 6, stock: 4 }, { is_active: true, price: 7, stock: 'x' }, { is_active: true, price: 'abc', stock: 2 }])
+    assert.equal(out.capped, 0)
+    const [n1, n2, n3] = out.created.map((c) => c.id)
+    assert.deepEqual(out.invalid, [{ id: '2', col: 'stock', error: 'NaN!' }, { id: n2, col: 'stock', error: 'NaN!' }, { id: n3, col: 'price', error: 'NaN!' }])
+    assert.deepEqual(b.errors, { 2: { stock: 'NaN!' }, [n2]: { stock: 'NaN!' }, [n3]: { price: 'NaN!' } })
+    assert.equal(b.pages['2'], 3)
+    assert.equal(b.undo.length, 1)
+    assert.equal(b.undo[0].type, 'paste')
+    assert.deepEqual(S.summary(b), { cells: 2, rows: 1, pages: 1, created: 3, deleted: 0, total: 5 })
+
+    const undone = S.undo(b)
+    assert.deepEqual(undone.removed, [n3, n2, n1])
+    assert.deepEqual(undone.edits.map(({ id, col, to }) => ({ id, col, to })), [{ id: '2', col: 'stock', to: 1 }, { id: '2', col: 'price', to: 10 }])
+    assert.deepEqual(S.summary(b).total, 0)
+    assert.deepEqual(b.errors, { 2: {} })
+
+    const redone = S.redo(b)
+    assert.deepEqual(redone.created.map((c) => c.id), [n1, n2, n3])
+    assert.equal(redone.edits.length, 2)
+    assert.deepEqual(b.createdOrder, [n1, n2, n3])
+    assert.deepEqual(b.errors, { 2: { stock: 'NaN!' }, [n2]: { stock: 'NaN!' }, [n3]: { price: 'NaN!' } })
+    assert.equal(S.summary(b).total, 5)
+
+    // A paste that changes nothing records no step.
+    const c = S.createBuffer()
+    assert.equal(S.applyPaste(c, S.pastePlan({ matrix: [['10']], startRow: 0, startCol: 1, rows, columns, t: T })).edits.length, 0)
+    assert.equal(c.undo.length, 0)
+})
+
+test('a paste stops creating rows at the server\'s cap on rows per save and counts the lines left out', () => {
+    const rows = [row(1), row(2), row(3)]
+    const b = S.createBuffer()
+    S.applyEdits(b, [{ id: '1', col: 'price', from: 10, to: 11 }])
+    S.markDeleted(b, ['9'])
+    // 4 rows past the end; the cap of 6 holds the edited row, the deletion, the row this paste edits and three new ones.
+    const plan = S.pastePlan({ matrix: [['a'], ['b'], ['c'], ['d'], ['e']], startRow: 2, startCol: 0, rows, columns, creatable: true, t: T })
+    const out = S.applyPaste(b, plan, { maxRows: 6 })
+
+    assert.equal(out.edits.length, 1)
+    assert.equal(out.created.length, 3)
+    assert.equal(out.capped, 1)
+    assert.deepEqual(b.createdOrder.map((id) => b.created[id].sku), ['b', 'c', 'd'])
+    assert.equal(S.summary(b).rows + S.summary(b).created + S.summary(b).deleted, 6)
+
+    // Undo takes the whole capped paste away; without a cap every row is created.
+    S.undo(b)
+    assert.deepEqual(b.createdOrder, [])
+    assert.equal(S.applyPaste(S.createBuffer(), plan, {}).created.length, 4)
+    // A cap of one is spent on the edited row: no new row at all.
+    assert.equal(S.applyPaste(S.createBuffer(), plan, { maxRows: 1 }).capped, 4)
+})
+
+test('editing a refused cell of a new row clears its error too', () => {
+    const b = S.createBuffer()
+    const temp = S.addCreated(b, { sku: 'SKU-001' })
+    b.errors[temp] = { sku: 'taken', price: 'min' }
+
+    S.applyEdits(b, [{ id: temp, col: 'sku', from: 'SKU-001', to: 'SKU-NEW' }])
+    assert.deepEqual(b.errors[temp], { price: 'min' })
+    assert.equal(S.errorCount(b), 1)
+
+    // Typing the same value again is no edit and keeps the error.
+    S.applyEdits(b, [{ id: temp, col: 'price', from: 'x', to: 'x' }])
+    assert.deepEqual(b.errors[temp], { price: 'min' })
 })
 
 test('a paste past the end without creatable, into a read-only sheet, or past the last column is skipped', () => {
