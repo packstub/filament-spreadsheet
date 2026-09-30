@@ -13,9 +13,10 @@
 | Enter while editing | Commit and move down |
 | Tab / Shift + Tab while editing | Commit and move right / left |
 | Escape | Cancel the edit (the menu, too) |
-| Delete, Backspace | Clear the selected cells |
+| Delete, Backspace | Clear the selected cells (the ones you may edit: a locked, read-only or computed cell stays) |
 | Enter, Space or a double-click on a boolean | Flip it |
 | Ctrl + C | Copy the selection as tab-separated text (labels for selects, ISO dates, TRUE/FALSE) |
+| Ctrl + X | Cut: copy the selection, then clear the cells you may edit |
 | Ctrl + V | Paste at the selection (see below) |
 | Ctrl + D | Fill the first row of the selection down into the rows below |
 | Drag the small square at the selection's corner | Fill neighbouring cells |
@@ -24,7 +25,7 @@
 | Ctrl + Enter | Add a row (when the sheet is creatable) |
 | Right-click a row | The row menu (delete / keep) |
 
-`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo and add-row can be changed in the config (`keybindings`).
+`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet.
 
 ## Paste from Excel, Google Sheets or Numbers
 

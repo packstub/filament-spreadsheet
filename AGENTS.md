@@ -38,7 +38,9 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~285 KB / 75 KB gzip, 41 KB / 6 KB).
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~289 KB / 74 KB gzip, 42 KB / 6 KB),
+  each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
+  checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
   (`harness.mjs` turns the real Blade view into a static page with a fake `$wire`; `run.mjs` drives it in Chromium
   through a sibling project's `playwright-core`; screenshots in `tests/browser/screenshots`, ignored).
@@ -70,8 +72,13 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   `repaint()` paints classes on existing cells and never `reformat()`s a row (that would rebuild the DOM under an
   open editor); Tab while editing is handled by the component (blur commits synchronously, then move), never by
   Tabulator's edit-next; booleans have no editor (double-click, Enter or Space flip them: `tickCross` stayed open on
-  Escape); `selectableRangeColumns` is off (a header click sorts, it must not select the column). Data calls await
-  `tableBuilt`.
+  Escape); `selectableRangeColumns` is off (a header click sorts, it must not select the column);
+  `selectableRangeClearCells` is off too: Delete, Backspace and Ctrl+X are the component's (`clearSelection()` through
+  `S.clearPlan()` / `S.editable()`, Tabulator's cleared locked and computed cells) and `onRangeEdit()` re-checks what the
+  fill handle wrote. Sheet shortcuts other than Ctrl+S apply only while the grid has focus. `refresh()` carries a
+  sequence number; a stale answer is dropped. Anything Tabulator renders from data goes in as an element with
+  `textContent` (select option labels via `itemFormatter`, the placeholder), never as a string it would `innerHTML`.
+  Data calls await `tableBuilt`.
 - In the Blade view, an element with `x-show` binds `:style` with the object syntax; nothing stored is interpolated
   into `wire:click` / `x-on:` expressions.
 - Render once: `$spreadsheetRendered` (`#[Locked]`) makes `getSpreadsheetConfig()` skip `rows()` after the render

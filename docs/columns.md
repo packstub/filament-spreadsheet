@@ -22,6 +22,8 @@ TextColumn::make('name')
 
 Rules are validated with Laravel's validator, with the type's own rules added. A `unique` rule, as a string (`unique:products,sku`) or as `Rule::unique('products', 'sku')`, ignores the record being updated, so an unchanged SKU never conflicts with itself.
 
+A cleared cell (Delete, an empty pasted cell, the empty choice of a select) is written as `null` unless a `required` rule refuses it: the column's rules run before `nullable`, so `required` still fails on the empty cell while the type's rules (`numeric`, `date_format`, `in`…) let it through. Give every `NOT NULL` column a `required` rule, so an emptied cell is refused with a message on the cell rather than by the database.
+
 A column whose name contains a dot (`category.name`) reads through the relation and is read-only.
 
 ## `TextColumn`
@@ -30,12 +32,12 @@ A column whose name contains a dot (`category.name`) reads through the relation 
 TextColumn::make('sku')->maxLength(32)
 ```
 
-Strings. `maxLength()` adds a `max:` rule and tells the editor.
+Strings. `maxLength()` adds a `max:` rule and sets the editor's `maxlength`, so typing stops there (a paste is still validated, and refused with the rule's message).
 
 ## `NumberColumn`
 
 ```php
-NumberColumn::make('price')->decimals(2)->min(0)->max(9999)->step(0.5)
+NumberColumn::make('price')->decimals(2)->min(0)->max(9999)
 NumberColumn::make('stock')->integer()->min(0)
 ```
 
@@ -68,7 +70,9 @@ DateColumn::make('available_on')->format('d/m/Y')
 DateTimeColumn::make('published_at')->format('M j, Y H:i')
 ```
 
-For `date` and `datetime` casts (or plain `Y-m-d` / `Y-m-d H:i:s` strings). On the wire the value is ISO (`2026-02-28`, `2026-02-28 09:30:00`, the model's timezone as Eloquent reads it); the cell shows it in `format()` (default: the config's `date_format` / `datetime_format`) and edits it with the browser's date or date-time input. A paste is read as ISO or in the display format when it is numeric (`28/02/2026` for `d/m/Y`, `28.02.2026 09:30` for `d.m.Y H:i`, a `g:i a` time with am/pm); month names are shown but not read back. Nothing is guessed: `2026-02-30` or `tomorrow` are refused.
+For `date` and `datetime` casts (or plain `Y-m-d` / `Y-m-d H:i:s` strings). On the wire the value is ISO (`2026-02-28`, `2026-02-28 09:30:00`); the cell shows it in `format()` (default: the config's `date_format` / `datetime_format`) and edits it with the browser's date or date-time input. A paste is read as ISO or in the display format when it is numeric (`28/02/2026` for `d/m/Y`, `28.02.2026 09:30` for `d.m.Y H:i`, a `g:i a` time with am/pm); month names are shown but not read back. Nothing is guessed: `2026-02-30` or `tomorrow` are refused.
+
+A `DateTimeColumn` is wall-clock time in the app's timezone (`app.timezone`), the way Eloquent reads and writes the column: there is no conversion for the viewer's zone, so a user in another zone sees and types the app's clock, not their own. A time inside a DST gap (`03:30` on the night the clocks move forward in `Europe/Bucharest`) does not exist; Carbon moves it to the next valid time (`04:30`) when the record is read, and that is what the sheet shows and saves.
 
 ## `ComputedColumn`
 

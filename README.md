@@ -18,7 +18,7 @@ An **inline-editable table** for bulk editing Eloquent records in Filament: a sh
 
 - **[One Save for hundreds of cells](#saving)**: changed cells wait in the browser (across pages, sorting and search) until you press Save or Ctrl+S; the server writes them in one transaction and answers with the rows as saved. `AllOrNothing` (one bad cell, nothing written, every error shown) or `PerRow` (good rows commit, bad rows come back).
 - **[Rules, policies and conflicts on the server](#saving)**: Laravel validation rules per column (a `unique` rule ignores the record itself), the model's policy (`update`, `create`, `delete`) or your own closures for every row, and an `updated_at` (or version) check that refuses a row someone else changed since you loaded it. Errors land on the cell, in red, with the message.
-- **[Keyboard grid](#editing)**: arrows and Shift+arrows select ranges, Enter or F2 (or just typing) edits, Tab and Enter move, Delete clears, **Ctrl+D fills down**, Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves. A drag handle fills too.
+- **[Keyboard grid](#editing)**: arrows and Shift+arrows select ranges, Enter or F2 (or just typing) edits, Tab and Enter move, Delete clears, Ctrl+X cuts, **Ctrl+D fills down**, Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves. A drag handle fills too.
 - **[Paste from Excel or Sheets](#editing)**: a block of cells lands where the selection is, each column reading it its own way ("1 234,50" becomes a number, "yes" a boolean, "Paint" the option with that label, "28/02/2026" a date in your display format); rows past the last one become new records.
 - **[Column types](#columns)**: `TextColumn`, `NumberColumn` (integer or decimals, min, max), `BooleanColumn`, `SelectColumn` (options, an enum, or a `relationship()`), `DateColumn`, `DateTimeColumn`, `ComputedColumn` (read-only). Per-column `rules()`, `readOnly()` (for some records only), `default()` for new rows, `hidden()`.
 - **[Resource page or standalone page](#installation)**: `SpreadsheetResourcePage` (`/products/sheet`, rows from the resource's query, tenant-scoped, the resource's abilities per row) with a `SheetAction` for the list page, or `SpreadsheetPage` with your own `query()`.
@@ -91,7 +91,7 @@ A column names an attribute and says how to read and write it. Every write is co
 
 ```php
 TextColumn::make('name')->rules(['required'])->maxLength(120),
-NumberColumn::make('price')->decimals(2)->min(0)->step(0.5),
+NumberColumn::make('price')->decimals(2)->min(0),
 NumberColumn::make('stock')->integer()->readOnly(fn (Product $product) => $product->is_locked),
 BooleanColumn::make('is_active')->default(true),
 SelectColumn::make('status')->options(Status::class),
@@ -107,7 +107,7 @@ Read more: [Columns](https://packstub.dev/docs/filament-spreadsheet/columns).
 
 <!-- TODO screenshot: a pasted block with dirty corners, one red cell with its message -->
 
-Click a cell to select it, type to replace it, double-click, Enter or F2 to edit it in place. Enter moves down, Tab moves right, Escape cancels. Shift+arrows select a range; Ctrl+C copies it as tab-separated text (labels for selects, ISO dates), Ctrl+V pastes whatever is on the clipboard, Delete clears it, Ctrl+D fills the first row down, and the small handle at the corner of the selection drags to fill. Ctrl+Z and Ctrl+Y walk the history, across pages. Changed cells get an amber corner; a cell the column cannot read ("abc" in a number) is red at once, before you even save.
+Click a cell to select it, type to replace it, double-click, Enter or F2 to edit it in place. Enter moves down, Tab moves right, Escape cancels. Shift+arrows select a range; Ctrl+C copies it as tab-separated text (labels for selects, ISO dates), Ctrl+X cuts it, Ctrl+V pastes whatever is on the clipboard, Delete clears it (the cells you may edit), Ctrl+D fills the first row down, and the small handle at the corner of the selection drags to fill. Ctrl+Z and Ctrl+Y walk the history, across pages. Changed cells get an amber corner; a cell the column cannot read ("abc" in a number) is red at once, before you even save.
 
 Read more: [Editing](https://packstub.dev/docs/filament-spreadsheet/editing).
 

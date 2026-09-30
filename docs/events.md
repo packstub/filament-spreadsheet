@@ -22,7 +22,7 @@ $spreadsheet
     });
 ```
 
-`beforeSave()` and `afterSave()` refuse the whole save with a `SaveRejected`'s message; any other exception in `afterSave()` rolls the batch back (in both modes the hook runs after the rows, inside the batch's transaction for `AllOrNothing`) and the user sees a generic message while the exception is reported.
+`beforeSave()` and `afterSave()` refuse the whole save with a `SaveRejected`'s message; any other exception in `afterSave()` rolls the batch back in both modes (the hook runs after the rows, inside the batch's transaction; in `PerRow` mode each row is a savepoint of it) and the user sees a generic message while the exception is reported.
 
 ## Laravel events
 

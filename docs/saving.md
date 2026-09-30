@@ -33,11 +33,13 @@ The answer carries the saved rows as they are after casts, mutators and database
 ->saveMode(SaveMode::PerRow)
 ```
 
-**AllOrNothing** wraps the batch in one transaction. One refused row (a rule, a policy, a conflict, a database error) rolls everything back; every error of every row still comes back, so the user fixes them all and saves once more. Right for data that must stay consistent as a set (prices and their costs, a schedule).
+Both modes run the batch inside one transaction, and `afterSave()` inside it too.
 
-**PerRow** writes each row in its own transaction: the good rows commit, the refused ones come back with their reasons and stay in the sheet. Right for long lists where one bad cell should not hold up the rest.
+**AllOrNothing** rolls everything back on one refused row (a rule, a policy, a conflict, a database error); every error of every row still comes back, so the user fixes them all and saves once more. Right for data that must stay consistent as a set (prices and their costs, a schedule).
 
-In both modes a batch larger than `max_rows_per_save` (2,000 by default) is refused before anything is read.
+**PerRow** writes each row to a savepoint of that transaction: a row the database refuses is rolled back on its own and reported, the good rows are kept and committed with the batch, and stay in the sheet only if refused. Right for long lists where one bad cell should not hold up the rest. An exception after the rows (`afterSave()`'s) still rolls the whole batch back, so the answer "The save did not go through." is always true.
+
+In both modes a batch larger than `max_rows_per_save` (2,000 by default) is refused before anything is read, and a row carrying more cells than twice the sheet's columns is refused with one row message rather than an error per key.
 
 ## Conflicts
 
@@ -47,8 +49,8 @@ Every row the browser loads carries a **version**: the raw value of `updated_at`
 
 ## Refusing a save
 
-`beforeSave()` runs before anything is written and may throw `SaveRejected` with a message the user sees; `afterSave()` runs inside the transaction (an exception rolls the save back; a `SaveRejected` shows its message, anything else a generic one). Any other exception while writing (the database's, a hook's) is reported to the exception handler and answered with "The save did not go through.": an exception's text is for the log, never for the notification.
+`beforeSave()` runs before anything is written and may throw `SaveRejected` with a message the user sees; `afterSave()` runs inside the transaction in both modes (an exception rolls the save back; a `SaveRejected` shows its message, anything else a generic one). Any other exception while writing (the database's, a hook's) is reported to the exception handler and answered with "The save did not go through.": an exception's text is for the log, never for the notification.
 
-## Rows outside the sheet
+## Deleting through the API
 
-A `PerRow` save can also delete through `spreadsheetDelete(ids)` / `Spreadsheet::delete(ids)`, the same checks applied. The toolbar itself marks rows and deletes them with the next Save, so a deletion can be undone until then.
+`spreadsheetDelete(ids)` on the component and `Spreadsheet::delete(ids)` on the definition delete by key through the same checks as a Save (`deletable()`, the policy, the save mode). The toolbar itself marks rows and deletes them with the next Save, so a deletion can be undone until then.

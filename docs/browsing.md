@@ -10,7 +10,7 @@ Everything the toolbar does happens on the server, one renderless call per chang
 ->searchable(['sku', 'name', 'category.name'])
 ```
 
-The search box looks in these attributes with `like %term%` (`ilike` on Postgres); a dotted path searches a `BelongsTo`/`HasMany` relation's attribute. Wildcards in the term are escaped, so `100%` finds `100% cotton`. The box debounces; the term is cut at 200 characters.
+The search box looks in these attributes with `like %term%` (`ilike` on Postgres); a dotted path searches a `BelongsTo`/`HasMany` relation's attribute. Wildcards in the term are escaped (with `!` and an explicit `ESCAPE` clause, which SQLite, MySQL and Postgres all parse), so `100%` finds `100% cotton`. The box debounces; the term is cut at 200 characters, and only the latest answer is shown when requests overlap.
 
 ## Sort
 
@@ -19,6 +19,8 @@ The search box looks in these attributes with `like %term%` (`ilike` on Postgres
 ```
 
 A click on a header sorts by that column, another click reverses it; the arrow shows which. Only a sortable column is accepted (a computed column and a dotted path are not; `->sortable(false)` opts a column out): anything else the browser could send falls back to the default sort. The primary key is always the tie-breaker, so pages never overlap.
+
+A sortable column must be a real database column: the sort is an `ORDER BY` on it. A column backed by an accessor, a JSON path or a virtual attribute sorts to a query error ("The rows could not be loaded."), so mark it `->sortable(false)`.
 
 ## Filters
 
