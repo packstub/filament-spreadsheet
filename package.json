@@ -1,0 +1,14 @@
+{
+    "name": "@packstub/filament-spreadsheet",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "node build.mjs",
+        "dev": "node build.mjs --watch",
+        "test": "node --test tests/js/*.test.mjs"
+    },
+    "devDependencies": {
+        "esbuild": "^0.28.2",
+        "tabulator-tables": "^6.6.0"
+    }
+}
