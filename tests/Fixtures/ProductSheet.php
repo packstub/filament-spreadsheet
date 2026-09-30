@@ -13,6 +13,7 @@ use Packstub\Spreadsheet\Columns\SelectColumn;
 use Packstub\Spreadsheet\Columns\TextColumn;
 use Packstub\Spreadsheet\Concerns\InteractsWithSpreadsheet;
 use Packstub\Spreadsheet\Enums\SaveMode;
+use Packstub\Spreadsheet\Exceptions\SaveRejected;
 use Packstub\Spreadsheet\Filter;
 use Packstub\Spreadsheet\SavePayload;
 use Packstub\Spreadsheet\Spreadsheet;
@@ -91,7 +92,7 @@ class ProductSheet extends Component
             ->beforeSave(function (SavePayload $payload): void {
                 static::$beforeSave[] = $payload;
 
-                throw_if(static::$rejectInBeforeSave, new \Packstub\Spreadsheet\Exceptions\SaveRejected('Not today.'));
+                throw_if(static::$rejectInBeforeSave, new SaveRejected('Not today.'));
             })
             ->mutateRowBeforeSave(fn (array $data, ?Product $record) => $data + ['updated_by' => 7])
             ->afterSave(function (Collection $products): void {

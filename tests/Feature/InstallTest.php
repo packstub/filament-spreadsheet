@@ -53,5 +53,5 @@ it('registers the built assets', function () {
 
     expect(File::size("{$root}/spreadsheet.js"))->toBeGreaterThan(10000)
         ->and(File::size("{$root}/spreadsheet.css"))->toBeGreaterThan(1000)
-        ->and(File::get("{$root}/spreadsheet.js"))->toContain('packstubSpreadsheet');
+        ->and(File::get("{$root}/spreadsheet.js"))->toContain('spreadsheetSave', 'Tabulator 6');
 });

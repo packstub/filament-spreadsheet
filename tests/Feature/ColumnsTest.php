@@ -148,3 +148,16 @@ it('labels columns from their name, reads a computed state and marks it read-onl
         ->and(TextColumn::make('name')->default(fn () => 'x')->getDefault())->toBe('x')
         ->and(TextColumn::make('name')->coerce(true))->toBe('1');
 });
+
+it('reads a dotted name through the relation and never writes it', function () {
+    $tools = category('Tools');
+    $product = product('a-1', 'Hammer', ['category_id' => $tools->id]);
+    $column = TextColumn::make('category.name');
+
+    expect($column->present($product))->toBe('Tools')
+        ->and($column->isEditable())->toBeFalse()
+        ->and($column->isSortable())->toBeFalse()
+        ->and($column->getLabel())->toBe('Category.name')
+        ->and(ComputedColumn::make('category.name')->present($product))->toBe('Tools')
+        ->and(save(['changed' => [$product->id => ['category.name' => 'X']]])->errors[$product->id])->toBe(['category.name' => 'This cell cannot be edited.']);
+});

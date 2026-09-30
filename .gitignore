@@ -8,3 +8,5 @@ testbench.yaml
 vendor
 node_modules
 .DS_Store
+tests/browser/screenshots
+tests/browser/.harness.html
