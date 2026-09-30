@@ -66,6 +66,7 @@ return [
     'their_value' => 'Valoarea lor',
     'your_value' => 'Valoarea ta',
     'row_failed' => 'Rândul nu a putut fi salvat.',
+    'too_many_cells' => 'Acest rând conține mai multe celule decât are foaia coloane.',
     'too_many_rows' => 'Prea multe rânduri într-o salvare (cel mult :max). Salvează în loturi mai mici.',
     'error_count' => '{1} :count celulă necesită atenție|[2,*] :count celule necesită atenție',
 ];

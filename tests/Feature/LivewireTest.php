@@ -114,14 +114,19 @@ it('answers a refused save with its reason and a failed one with a generic messa
 
     ProductSheet::$readOnly = false;
     ProductSheet::$failInAfterSave = true;
-    Livewire::test(ProductSheet::class)
-        ->call('spreadsheetSave', ['changed' => [$product->id => ['name' => 'X']]])
-        ->assertReturned(fn ($r) => $r['ok'] === false && $r['message'] === 'The save did not go through.');
+
+    // In both modes: the rows are rolled back, so the generic answer is true and a second save is not a conflict.
+    foreach ([SaveMode::AllOrNothing, SaveMode::PerRow] as $mode) {
+        ProductSheet::$saveMode = $mode;
+        Livewire::test(ProductSheet::class)
+            ->call('spreadsheetSave', ['changed' => [$product->id => ['name' => 'X']]])
+            ->assertReturned(fn ($r) => $r['ok'] === false && $r['message'] === 'The save did not go through.' && $r['rolledBack'] === true);
+
+        expect($product->fresh()->name)->toBe('Hammer', "{$mode->name}: the row was committed although the answer says it was not");
+    }
 
     Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'indexer down');
-    Exceptions::assertReportedCount(1);
-
-    expect($product->fresh()->name)->toBe('Hammer');
+    Exceptions::assertReportedCount(2);
 });
 
 it('deletes renderless through the policy, with crafted ids ignored', function () {

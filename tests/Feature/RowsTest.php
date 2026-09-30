@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Packstub\Spreadsheet\Tests\Fixtures\ProductPolicy;
 use Packstub\Spreadsheet\Tests\Fixtures\ProductSheet;
@@ -77,6 +78,7 @@ it('searches the searchable attributes, a relation\'s too, with the wildcards es
     product('a-1', 'Hammer', ['category_id' => $tools->id]);
     product('b-2', '100% cotton');
     product('c-3', 'Nail');
+    product('d-4', 'Wow! a_b');
 
     $skus = fn (string $search) => array_column(array_column(sheet()->rows(['search' => $search])['rows'], 'values'), 'sku');
 
@@ -84,7 +86,24 @@ it('searches the searchable attributes, a relation\'s too, with the wildcards es
         ->and($skus('tool'))->toBe(['A-1'])
         ->and($skus('100%'))->toBe(['B-2'])
         ->and($skus('%'))->toBe(['B-2'])
-        ->and($skus('  '))->toBe(['A-1', 'B-2', 'C-3']);
+        ->and($skus('!'))->toBe(['D-4'])
+        ->and($skus('a_b'))->toBe(['D-4'])
+        ->and($skus('a-b'))->toBe([])
+        ->and($skus('  '))->toBe(['A-1', 'B-2', 'C-3', 'D-4']);
+});
+
+it('escapes the search with an escape character every database parses', function () {
+    product('a-1');
+    DB::enableQueryLog();
+
+    sheet()->rows(['search' => '100%_!x']);
+    $query = collect(DB::getQueryLog())->first(fn (array $q) => str_contains($q['query'], ' like '));
+    DB::disableQueryLog();
+
+    // A backslash escape (`escape '\'`) is a parse error on MySQL: `\'` is an escaped quote there.
+    expect($query['query'])->toContain("like ? escape '!'")
+        ->not->toContain('\\')
+        ->and($query['bindings'])->toContain('%100!%!_!!x%');
 });
 
 it('sorts by a sortable column only and falls back to the default sort for anything else', function () {

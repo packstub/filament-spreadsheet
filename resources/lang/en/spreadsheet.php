@@ -66,6 +66,7 @@ return [
     'their_value' => 'Their value',
     'your_value' => 'Your value',
     'row_failed' => 'This row could not be saved.',
+    'too_many_cells' => 'This row carries more cells than the sheet has columns.',
     'too_many_rows' => 'Too many rows in one save (at most :max). Save in smaller batches.',
     'error_count' => '{1} :count cell needs attention|[2,*] :count cells need attention',
 ];

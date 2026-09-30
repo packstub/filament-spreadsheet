@@ -66,6 +66,7 @@ return [
     'their_value' => 'Ihr Wert (andere)',
     'your_value' => 'Ihr Wert',
     'row_failed' => 'Diese Zeile konnte nicht gespeichert werden.',
+    'too_many_cells' => 'Diese Zeile enthält mehr Zellen, als das Blatt Spalten hat.',
     'too_many_rows' => 'Zu viele Zeilen in einem Speichervorgang (höchstens :max). Speichern Sie in kleineren Schritten.',
     'error_count' => '{1} :count Zelle braucht Aufmerksamkeit|[2,*] :count Zellen brauchen Aufmerksamkeit',
 ];

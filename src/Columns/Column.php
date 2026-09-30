@@ -236,7 +236,11 @@ abstract class Column
 
     /**
      * The rules Laravel validates the attribute with: the column's own (a `unique`
-     * ignoring the record) and the type's.
+     * ignoring the record), then `nullable`, then the type's. A cleared cell is
+     * null (see coerce()) and the type rules must let it through: without
+     * `nullable` the validator runs `numeric`, `boolean`, `date_format` or `in` on
+     * the null and refuses it. A `required` rule is implicit and still fails on
+     * null, so a column that must not be cleared says `required`.
      *
      * @return array<int, mixed>
      */
@@ -256,7 +260,7 @@ abstract class Column
             }
         }
 
-        return [...$rules, ...$this->typeRules()];
+        return [...$rules, 'nullable', ...$this->typeRules()];
     }
 
     /**

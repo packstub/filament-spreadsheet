@@ -18,8 +18,6 @@ class NumberColumn extends Column
 
     protected int|float|null $max = null;
 
-    protected int|float|null $step = null;
-
     /** Whole numbers only. */
     public function integer(bool $condition = true): static
     {
@@ -46,13 +44,6 @@ class NumberColumn extends Column
     public function max(int|float|null $max): static
     {
         $this->max = $max;
-
-        return $this;
-    }
-
-    public function step(int|float|null $step): static
-    {
-        $this->step = $step;
 
         return $this;
     }
@@ -162,7 +153,6 @@ class NumberColumn extends Column
             'decimals' => $this->integer ? 0 : $this->decimals,
             'min' => $this->min,
             'max' => $this->max,
-            'step' => $this->step,
         ];
     }
 }

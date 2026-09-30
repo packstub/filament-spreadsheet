@@ -58,14 +58,15 @@ abstract class TestCase extends Orchestra
             $table->foreignId('category_id')->nullable();
             $table->string('sku')->unique();
             $table->string('name');
-            $table->decimal('price', 10, 2)->default(0);
+            // Nullable with a default: a cleared cell writes null, a new row starts from the default.
+            $table->decimal('price', 10, 2)->nullable()->default(0);
             $table->decimal('cost', 10, 2)->default(0);
-            $table->integer('stock')->default(0);
-            $table->boolean('is_active')->default(true);
+            $table->integer('stock')->nullable()->default(0);
+            $table->boolean('is_active')->nullable()->default(true);
             $table->boolean('is_locked')->default(false);
             $table->date('available_on')->nullable();
             $table->dateTime('published_at')->nullable();
-            $table->string('status')->default('draft');
+            $table->string('status')->nullable()->default('draft');
             $table->string('notes')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->timestamps();

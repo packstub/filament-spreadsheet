@@ -125,10 +125,11 @@ it('adds the record to a unique rule, as a string or a Rule object, and leaves o
         ->and($rules[3])->toBeInstanceOf(Unique::class)
         ->and((string) $rules[3])->toContain("{$record->id}")
         ->and($rules[4])->toBe('max:32')
-        ->and(array_slice($rules, 5))->toBe(['string', 'max:16'])
+        // `nullable` sits between the column's rules and the type's: a cleared cell passes the type rules, a `required` one still fails.
+        ->and(array_slice($rules, 5))->toBe(['nullable', 'string', 'max:16'])
         ->and($column->getRules(null)[1])->toBe('unique:products,sku')
-        ->and(TextColumn::make('name')->rules('required|min:2')->getRules(null))->toBe(['required', 'min:2', 'string'])
-        ->and(TextColumn::make('name')->rules(fn (?Product $p) => $p ? ['max:5'] : ['max:9'])->getRules($record))->toBe(['max:5', 'string']);
+        ->and(TextColumn::make('name')->rules('required|min:2')->getRules(null))->toBe(['required', 'min:2', 'nullable', 'string'])
+        ->and(TextColumn::make('name')->rules(fn (?Product $p) => $p ? ['max:5'] : ['max:9'])->getRules($record))->toBe(['max:5', 'nullable', 'string']);
 });
 
 it('labels columns from their name, reads a computed state and marks it read-only', function () {

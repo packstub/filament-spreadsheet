@@ -231,7 +231,7 @@ class Spreadsheet
         return $this;
     }
 
-    /** Names the sheet in events and where the browser keeps its state; defaults to the page's class. */
+    /** Names the sheet in `RowsSaved` / `RowSaveFailed` (`$spreadsheet`); defaults to the page's class. */
     public function key(?string $key): static
     {
         $this->key = $key;
@@ -506,12 +506,14 @@ class Spreadsheet
     /* ------------------------------------------------------------------ writing */
 
     /**
-     * Write a batch. Every row is authorised, coerced and validated on the server;
-     * AllOrNothing rolls everything back on the first refused row (all the errors
-     * still come back), PerRow commits the good rows. A refused batch (read-only
-     * sheet, too many rows, beforeSave()) throws SaveRejected with the message for
-     * the user; an exception thrown while writing (the database's, a hook's)
-     * propagates after the rollback, for the caller to report.
+     * Write a batch. Every row is authorised, coerced and validated on the server,
+     * inside one transaction in both modes: AllOrNothing rolls everything back on
+     * the first refused row (all the errors still come back); PerRow writes each
+     * row to a savepoint, so a refused row is rolled back on its own and the good
+     * ones are kept. A refused batch (read-only sheet, too many rows, beforeSave())
+     * throws SaveRejected with the message for the user; an exception thrown after
+     * the rows (afterSave()'s, say) rolls the whole batch back in both modes and
+     * propagates, for the caller to report.
      *
      * @throws SaveRejected
      */
@@ -557,6 +559,8 @@ class Spreadsheet
                     $reason = __('packstub-spreadsheet::spreadsheet.missing');
                 } elseif (! $this->canUpdate($record)) {
                     $reason = __('packstub-spreadsheet::spreadsheet.cannot_update');
+                } elseif ($this->tooManyCells($values)) {
+                    $reason = __('packstub-spreadsheet::spreadsheet.too_many_cells');
                 } elseif ($this->conflicts($record, $payload->version($id), $values, $result)) {
                     $reason = __('packstub-spreadsheet::spreadsheet.conflict');
                 } else {
@@ -588,6 +592,13 @@ class Spreadsheet
                 if (! $this->canCreate()) {
                     $this->refuse($result, $temp, [], __('packstub-spreadsheet::spreadsheet.cannot_create'));
                     $failed[] = [null, $values, [], __('packstub-spreadsheet::spreadsheet.cannot_create')];
+
+                    continue;
+                }
+
+                if ($this->tooManyCells($values)) {
+                    $this->refuse($result, $temp, [], __('packstub-spreadsheet::spreadsheet.too_many_cells'));
+                    $failed[] = [null, $values, [], __('packstub-spreadsheet::spreadsheet.too_many_cells')];
 
                     continue;
                 }
@@ -650,11 +661,8 @@ class Spreadsheet
         };
 
         try {
-            if ($perRow) {
-                $work();
-            } else {
-                DB::connection($this->newModel()->getConnectionName())->transaction($work);
-            }
+            // One transaction in both modes; in PerRow mode write() nests a savepoint per row.
+            DB::connection($this->newModel()->getConnectionName())->transaction($work);
         } catch (RolledBack) {
             $result->rolledBack = true;
             $result->message = __('packstub-spreadsheet::spreadsheet.not_saved');
@@ -738,6 +746,12 @@ class Spreadsheet
     {
         $ids = array_values(array_unique(array_filter($ids, fn ($id) => $id !== '')));
 
+        if ($this->newModel()->getKeyType() === 'int') {
+            // An integer key is queried with integers only: anything else is answered as
+            // missing rather than sent to the database (Postgres refuses `id in ('abc')`).
+            $ids = array_values(array_filter($ids, fn ($id) => ctype_digit((string) $id)));
+        }
+
         if ($ids === []) {
             return [];
         }
@@ -776,11 +790,13 @@ class Spreadsheet
         }
 
         $operator = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-        $like = '%'.addcslashes($term, '%_\\').'%';
+        $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term).'%';
 
-        // An explicit escape character: SQLite has none by default, MySQL and
-        // Postgres accept the clause, so "100%" finds "100% cotton" everywhere.
-        $match = fn (Builder $q, string $column, string $boolean) => $q->whereRaw($q->getGrammar()->wrap($q->qualifyColumn($column))." {$operator} ? escape '\\'", [$like], $boolean);
+        // `!` escapes the wildcards, with an explicit ESCAPE clause: SQLite has no
+        // escape character by default, and a backslash there is a parse error on
+        // MySQL (`'\'` never closes the literal). `!` works on all three, so "100%"
+        // finds "100% cotton" everywhere.
+        $match = fn (Builder $q, string $column, string $boolean) => $q->whereRaw($q->getGrammar()->wrap($q->qualifyColumn($column))." {$operator} ? escape '!'", [$like], $boolean);
 
         $query->where(function (Builder $q) use ($match): void {
             foreach ($this->searchable as $path) {
@@ -902,9 +918,10 @@ class Spreadsheet
     }
 
     /**
-     * One row's write: in PerRow mode inside its own transaction, an exception
-     * reported and turned into a row error; in AllOrNothing mode as part of the
-     * batch's transaction, an exception propagating to roll it all back.
+     * One row's write: in PerRow mode inside its own savepoint (a nested
+     * transaction), an exception rolling that row back, reported and turned into
+     * a row error; in AllOrNothing mode as part of the batch's transaction, an
+     * exception propagating to roll it all back.
      */
     protected function write(SaveResult $result, string $key, bool $perRow, Closure $operation): bool
     {
@@ -938,6 +955,17 @@ class Spreadsheet
         }
 
         $record->forceFill($data)->save();
+    }
+
+    /**
+     * A row carrying far more cells than the sheet has columns did not come from
+     * the grid: it is refused with one reason instead of one error per unknown key.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    protected function tooManyCells(array $values): bool
+    {
+        return count($values) > max(1, 2 * count($this->getColumns()));
     }
 
     /** @param  array<string, string>  $errors */

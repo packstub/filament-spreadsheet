@@ -2,6 +2,7 @@
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Packstub\Spreadsheet\Enums\SaveMode;
@@ -63,8 +64,19 @@ it('coerces what the browser sends by column type and answers with the row after
 it('reads numbers, booleans and dates in every shape a paste brings, and refuses the rest on the cell', function () {
     $product = product('a-1');
 
-    $ok = fn (string $column, mixed $value) => save(['changed' => [$product->id => [$column => $value]]])->saved[$product->id]['values'][$column] ?? null;
-    $error = fn (string $column, mixed $value) => save(['changed' => [$product->id => [$column => $value]]])->errors[$product->id][$column] ?? null;
+    // Both helpers insist on their outcome: a refused save must never read as "null" and pass a ->toBeNull().
+    $ok = function (string $column, mixed $value) use ($product): mixed {
+        $result = save(['changed' => [$product->id => [$column => $value]]]);
+        expect($result->ok())->toBeTrue("{$column} = ".json_encode($value).' was refused: '.json_encode($result->toArray()));
+
+        return $result->saved[$product->id]['values'][$column];
+    };
+    $error = function (string $column, mixed $value) use ($product): string {
+        $result = save(['changed' => [$product->id => [$column => $value]]]);
+        expect(isset($result->errors[$product->id][$column]))->toBeTrue("{$column} = ".json_encode($value).' was not refused on its cell: '.json_encode($result->toArray()));
+
+        return $result->errors[$product->id][$column];
+    };
 
     expect($ok('price', '12'))->toBe(12.0)
         ->and($ok('price', '1 234,5'))->toBe(1234.5)
@@ -90,6 +102,25 @@ it('reads numbers, booleans and dates in every shape a paste brings, and refuses
         ->and($error('status', 'gone'))->toBe('Not one of the options.')
         ->and($error('category_id', '999'))->toBe('Not one of the options.')
         ->and($error('name', ''))->toContain('required');
+});
+
+it('clears a cell of every type to null, unless a required rule refuses the clear', function () {
+    $tools = category('Tools');
+    $product = product('a-1', 'Hammer', ['price' => 5, 'stock' => 3, 'is_active' => true, 'available_on' => '2026-01-01', 'published_at' => '2026-01-01 10:00:00', 'category_id' => $tools->id, 'status' => 'live']);
+    $cleared = ['price' => null, 'stock' => null, 'is_active' => null, 'available_on' => null, 'published_at' => null, 'category_id' => null, 'status' => null];
+
+    // Delete, an empty pasted cell and "" in a select all arrive as '' or null.
+    $result = save(['changed' => [$product->id => ['price' => '', 'stock' => null, 'is_active' => '', 'available_on' => '', 'published_at' => null, 'category_id' => '', 'status' => '']]]);
+
+    expect($result->ok())->toBeTrue(json_encode($result->toArray()))
+        ->and($result->saved[$product->id]['values'])->toMatchArray($cleared)
+        ->and($product->fresh()->getAttributes())->toMatchArray($cleared);
+
+    $refused = save(['changed' => [$product->id => ['name' => '', 'sku' => null]]]);
+
+    expect($refused->errors[$product->id])->toBe(['name' => 'The Name field is required.', 'sku' => 'The Sku field is required.'])
+        ->and($refused->rolledBack)->toBeTrue()
+        ->and($product->fresh()->name)->toBe('Hammer');
 });
 
 it('validates with the column rules, a unique rule ignoring the record itself', function () {
@@ -301,16 +332,21 @@ it('runs beforeSave first and lets it refuse the whole save with its message', f
         ->and($product->fresh()->name)->toBe('Product');
 });
 
-it('rolls back when afterSave throws, letting the exception propagate for the caller to report', function () {
+it('rolls back when afterSave throws, letting the exception propagate for the caller to report', function (SaveMode $mode) {
     Event::fake([RowsSaved::class]);
-    $product = product('a-1');
+    $a = product('a-1');
+    $b = product('b-2');
+    ProductSheet::$saveMode = $mode;
     ProductSheet::$failInAfterSave = true;
 
-    expect(fn () => save(['changed' => [$product->id => ['name' => 'X']]]))->toThrow(RuntimeException::class, 'indexer down')
-        ->and($product->fresh()->name)->toBe('Product');
+    // In PerRow mode the rows are written to savepoints inside the batch's transaction: an afterSave failure rolls them all back too.
+    expect(fn () => save(['changed' => [$a->id => ['name' => 'X'], $b->id => ['name' => 'Y']], 'created' => ['n1' => ['sku' => 'c-3', 'name' => 'New']]]))->toThrow(RuntimeException::class, 'indexer down')
+        ->and($a->fresh()->name)->toBe('Product')
+        ->and($b->fresh()->name)->toBe('Product')
+        ->and(Product::query()->count())->toBe(2);
 
     Event::assertNotDispatched(RowsSaved::class);
-});
+})->with([SaveMode::AllOrNothing, SaveMode::PerRow]);
 
 it('fires RowsSaved once with the updated, created and deleted records', function () {
     Event::fake([RowsSaved::class]);
@@ -367,6 +403,49 @@ it('reads a crafted payload strictly: bad keys, shapes and temporary ids are dro
     expect($result->saved)->toHaveKey((string) $product->id)
         ->and($result->created)->toHaveKey('n-1')
         ->and($result->rowErrors)->toBe(['5' => 'This row is no longer in the sheet.', 'abc' => 'This row is no longer in the sheet.']);
+});
+
+it('refuses a row carrying far more cells than the sheet has columns with one reason, not an error per key', function () {
+    Event::fake([RowSaveFailed::class]);
+    $product = product('a-1');
+    $values = ['name' => 'Ok'];
+
+    foreach (range(1, 1000) as $i) {
+        $values["<b>{$i}</b>"] = str_repeat('x', 100);
+    }
+
+    $result = save(['changed' => [$product->id => $values], 'created' => ['n1' => $values]]);
+
+    expect($result->errors)->toBe([])
+        ->and($result->rowErrors)->toBe([(string) $product->id => 'This row carries more cells than the sheet has columns.', 'n1' => 'This row carries more cells than the sheet has columns.'])
+        ->and(strlen(json_encode($result->toArray())))->toBeLessThan(1000)
+        ->and($product->fresh()->name)->toBe('Product');
+
+    Event::assertDispatchedTimes(RowSaveFailed::class, 2);
+
+    // A row with a few unknown keys still names each of them.
+    $few = save(['changed' => [$product->id => ['name' => 'Ok', 'nope' => 1, 'nada' => 2]]]);
+
+    expect(keys($few->errors[$product->id]))->toBe(['nope', 'nada']);
+});
+
+it('queries an integer key with integers only: a crafted key is answered as missing, never sent to the database', function () {
+    $product = product('a-1');
+    $crafted = ['abc', "1' or 1=1", '9x', '-1', '1.0'];
+    DB::enableQueryLog();
+
+    $result = sheet()->saveMode(SaveMode::PerRow)->save(SavePayload::fromArray([
+        'changed' => array_fill_keys($crafted, ['name' => 'X']) + [$product->id => ['name' => 'Ok']],
+        'deleted' => $crafted,
+    ]));
+    $bindings = collect(DB::getQueryLog())->flatMap(fn (array $q) => array_map(strval(...), $q['bindings']))->all();
+    DB::disableQueryLog();
+
+    expect(keys($result->saved))->toBe([(string) $product->id])
+        ->and(keys($result->rowErrors))->toBe($crafted)
+        ->and(array_unique($result->rowErrors))->toBe(['abc' => 'This row is no longer in the sheet.'])
+        ->and(array_values(array_intersect($bindings, $crafted)))->toBe([])
+        ->and($bindings)->toContain((string) $product->id);
 });
 
 it('deletes through the same checks with delete()', function () {
