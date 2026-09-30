@@ -1,0 +1,378 @@
+/*
+ * packstub/filament-spreadsheet — Tabulator's base stylesheet, then the panel's
+ * own palette (--gray-*, --primary-*, --danger-*…) over every coloured surface,
+ * so the sheet follows the theme and dark mode without compiling the plugin's
+ * views. Logical properties in the toolbar: it reads right-to-left with the page.
+ * Override the --ps-sheet-* variables on .ps-sheet to restyle it.
+ */
+
+@import "tabulator-tables/dist/css/tabulator.min.css";
+
+.ps-sheet {
+    --ps-sheet-bg: #fff;
+    --ps-sheet-surface: var(--gray-50);
+    --ps-sheet-border: var(--gray-200);
+    --ps-sheet-line: color-mix(in oklab, var(--gray-200) 70%, transparent);
+    --ps-sheet-text: var(--gray-950);
+    --ps-sheet-muted: var(--gray-500);
+    --ps-sheet-soft: var(--gray-600);
+    --ps-sheet-head: var(--gray-50);
+    --ps-sheet-head-text: var(--gray-700);
+    --ps-sheet-hover: color-mix(in oklab, var(--gray-100) 60%, transparent);
+    --ps-sheet-ring: var(--primary-500);
+    --ps-sheet-range: color-mix(in oklab, var(--primary-500) 10%, transparent);
+    --ps-sheet-dirty: var(--warning-500);
+    --ps-sheet-dirty-bg: color-mix(in oklab, var(--warning-400) 14%, transparent);
+    --ps-sheet-error: var(--danger-500);
+    --ps-sheet-error-bg: color-mix(in oklab, var(--danger-500) 12%, transparent);
+    --ps-sheet-conflict: #a855f7;
+    --ps-sheet-conflict-bg: color-mix(in oklab, #a855f7 12%, transparent);
+    --ps-sheet-locked: color-mix(in oklab, var(--gray-100) 55%, transparent);
+    --ps-sheet-created-bg: color-mix(in oklab, var(--success-500) 8%, transparent);
+    --ps-sheet-radius: 0.5rem;
+    --ps-sheet-height: calc(100dvh - var(--topbar-height, 4rem) - 11rem);
+    --ps-sheet-font: inherit;
+
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+    color: var(--ps-sheet-text);
+    font-family: var(--ps-sheet-font);
+}
+
+.dark .ps-sheet {
+    --ps-sheet-bg: var(--gray-900);
+    --ps-sheet-surface: rgb(255 255 255 / 0.03);
+    --ps-sheet-border: rgb(255 255 255 / 0.1);
+    --ps-sheet-line: rgb(255 255 255 / 0.07);
+    --ps-sheet-text: #fff;
+    --ps-sheet-muted: var(--gray-400);
+    --ps-sheet-soft: var(--gray-300);
+    --ps-sheet-head: rgb(255 255 255 / 0.04);
+    --ps-sheet-head-text: var(--gray-200);
+    --ps-sheet-hover: rgb(255 255 255 / 0.04);
+    --ps-sheet-range: color-mix(in oklab, var(--primary-400) 16%, transparent);
+    --ps-sheet-dirty-bg: color-mix(in oklab, var(--warning-400) 18%, transparent);
+    --ps-sheet-error-bg: color-mix(in oklab, var(--danger-500) 20%, transparent);
+    --ps-sheet-conflict-bg: color-mix(in oklab, #a855f7 20%, transparent);
+    --ps-sheet-locked: rgb(255 255 255 / 0.03);
+    --ps-sheet-created-bg: color-mix(in oklab, var(--success-500) 12%, transparent);
+}
+
+.ps-sheet [x-cloak] { display: none !important; }
+.ps-sheet svg { width: 1rem; height: 1rem; flex: none; }
+
+/* ------------------------------------------------------------------ toolbar */
+
+.ps-sheet-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ps-sheet-spacer { flex: 1; }
+
+.ps-sheet-btn,
+.ps-sheet-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 2.25rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--ps-sheet-border);
+    border-radius: var(--ps-sheet-radius);
+    background: var(--ps-sheet-bg);
+    color: var(--ps-sheet-soft);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ps-sheet-btn:hover:not(:disabled),
+.ps-sheet-seg-btn:hover:not(:disabled) { background: var(--ps-sheet-hover); color: var(--ps-sheet-text); }
+.ps-sheet-btn:disabled,
+.ps-sheet-seg-btn:disabled { opacity: 0.5; cursor: default; }
+.ps-sheet-btn:focus-visible,
+.ps-sheet-seg-btn:focus-visible,
+.ps-sheet-field input:focus-visible,
+.ps-sheet-field select:focus-visible { outline: 2px solid var(--ps-sheet-ring); outline-offset: 1px; }
+
+.ps-sheet-btn-primary { background: var(--primary-600); border-color: var(--primary-600); color: #fff; }
+.ps-sheet-btn-primary:hover:not(:disabled) { background: var(--primary-500); color: #fff; }
+.ps-sheet-btn-danger { color: var(--danger-600); }
+.dark .ps-sheet-btn-danger { color: var(--danger-400); }
+
+.ps-sheet-badge {
+    display: inline-flex;
+    align-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding-inline: 0.375rem;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.25);
+    font-size: 0.75rem;
+    font-weight: 700;
+    justify-content: center;
+}
+.ps-sheet-btn:not(.ps-sheet-btn-primary) .ps-sheet-badge { background: var(--ps-sheet-hover); color: var(--ps-sheet-text); }
+
+.ps-sheet-seg { display: inline-flex; }
+.ps-sheet-seg .ps-sheet-seg-btn { padding-inline: 0.5rem; border-radius: 0; }
+.ps-sheet-seg .ps-sheet-seg-btn:first-child { border-start-start-radius: var(--ps-sheet-radius); border-end-start-radius: var(--ps-sheet-radius); }
+.ps-sheet-seg .ps-sheet-seg-btn:last-child { border-start-end-radius: var(--ps-sheet-radius); border-end-end-radius: var(--ps-sheet-radius); }
+.ps-sheet-seg .ps-sheet-seg-btn + .ps-sheet-seg-btn { margin-inline-start: -1px; }
+
+.ps-sheet-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 2.25rem;
+    padding-inline: 0.625rem;
+    border: 1px solid var(--ps-sheet-border);
+    border-radius: var(--ps-sheet-radius);
+    background: var(--ps-sheet-bg);
+    color: var(--ps-sheet-muted);
+    font-size: 0.8125rem;
+}
+.ps-sheet-field input,
+.ps-sheet-field select {
+    border: 0;
+    background: transparent;
+    color: var(--ps-sheet-text);
+    font-size: 0.875rem;
+    padding: 0;
+    min-width: 0;
+    outline: none;
+}
+.ps-sheet-field select { padding-inline-end: 1.25rem; }
+.ps-sheet-field input[type="date"] { width: 8.5rem; }
+.ps-sheet-search input { width: 12rem; }
+.ps-sheet-search svg { color: var(--ps-sheet-muted); }
+
+.ps-sheet-range { display: inline-flex; align-items: center; gap: 0.25rem; }
+.ps-sheet-filter-label { font-size: 0.8125rem; color: var(--ps-sheet-muted); }
+.ps-sheet-filter-on { border-color: var(--ps-sheet-ring); }
+.ps-sheet-dash { color: var(--ps-sheet-muted); }
+
+.ps-sheet-pill {
+    display: inline-flex;
+    align-items: center;
+    height: 1.5rem;
+    padding-inline: 0.625rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.ps-sheet-pill-dirty { background: var(--ps-sheet-dirty-bg); color: var(--warning-700); }
+.dark .ps-sheet-pill-dirty { color: var(--warning-300); }
+.ps-sheet-pill-errors { background: var(--ps-sheet-error-bg); color: var(--danger-700); }
+.dark .ps-sheet-pill-errors { color: var(--danger-300); }
+.ps-sheet-pill-readonly { background: var(--ps-sheet-hover); color: var(--ps-sheet-muted); }
+
+.ps-sheet-pager { display: inline-flex; align-items: center; gap: 0.375rem; }
+.ps-sheet-pager-text,
+.ps-sheet-count { font-size: 0.8125rem; color: var(--ps-sheet-muted); white-space: nowrap; }
+.ps-sheet-per-page { height: 2rem; }
+
+.ps-sheet-hint {
+    font-size: 0.8125rem;
+    color: var(--ps-sheet-muted);
+}
+
+/* ------------------------------------------------------------------ grid */
+
+.ps-sheet-grid {
+    height: var(--ps-sheet-height);
+    min-height: 16rem;
+    border-radius: var(--ps-sheet-radius);
+    overflow: hidden;
+}
+
+.ps-sheet .tabulator {
+    height: 100%;
+    border: 1px solid var(--ps-sheet-border);
+    border-radius: var(--ps-sheet-radius);
+    background: var(--ps-sheet-bg);
+    color: var(--ps-sheet-text);
+    font-size: 0.875rem;
+    font-family: inherit;
+}
+
+.ps-sheet .tabulator .tabulator-header {
+    background: var(--ps-sheet-head);
+    border-bottom: 1px solid var(--ps-sheet-border);
+    color: var(--ps-sheet-head-text);
+    font-weight: 600;
+}
+.ps-sheet .tabulator .tabulator-header .tabulator-col {
+    background: var(--ps-sheet-head);
+    border-right: 1px solid var(--ps-sheet-line);
+}
+.ps-sheet .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 0.5rem 0.625rem; }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-col-sortable { cursor: pointer; }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-col-sortable:hover { background: var(--ps-sheet-hover); }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.tabulator-range-highlight { background: var(--ps-sheet-range); color: var(--ps-sheet-text); }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.tabulator-range-selected { background: var(--primary-600); color: #fff; }
+.ps-sheet .tabulator .tabulator-header .tabulator-frozen.tabulator-frozen-left { border-right: 2px solid var(--ps-sheet-border); }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-col-readonly .tabulator-col-title { color: var(--ps-sheet-muted); font-weight: 500; }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-rownum { background: var(--ps-sheet-head); }
+
+.ps-sheet .tabulator .tabulator-tableholder { background: var(--ps-sheet-bg); }
+.ps-sheet .tabulator .tabulator-tableholder:focus-visible { outline: none; }
+.ps-sheet .tabulator .tabulator-tableholder .tabulator-table { background: var(--ps-sheet-bg); color: var(--ps-sheet-text); }
+.ps-sheet .tabulator .tabulator-tableholder .tabulator-placeholder .tabulator-placeholder-contents {
+    color: var(--ps-sheet-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.ps-sheet .tabulator-row,
+.ps-sheet .tabulator-row.tabulator-row-even { background: var(--ps-sheet-bg); border-bottom: 1px solid var(--ps-sheet-line); }
+.ps-sheet .tabulator-row.tabulator-selectable:hover { background: var(--ps-sheet-hover); cursor: default; }
+.ps-sheet .tabulator-row .tabulator-cell {
+    border-right: 1px solid var(--ps-sheet-line);
+    padding: 0 0.625rem;
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+}
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-frozen.tabulator-frozen-left { border-right: 2px solid var(--ps-sheet-border); background: inherit; }
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-rownum {
+    justify-content: center;
+    color: var(--ps-sheet-muted);
+    background: var(--ps-sheet-head);
+    font-size: 0.75rem;
+    user-select: none;
+    cursor: pointer;
+}
+.ps-sheet .tabulator-row.tabulator-range-highlight .tabulator-cell.tabulator-range-row-header { background: var(--ps-sheet-range); color: var(--ps-sheet-text); }
+.ps-sheet .tabulator-row.tabulator-range-selected .tabulator-cell.tabulator-range-row-header { background: var(--primary-600); color: #fff; }
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-range-selected { background: var(--ps-sheet-range); }
+.ps-sheet .tabulator .tabulator-tableholder .tabulator-range-overlay .tabulator-range { border-color: var(--ps-sheet-ring); }
+.ps-sheet .tabulator .tabulator-tableholder .tabulator-range-overlay .tabulator-range-cell-active { border-color: var(--ps-sheet-ring); }
+.ps-sheet .tabulator .tabulator-tableholder .tabulator-range-overlay .tabulator-range .tabulator-range-fill-handle {
+    background: var(--ps-sheet-ring);
+    border: 1px solid var(--ps-sheet-bg);
+    width: 8px;
+    height: 8px;
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    cursor: crosshair;
+}
+
+/* cell states */
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-cell-locked { background: var(--ps-sheet-locked); color: var(--ps-sheet-soft); }
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-cell-dirty { background: var(--ps-sheet-dirty-bg); }
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-cell-dirty::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    inset-inline-end: 0;
+    border-style: solid;
+    border-width: 0 7px 7px 0;
+    border-color: transparent var(--ps-sheet-dirty) transparent transparent;
+}
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-cell-error { background: var(--ps-sheet-error-bg); box-shadow: inset 0 0 0 1px var(--ps-sheet-error); }
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-cell-error::after { border-color: transparent var(--ps-sheet-error) transparent transparent; }
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-cell-conflict { background: var(--ps-sheet-conflict-bg); box-shadow: inset 0 0 0 1px var(--ps-sheet-conflict); }
+.ps-sheet .tabulator-row .tabulator-cell.ps-sheet-cell-conflict::after { border-color: transparent var(--ps-sheet-conflict) transparent transparent; }
+.ps-sheet .tabulator-row.ps-sheet-row-deleted .tabulator-cell { text-decoration: line-through; color: var(--ps-sheet-muted); opacity: 0.7; }
+.ps-sheet .tabulator-row.ps-sheet-row-deleted .tabulator-cell.ps-sheet-rownum { text-decoration: none; color: var(--danger-500); }
+.ps-sheet .tabulator-row.ps-sheet-row-created .tabulator-cell.ps-sheet-rownum { background: var(--ps-sheet-created-bg); color: var(--success-600); font-weight: 700; }
+.ps-sheet .tabulator-row.ps-sheet-row-readonly .tabulator-cell:not(.ps-sheet-rownum) { color: var(--ps-sheet-soft); background: var(--ps-sheet-locked); }
+.ps-sheet .tabulator-row.ps-sheet-row-error .tabulator-cell.ps-sheet-rownum { color: var(--danger-500); box-shadow: inset 3px 0 0 var(--ps-sheet-error); }
+.ps-sheet-is-readonly .tabulator-row .tabulator-cell { cursor: default; }
+.ps-sheet-tick { color: var(--success-600); }
+.ps-sheet-cross { color: var(--ps-sheet-muted); }
+
+/* editing */
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-editing {
+    border: 1px solid var(--ps-sheet-ring);
+    outline: none;
+    padding: 0;
+    background: var(--ps-sheet-bg);
+}
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-editing input,
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-editing select,
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-editing textarea {
+    border: 0;
+    outline: none;
+    width: 100%;
+    height: 100%;
+    padding: 0 0.625rem;
+    background: var(--ps-sheet-bg);
+    color: var(--ps-sheet-text);
+    font: inherit;
+}
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-editing input[type="checkbox"] { width: auto; height: auto; margin: 0 auto; }
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-validation-fail { border-color: var(--ps-sheet-error); }
+
+.tabulator-edit-list {
+    background: var(--gray-50, #fff);
+    border: 1px solid var(--gray-200, #ddd);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+    padding: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--gray-950, #111);
+}
+.dark .tabulator-edit-list { background: var(--gray-800); border-color: rgb(255 255 255 / 0.1); color: #fff; }
+.tabulator-edit-list .tabulator-edit-list-item { padding: 0.375rem 0.625rem; border-radius: 0.375rem; color: inherit; }
+.tabulator-edit-list .tabulator-edit-list-item.active { background: var(--primary-600); color: #fff; }
+.tabulator-edit-list .tabulator-edit-list-item:hover { background: var(--primary-500); color: #fff; cursor: pointer; }
+.tabulator-edit-list .tabulator-edit-list-item.focused { outline: 1px solid var(--primary-500); outline-offset: -1px; }
+
+/* the ones the base sheet colours that never show here */
+.ps-sheet .tabulator .tabulator-col-resize-handle:hover { background: var(--ps-sheet-ring); opacity: 0.4; }
+.ps-sheet .tabulator .tabulator-col-resize-guide { background: var(--ps-sheet-ring); }
+
+/* ------------------------------------------------------------------ context menu */
+
+.ps-sheet-menu {
+    position: absolute;
+    z-index: 40;
+    min-width: 11rem;
+    padding: 0.25rem;
+    border: 1px solid var(--ps-sheet-border);
+    border-radius: var(--ps-sheet-radius);
+    background: var(--ps-sheet-bg);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.14);
+}
+.ps-sheet-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.625rem;
+    border: 0;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--ps-sheet-text);
+    font-size: 0.875rem;
+    text-align: start;
+    cursor: pointer;
+}
+.ps-sheet-menu-item:hover,
+.ps-sheet-menu-item:focus-visible { background: var(--ps-sheet-hover); outline: none; }
+.ps-sheet-menu-item-danger { color: var(--danger-600); }
+.dark .ps-sheet-menu-item-danger { color: var(--danger-400); }
+
+/* ------------------------------------------------------------------ states */
+
+.ps-sheet-is-loading .ps-sheet-grid { opacity: 0.6; transition: opacity 0.15s; }
+.ps-sheet-is-saving .ps-sheet-grid { pointer-events: none; opacity: 0.8; }
+
+/* ------------------------------------------------------------------ small screens */
+
+@media (max-width: 40rem) {
+    .ps-sheet-search input { width: 8rem; }
+    .ps-sheet-btn span:not(.ps-sheet-badge) { display: none; }
+    .ps-sheet-btn { padding-inline: 0.5rem; }
+    .ps-sheet-count { display: none; }
+}
