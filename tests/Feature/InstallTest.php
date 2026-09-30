@@ -48,10 +48,19 @@ it('ships every string in every language', function () {
     }
 });
 
-it('registers the built assets', function () {
-    $root = dirname(__DIR__, 2).'/resources/dist';
+it('registers the built assets, with Tabulator\'s copyright and permission notice kept in both files', function () {
+    $root = dirname(__DIR__, 2);
+    $js = File::get("{$root}/resources/dist/spreadsheet.js");
+    $css = File::get("{$root}/resources/dist/spreadsheet.css");
 
-    expect(File::size("{$root}/spreadsheet.js"))->toBeGreaterThan(10000)
-        ->and(File::size("{$root}/spreadsheet.css"))->toBeGreaterThan(1000)
-        ->and(File::get("{$root}/spreadsheet.js"))->toContain('spreadsheetSave', 'Tabulator 6');
+    expect(strlen($js))->toBeGreaterThan(10000)
+        ->and(strlen($css))->toBeGreaterThan(1000)
+        ->and($js)->toContain('spreadsheetSave', 'Tabulator 6');
+
+    // MIT asks for the copyright notice and the permission notice in substantial portions: the bundles are one.
+    foreach ([$js, $css] as $bundle) {
+        expect(substr($bundle, 0, 2000))->toContain('Copyright (c) 2015-2026 Oli Folkerd', 'Permission is hereby granted, free of charge');
+    }
+
+    expect(File::get("{$root}/LICENSE.md"))->toContain('Third-party', 'Tabulator', 'Oli Folkerd');
 });

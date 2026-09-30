@@ -15,6 +15,18 @@ const watch = process.argv.includes('--watch')
 
 const version = JSON.parse(readFileSync(new URL('./node_modules/tabulator-tables/package.json', import.meta.url), 'utf8')).version
 
+// MIT asks for the copyright notice and the permission notice in substantial portions of the software: both bundles
+// carry Tabulator's, verbatim from its LICENSE (esbuild strips the comment the sources hold).
+const tabulatorLicense = readFileSync(new URL('./node_modules/tabulator-tables/LICENSE', import.meta.url), 'utf8').trim()
+const notice = (what) => [
+    '/*!',
+    ' * packstub/filament-spreadsheet — MIT, https://packstub.dev/docs/filament-spreadsheet',
+    ` * Bundles Tabulator ${version} (${what}; https://tabulator.info), included under its licence:`,
+    ' *',
+    ...tabulatorLicense.split('\n').map((line) => ` * ${line}`.trimEnd()),
+    ' */',
+].join('\n')
+
 const common = {
     bundle: true,
     minify: true,
@@ -28,14 +40,14 @@ const js = {
     entryPoints: ['resources/js/spreadsheet.js'],
     outfile: 'resources/dist/spreadsheet.js',
     format: 'esm',
-    banner: { js: `/* packstub/filament-spreadsheet — MIT. Bundles Tabulator ${version} (MIT, https://tabulator.info). */` },
+    banner: { js: notice('the modules the grid registers') },
 }
 
 const css = {
     ...common,
     entryPoints: ['resources/css/spreadsheet.css'],
     outfile: 'resources/dist/spreadsheet.css',
-    banner: { css: `/* packstub/filament-spreadsheet — MIT. Bundles Tabulator ${version}'s stylesheet (MIT, https://tabulator.info). */` },
+    banner: { css: notice('the base stylesheet') },
 }
 
 if (watch) {

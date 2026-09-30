@@ -385,6 +385,28 @@ test('fill-down copies the first row of the selection into the rows below, where
     assert.deepEqual(S.fillDownPlan({ rows, columns, top: 0, bottom: 1, left: 7, right: 7 }), [])
 })
 
+test('a clear (Delete, Backspace, cut) empties the editable cells of the selection and leaves the others alone', () => {
+    const rows = [row(1, { price: null }), row(2, {}, { locked: ['price'] }), row(3, {}, { readOnly: true }), row(4, {}, { deleted: true }), row(5)]
+    // Columns 1..3: price, stock, category_id; then margin (computed) at 7.
+    const edits = S.clearPlan({ rows, columns, top: 0, bottom: 4, left: 1, right: 2 })
+
+    assert.deepEqual(edits, [
+        { id: '1', col: 'price', from: null, to: null, version: 'v1' },
+        { id: '1', col: 'stock', from: 1, to: null, version: 'v1' },
+        { id: '2', col: 'stock', from: 1, to: null, version: 'v2' },
+        { id: '5', col: 'price', from: 10, to: null, version: 'v5' },
+        { id: '5', col: 'stock', from: 1, to: null, version: 'v5' },
+    ])
+    assert.deepEqual(S.clearPlan({ rows, columns, top: 0, bottom: 0, left: 7, right: 7 }), [])
+    assert.deepEqual(S.clearPlan({ rows, columns, top: 0, bottom: 0, left: 1, right: 1, readOnly: true }), [])
+    assert.deepEqual(S.clearPlan({ rows, columns, top: 9, bottom: 9, left: 1, right: 1 }), [])
+
+    // An already empty cell is not a change once applied.
+    const b = S.createBuffer()
+    assert.equal(S.applyEdits(b, edits).length, 4)
+    assert.deepEqual(b.changes, { 1: { stock: null }, 2: { stock: null }, 5: { price: null, stock: null } })
+})
+
 test('editable() knows every reason a cell is locked', () => {
     const price = columns[1]
     assert.equal(S.editable(price, row(1)), true)
@@ -423,4 +445,6 @@ test('keybindings read "mod+s" style specs and match events', () => {
     assert.equal(S.matchesKey({ key: 'd', ctrlKey: true }, S.parseKeybinding('ctrl+d')), true)
     assert.equal(S.matchesKey({ key: 'd', metaKey: true }, S.parseKeybinding('ctrl+d')), false)
     assert.equal(S.matchesKey({ key: 'F2' }, S.parseKeybinding('f2')), true)
+    assert.deepEqual(Object.keys(S.DEFAULT_KEYS), ['save', 'fill_down', 'undo', 'redo', 'add_row', 'cut'])
+    assert.equal(S.matchesKey({ key: 'x', ctrlKey: true }, S.parseKeybinding(S.DEFAULT_KEYS.cut)), true)
 })

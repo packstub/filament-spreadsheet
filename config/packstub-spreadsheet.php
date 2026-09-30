@@ -54,7 +54,7 @@ return [
     'row_height' => 32,
 
     'keybindings' => [
-        // 'save' => 'mod+s', 'fill_down' => 'mod+d', 'undo' => 'mod+z', 'redo' => 'mod+y', 'add_row' => 'mod+enter',
+        // 'save' => 'mod+s', 'fill_down' => 'mod+d', 'undo' => 'mod+z', 'redo' => 'mod+y', 'add_row' => 'mod+enter', 'cut' => 'mod+x',
     ],
 
     /*

@@ -19,3 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## Third-party
+
+`resources/dist/spreadsheet.js` and `resources/dist/spreadsheet.css` bundle [Tabulator](https://tabulator.info)
+(`tabulator-tables`), Copyright (c) 2015-2026 Oli Folkerd, released under the MIT License. Its copyright notice and
+permission notice are kept at the top of both files.

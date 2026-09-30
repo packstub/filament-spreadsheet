@@ -3,8 +3,10 @@
  * demos/packstub-demo/node_modules, or a PLAYWRIGHT_CORE path) and checks the
  * interactions the Node suite cannot: typing into a cell, Enter moving down,
  * paste, fill-down, undo, dirty cells across pages, save (ok, errors,
- * conflicts), add and delete rows, read-only mode. Screenshots land in
- * SCREENSHOT_DIR (default: tests/browser/screenshots, ignored by git).
+ * conflicts), add and delete rows, Delete/Backspace/Ctrl+X over locked and
+ * computed cells, a hostile select label, the shortcut scope, overlapping page
+ * requests, read-only mode. Screenshots land in SCREENSHOT_DIR (default:
+ * tests/browser/screenshots, ignored by git).
  *
  *   node tests/browser/run.mjs
  */
@@ -271,10 +273,11 @@ try {
     s = await state()
     check('the row is deleted on save', s.total === 250 && (await page.evaluate(() => window.__server.products.length)) === 250 && s.dirty.total === 0)
 
-    // context menu
+    // context menu (one path: the view's contextmenu handler; Tabulator's rowContext used to open it a second time)
+    await page.evaluate(() => { const s = window.sheet(); const orig = s.openMenu; window.__menuCalls = 0; s.openMenu = function (e) { window.__menuCalls++; return orig.call(this, e) } })
     await page.locator('.tabulator-tableholder .tabulator-row').nth(3).locator('.tabulator-cell[tabulator-field="name"]').click({ button: 'right' })
     await page.waitForTimeout(50)
-    check('right-click opens the row menu', await page.locator('.ps-sheet-menu').isVisible())
+    check('right-click opens the row menu, once', (await page.locator('.ps-sheet-menu').isVisible()) && (await page.evaluate(() => window.__menuCalls)) === 1, `calls ${await page.evaluate(() => window.__menuCalls)}`)
     await page.locator('.ps-sheet-menu-item', { hasText: 'Delete row' }).click()
     await page.waitForTimeout(50)
     s = await state()
@@ -298,6 +301,106 @@ try {
     await page.keyboard.type('x')
     await page.waitForTimeout(30)
     check('a row the policy locks is greyed and refuses typing', ! (await state()).editing && (await page.locator('.tabulator-row.ps-sheet-row-readonly').count()) === 1, JSON.stringify({ editing: (await state()).editing, rows: await page.locator('.tabulator-row.ps-sheet-row-readonly').count(), meta: await page.evaluate(() => window.sheet().rows[0]) }))
+
+    // Delete on a read-only row leaves it alone (Tabulator's own range clearing would blank it)
+    await page.keyboard.press('Delete')
+    await page.waitForTimeout(50)
+    const readOnlyRow = await page.evaluate(() => ({ changes: window.sheet().buffer.changes['40'], text: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText }))
+    check('Delete on a read-only row neither buffers nor blanks the cell', readOnlyRow.changes === undefined && readOnlyRow.text === 'Product 40', JSON.stringify(readOnlyRow))
+
+    // Delete over a range holding a locked cell (cost on SKU-025) and the computed margin clears only what may be edited
+    await page.locator('.ps-sheet-search input').fill('SKU-025')
+    await page.waitForFunction(() => window.sheet().rows[0]?.id === '25')
+    await page.waitForTimeout(50)
+    const textsBefore = await page.evaluate(() => ['cost', 'margin'].map((f) => document.querySelector(`.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="${f}"]`).innerText))
+    await cell(0, 'cost').click()
+    await page.keyboard.down('Shift')
+    await cell(0, 'margin').click()
+    await page.keyboard.up('Shift')
+    await page.keyboard.press('Delete')
+    await page.waitForTimeout(50)
+    const cleared = await page.evaluate(() => ({ changes: window.sheet().buffer.changes['25'], texts: ['cost', 'margin'].map((f) => document.querySelector(`.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="${f}"]`).innerText) }))
+    check('Delete over a range clears the editable cells only: the locked and the computed cell keep their value', Object.keys(cleared.changes ?? {}).sort().join() === 'available_on,is_active,published_at,stock' && Object.values(cleared.changes).every((v) => v === null) && cleared.texts.join() === textsBefore.join(), JSON.stringify({ cleared, textsBefore }))
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction(() => ! window.sheet().saving)
+    await page.waitForTimeout(80)
+    s = await state()
+    check('the save after that Delete goes through: nothing the server refuses was sent', s.dirty.total === 0 && s.errorCount === 0 && (await page.evaluate(() => Object.keys(window.__server.calls.save.at(-1).changed['25']).sort().join())) === 'available_on,is_active,published_at,stock', JSON.stringify({ dirty: s.dirty, errors: s.errorCount }))
+
+    // Backspace clears too; a hostile select option label is text, never HTML
+    await page.locator('.ps-sheet-search input').fill('SKU-001')
+    await page.waitForFunction(() => window.sheet().rows[0]?.id === '1')
+    await page.waitForTimeout(50)
+    await cell(0, 'stock').click()
+    await page.keyboard.press('Backspace')
+    await page.waitForTimeout(50)
+    check('Backspace clears the selected cell', (await page.evaluate(() => window.sheet().buffer.changes['1']?.stock)) === null && (await cell(0, 'stock').innerText()) === '')
+    await page.evaluate(() => { const col = window.sheet().grid.table.getColumn('category_id'); col.getDefinition().editorParams.values.push({ label: '<img src=x onerror="window.__xss=1"><b id="xss-label">Bold</b>', value: '9' }) })
+    await cell(0, 'category_id').dblclick()
+    await page.waitForSelector('.tabulator-edit-list')
+    await page.waitForTimeout(100)
+    const listItems = await page.evaluate(() => ({ xss: window.__xss, bold: !! document.querySelector('#xss-label'), img: !! document.querySelector('.tabulator-edit-list img'), last: document.querySelector('.tabulator-edit-list .tabulator-edit-list-item:last-child')?.textContent }))
+    check('a select option label with HTML in it is shown as text and runs nothing', listItems.xss === undefined && ! listItems.bold && ! listItems.img && listItems.last === '<img src=x onerror="window.__xss=1"><b id="xss-label">Bold</b>', JSON.stringify(listItems))
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(50)
+
+    // the text editor carries the column's maxLength
+    await cell(0, 'name').click()
+    await page.keyboard.press('F2')
+    await page.waitForSelector('.tabulator-editing input')
+    check('the text editor limits typing to the column\'s maxLength', (await page.locator('.tabulator-editing input').getAttribute('maxlength')) === '120')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(30)
+
+    // Ctrl+X copies the selection the way Ctrl+C does, then clears the editable cells
+    await page.evaluate(() => { window.__copied = null; document.addEventListener('copy', (e) => { window.__copied = e.clipboardData.getData('text/plain') }) })
+    await cell(0, 'name').click()
+    await page.keyboard.press('Control+x')
+    await page.waitForTimeout(80)
+    const cut = await page.evaluate(() => ({ copied: window.__copied, name: window.sheet().buffer.changes['1']?.name, text: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText }))
+    check('Ctrl+X puts the cell on the clipboard and clears it', cut.copied === 'Product 1' && cut.name === null && cut.text === '', JSON.stringify(cut))
+    await page.keyboard.press('Control+z')
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('undo brings the cut and the cleared cell back', s.dirty.total === 0, JSON.stringify(s.dirty))
+
+    // outside the grid only Ctrl+S is the sheet's: the search box keeps its own Ctrl+Z, Ctrl+D and Ctrl+Enter
+    await cell(0, 'name').click()
+    await page.keyboard.type('Zed')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    const savesBefore = await page.evaluate(() => window.__server.calls.save.length)
+    await page.locator('.ps-sheet-search input').focus()
+    await page.keyboard.press('Control+z')
+    await page.keyboard.press('Control+d')
+    await page.keyboard.press('Control+Enter')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('Ctrl+Z, Ctrl+D and Ctrl+Enter in the search box leave the sheet alone', s.dirty.total === 1 && s.dirty.created === 0 && s.dirty.cells === 1, JSON.stringify(s.dirty))
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction((n) => window.__server.calls.save.length === n + 1, savesBefore)
+    await page.waitForTimeout(80)
+    s = await state()
+    check('Ctrl+S in the search box still saves', s.dirty.total === 0 && (await page.evaluate(() => window.__server.products.find((p) => p.id === '1').name)) === 'Zed')
+
+    // overlapping page requests: the answer of the latest request wins, whatever order they land in
+    await page.evaluate(() => {
+        const orig = window.__wire.spreadsheetRows
+        let n = 0
+        window.__wire.__origRows = orig
+        window.__wire.spreadsheetRows = async (req) => { const k = ++n; const r = await orig(req); await new Promise((res) => setTimeout(res, k === 1 ? 300 : 10)); return r }
+        const sh = window.sheet()
+        sh.search = 'SKU-00'
+        sh.refresh()
+        sh.search = 'SKU-001'
+        sh.refresh()
+    })
+    await page.waitForTimeout(600)
+    const raced = await page.evaluate(() => ({ search: window.sheet().search, total: window.sheet().total, loading: window.sheet().loading }))
+    check('the latest request wins when an earlier answer lands later', raced.total === 1 && raced.search === 'SKU-001' && ! raced.loading, JSON.stringify(raced))
+    await page.evaluate(() => { window.__wire.spreadsheetRows = window.__wire.__origRows })
+
     await page.locator('.ps-sheet-search input').fill('')
     await page.waitForFunction(() => window.sheet().total === 250)
 

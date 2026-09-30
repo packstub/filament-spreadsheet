@@ -55,6 +55,7 @@ export default function packstubSpreadsheet(config) {
         init() {
             for (const f of this.filters) this.active[f.name] = f.type === 'dateRange' ? { from: '', until: '' } : ''
 
+            this._req = 0
             this._keydown = (e) => this.onKeydown(e)
             this._beforeUnload = (e) => this.onBeforeUnload(e)
             this._navigate = (e) => this.onNavigate(e)
@@ -78,7 +79,6 @@ export default function packstubSpreadsheet(config) {
                         sort: (col) => this.sortBy(col),
                         paste: (text) => this.onPaste(text),
                         select: (count) => { this.selected = this.readOnly || ! this.deletable ? 0 : count },
-                        context: (e, id) => this.openMenu(e, id),
                     },
                 })
 
@@ -91,6 +91,7 @@ export default function packstubSpreadsheet(config) {
             this.$root.removeEventListener('keydown', this._keydown, true)
             window.removeEventListener('beforeunload', this._beforeUnload)
             document.removeEventListener('livewire:navigate', this._navigate)
+            clearTimeout(this._hint)
             this.grid?.destroy()
         },
 
@@ -167,17 +168,20 @@ export default function packstubSpreadsheet(config) {
             return { page: this.page, perPage: this.perPage, sort: this.sort, search: this.search, filters: JSON.parse(JSON.stringify(this.active)) }
         },
 
+        /** Ask for the page the toolbar describes. Requests can overlap (search, paging, a sort): only the latest one's answer is applied. */
         async refresh() {
             if (! this.grid) return
+            const seq = ++this._req
             this.loading = true
             try {
                 const r = await this.$wire.spreadsheetRows(this.request())
+                if (seq !== this._req) return
                 if (! r || r.ok === false) this.notify(r?.message ?? t.load_failed, 'danger')
                 else this.applyPage(r)
             } catch (e) {
-                this.notify(t.offline, 'danger')
+                if (seq === this._req) this.notify(t.offline, 'danger')
             } finally {
-                this.loading = false
+                if (seq === this._req) this.loading = false
             }
         },
 
@@ -208,21 +212,41 @@ export default function packstubSpreadsheet(config) {
             else this.sync()
         },
 
-        /** Cells written by the fill handle or a cleared range. */
+        /** Cells written by the fill handle. Each is checked again here: what the grid wrote into a cell it must not edit is repainted back. */
         onRangeEdit(edits) {
+            const rows = this.visibleRows()
             const list = []
             const invalid = []
+            const touched = new Set()
             for (const e of edits) {
                 const column = this.column(e.col)
                 if (! column) continue
+                touched.add(e.id)
+                const row = rows.find((r) => r.id === e.id)
+                if (! S.editable(column, row, this.readOnly)) continue
                 const res = S.coerce(column, e.to, t)
-                const row = this.rows.find((r) => r.id === e.id)
-                list.push({ id: e.id, col: e.col, from: e.from, to: res.value, version: row?.version ?? null })
+                list.push({ id: e.id, col: e.col, from: e.from, to: res.value, version: row.version })
                 if (! res.ok) invalid.push({ id: e.id, col: e.col, error: res.error })
             }
             S.applyEdits(this.buffer, list, { page: this.page })
             for (const i of invalid) { this.buffer.errors[i.id] ??= {}; this.buffer.errors[i.id][i.col] = i.error }
-            this.repaint(list.map((e) => e.id))
+            this.repaint([...touched])
+        },
+
+        /** Delete / Backspace: every editable cell of the selection becomes empty; locked, read-only and computed cells stay. */
+        clearSelection() {
+            if (this.readOnly) return
+            const sel = this.grid.selection()
+            if (! sel || sel.left < 0) return
+            const edits = S.clearPlan({ rows: this.visibleRows(), columns: this.columns, top: sel.top, bottom: sel.bottom, left: sel.left, right: sel.right, readOnly: this.readOnly })
+            const applied = S.applyEdits(this.buffer, edits, { page: this.page })
+            if (applied.length) this.repaint(applied.map((e) => e.id))
+        },
+
+        /** Ctrl+X: the selection goes to the clipboard as Ctrl+C would send it, then the editable cells are cleared. */
+        cut() {
+            this.grid.copy()
+            this.clearSelection()
         },
 
         onPaste(text) {
@@ -406,9 +430,14 @@ export default function packstubSpreadsheet(config) {
             const editing = this.grid.isEditing()
 
             if (S.matchesKey(e, keys.save)) { e.preventDefault(); this.save(); return }
+
+            // Outside the grid (the search box, a filter, a toolbar button) every other key keeps its browser meaning: Ctrl+Z there undoes the typing, not the sheet.
+            if (! this.$refs.grid?.contains(e.target)) return
+
             if (S.matchesKey(e, keys.undo) && ! editing) { e.preventDefault(); this.undo(); return }
             if ((S.matchesKey(e, keys.redo) || S.matchesKey(e, S.parseKeybinding('mod+shift+z'))) && ! editing) { e.preventDefault(); this.redo(); return }
             if (S.matchesKey(e, keys.fill_down) && ! editing) { e.preventDefault(); this.fillDown(); return }
+            if (S.matchesKey(e, keys.cut) && ! editing) { e.preventDefault(); this.cut(); return }
             if (S.matchesKey(e, keys.add_row)) { e.preventDefault(); this.addRow(); return }
 
             if (editing) {
@@ -430,6 +459,8 @@ export default function packstubSpreadsheet(config) {
             }
 
             if (this.readOnly || e.target?.closest?.('input, select, textarea, button')) return
+
+            if ((e.key === 'Delete' || e.key === 'Backspace') && ! e.ctrlKey && ! e.metaKey && ! e.altKey) { e.preventDefault(); this.clearSelection(); return }
 
             if ((e.key === 'Enter' || e.key === ' ') && ! e.ctrlKey && ! e.metaKey && this.grid.toggleActive()) { e.preventDefault(); e.stopPropagation(); return }
 
@@ -459,8 +490,9 @@ export default function packstubSpreadsheet(config) {
 
         /* ------------------------------------------------------------ menu */
 
-        openMenu(e, id = null) {
-            id ??= this.grid?.rowAt(e)
+        /** The view's contextmenu handler on the grid element (the one path: Tabulator's rowContext would open it a second time). */
+        openMenu(e) {
+            const id = this.grid?.rowAt(e)
             if (! id || this.readOnly || ! this.deletable) return
             const created = S.isCreated(this.buffer, id)
             const row = this.rows.find((r) => r.id === id)

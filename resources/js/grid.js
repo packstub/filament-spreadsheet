@@ -47,16 +47,18 @@ function isoEditor(withTime) {
             if (m) input.value = withTime ? `${m[1]}T${m[2] ?? '00:00'}` : m[1]
         }
         onRendered(() => { input.focus({ preventScroll: true }); input.style.height = '100%' })
-        const done = () => {
+        // A picked date fires change and then blur (Enter and Escape are followed by a blur too): the first one settles the edit.
+        let settled = false
+        const once = (fn) => { if (settled) return; settled = true; fn() }
+        const done = () => once(() => {
             const v = input.value
-            if (! v) return success(null)
-            success(withTime ? v.replace('T', ' ') + ':00' : v)
-        }
+            success(v ? (withTime ? v.replace('T', ' ') + ':00' : v) : null)
+        })
         input.addEventListener('change', done)
         input.addEventListener('blur', done)
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); done() }
-            if (e.key === 'Escape') cancel()
+            if (e.key === 'Escape') once(cancel)
         })
 
         return input
@@ -125,13 +127,42 @@ function escapeHtml(s) {
     return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 }
 
+/** The empty-table message as an element (a string would be set as innerHTML). */
+function placeholder(text) {
+    const el = document.createElement('div')
+    el.className = 'tabulator-placeholder-contents'
+    el.textContent = text ?? ''
+
+    return el
+}
+
+/** An element carrying a string as text: what Tabulator would otherwise set as innerHTML. */
+function textNode(text) {
+    const el = document.createElement('span')
+    el.textContent = text === null || text === undefined ? '' : String(text)
+
+    return el
+}
+
 function editorFor(column) {
     switch (column.type) {
         case 'boolean':
             // No editor: a double-click, Enter or Space flips the cell (see toggleBoolean).
             return { editor: false }
         case 'select':
-            return { editor: 'list', editorParams: { values: (column.options ?? []).map((o) => ({ label: o.label, value: o.value })), autocomplete: true, listOnEmpty: true, allowEmpty: true, selectContents: true, filterFunc: (term, label) => String(label).toLowerCase().includes(String(term).toLowerCase()) } }
+            return {
+                editor: 'list',
+                editorParams: {
+                    values: (column.options ?? []).map((o) => ({ label: o.label, value: o.value })),
+                    autocomplete: true,
+                    listOnEmpty: true,
+                    allowEmpty: true,
+                    selectContents: true,
+                    // Labels are data (a category's name, a related record's title): the list shows them as text, never as HTML.
+                    itemFormatter: (label) => textNode(label),
+                    filterFunc: (term, label) => String(label).toLowerCase().includes(String(term).toLowerCase()),
+                },
+            }
         case 'date':
             return { editor: isoEditor(false) }
         case 'datetime':
@@ -139,7 +170,7 @@ function editorFor(column) {
         case 'computed':
             return { editor: false }
         default:
-            return { editor: 'input', editorParams: { selectContents: true } }
+            return { editor: 'input', editorParams: { selectContents: true, ...(column.maxLength ? { elementAttributes: { maxlength: String(column.maxLength) } } : {}) } }
     }
 }
 
@@ -149,11 +180,14 @@ function editorFor(column) {
  *   rowOffset()         the number of the first row on the page, minus one
  *   sortState()         { column, direction } for the header arrows
  *   on.edit(id, col, from, to)          one cell edited in place
- *   on.rangeEdit([{ id, col, value }])  cells written by the fill handle or a cleared range
+ *   on.rangeEdit([{ id, col, from, to }])  cells written by the fill handle (the component re-checks each)
  *   on.sort(col)                        header clicked
  *   on.paste(text)                      text pasted into the grid
  *   on.select(count)                    rows in the active range
- *   on.context(event, id)               right-click on a row
+ *
+ * Delete/Backspace and Ctrl+X are the component's (clear() through its own
+ * editability check), never Tabulator's range clearing; a right-click is the
+ * view's contextmenu handler with rowAt().
  */
 export function createGrid(element, options) {
     const { columns, t, locale = 'en', readOnly = false, on = {} } = options
@@ -228,7 +262,7 @@ export function createGrid(element, options) {
         renderHorizontal: 'virtual',
         renderVertical: 'virtual',
         rowHeight: options.rowHeight ?? 32,
-        placeholder: t.empty,
+        placeholder: placeholder(t.empty),
         rowHeader: {
             field: ROWNUM,
             headerSort: false,
@@ -254,8 +288,8 @@ export function createGrid(element, options) {
         // A header click sorts (server-side); selecting whole columns would make it a selection too.
         selectableRangeColumns: false,
         selectableRangeRows: true,
-        selectableRangeClearCells: ! readOnly,
-        selectableRangeClearCellsValue: null,
+        // Tabulator's Delete would clear locked and computed cells too: the component handles the key (see clearSelection()).
+        selectableRangeClearCells: false,
         selectableRangeFill: ! readOnly,
         editTriggerEvent: 'dblclick',
         clipboard: 'copy',
@@ -306,8 +340,6 @@ export function createGrid(element, options) {
     table.on('rangeAdded', selectionChanged)
     table.on('rangeChanged', selectionChanged)
     table.on('rangeRemoved', selectionChanged)
-
-    table.on('rowContext', (e, row) => on.context?.(e, String(row.getIndex())))
 
     element.addEventListener('paste', (e) => {
         if (table.modules.edit.currentCell) return
@@ -450,6 +482,11 @@ export function createGrid(element, options) {
 
         focus() {
             table.rowManager.element.focus({ preventScroll: true })
+        },
+
+        /** Put the active range on the clipboard as TSV (what Ctrl+C does). */
+        copy() {
+            table.copyToClipboard('range')
         },
 
         /** The id of the row under a pointer event, if any. */

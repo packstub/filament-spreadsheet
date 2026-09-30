@@ -4,8 +4,8 @@
  * Nothing here touches the DOM, Tabulator or Livewire: TSV parsing, coercion per
  * column type (the same rules as the server's columns), the dirty buffer that
  * survives paging, sorting and searching until Save, the payload builder, the
- * undo stack, fill-down and paste planning, and how a save's answer is applied.
- * tests/js runs all of it on plain Node.
+ * undo stack, fill-down, clear and paste planning, and how a save's answer is
+ * applied. tests/js runs all of it on plain Node.
  */
 
 /* ------------------------------------------------------------------ TSV */
@@ -713,6 +713,28 @@ export function fillDownPlan({ rows, columns, top, bottom, left, right, readOnly
     return edits
 }
 
+/**
+ * Plan a clear (Delete, Backspace, the second half of a cut): every cell of the
+ * selection that may be edited becomes null; a locked, read-only or computed
+ * cell is left alone.
+ */
+export function clearPlan({ rows, columns, top, bottom, left, right, readOnly = false }) {
+    const edits = []
+
+    for (let r = top; r <= bottom; r++) {
+        const row = rows[r]
+        if (! row) continue
+
+        for (let c = left; c <= right; c++) {
+            const column = columns[c]
+            if (! editable(column, row, readOnly)) continue
+            edits.push({ id: row.id, col: column.name, from: row.values[column.name] ?? null, to: null, version: row.version })
+        }
+    }
+
+    return edits
+}
+
 /* ------------------------------------------------------------------ strings */
 
 /** Laravel's "{0} none|{1} one|[2,*] :count many" strings. */
@@ -773,4 +795,4 @@ export function matchesKey(event, binding) {
     return true
 }
 
-export const DEFAULT_KEYS = { save: 'mod+s', fill_down: 'mod+d', undo: 'mod+z', redo: 'mod+y', add_row: 'mod+enter' }
+export const DEFAULT_KEYS = { save: 'mod+s', fill_down: 'mod+d', undo: 'mod+z', redo: 'mod+y', add_row: 'mod+enter', cut: 'mod+x' }
