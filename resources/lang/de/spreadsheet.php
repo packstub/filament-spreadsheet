@@ -45,6 +45,7 @@ return [
     'has_conflicts' => 'Einige Zeilen wurden auf dem Server geändert, während Sie sie bearbeitet haben.',
     'offline' => 'Der Server war nicht erreichbar. Ihre Änderungen sind noch da.',
     'paste_skipped' => '{1} :count Zelle konnte nicht eingefügt werden (schreibgeschützt oder außerhalb der Tabelle).|[2,*] :count Zellen konnten nicht eingefügt werden (schreibgeschützt oder außerhalb der Tabelle).',
+    'paste_capped' => '{1} :count Zeile wurde nicht hinzugefügt: ein Speichervorgang umfasst höchstens :max Zeilen.|[2,*] :count Zeilen wurden nicht hinzugefügt: ein Speichervorgang umfasst höchstens :max Zeilen.',
     'failed' => 'Das Speichern ist fehlgeschlagen.',
     'load_failed' => 'Die Zeilen konnten nicht geladen werden.',
 
@@ -66,6 +67,7 @@ return [
     'their_value' => 'Ihr Wert (andere)',
     'your_value' => 'Ihr Wert',
     'row_failed' => 'Diese Zeile konnte nicht gespeichert werden.',
+    'row_delete_failed' => 'Diese Zeile konnte nicht gelöscht werden.',
     'too_many_cells' => 'Diese Zeile enthält mehr Zellen, als das Blatt Spalten hat.',
     'too_many_rows' => 'Zu viele Zeilen in einem Speichervorgang (höchstens :max). Speichern Sie in kleineren Schritten.',
     'error_count' => '{1} :count Zelle braucht Aufmerksamkeit|[2,*] :count Zellen brauchen Aufmerksamkeit',

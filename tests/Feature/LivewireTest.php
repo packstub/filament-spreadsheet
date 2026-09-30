@@ -39,6 +39,13 @@ it('queries the rows on the first render only: a re-render carries none, the bro
         ->and($component->instance()->getSpreadsheetConfig(withState: true)['state']['rows'][0]['values']['name'])->toBe('Hammer');
 });
 
+it('tells the browser the cap on rows per save, so a paste stops creating rows there', function () {
+    expect(Livewire::test(ProductSheet::class)->instance()->getSpreadsheetConfig()['maxRowsPerSave'])->toBe(2000);
+
+    config()->set('packstub-spreadsheet.max_rows_per_save', 50);
+    expect(Livewire::test(ProductSheet::class)->instance()->getSpreadsheetConfig()['maxRowsPerSave'])->toBe(50);
+});
+
 it('answers a page of rows renderless, whatever shape the request has', function () {
     foreach (range(1, 5) as $i) {
         product("p-{$i}", "Item {$i}");

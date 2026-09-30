@@ -1,10 +1,13 @@
 <?php
 
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Schema;
 use Packstub\Spreadsheet\Enums\SaveMode;
 use Packstub\Spreadsheet\Events\RowSaveFailed;
 use Packstub\Spreadsheet\Events\RowsSaved;
@@ -431,22 +434,95 @@ it('refuses a row carrying far more cells than the sheet has columns with one re
 
 it('queries an integer key with integers only: a crafted key is answered as missing, never sent to the database', function () {
     $product = product('a-1');
-    $crafted = ['abc', "1' or 1=1", '9x', '-1', '1.0'];
+    // The last two are digits but not a 64-bit integer: Postgres would refuse the whole query as out of range.
+    $crafted = ['abc', "1' or 1=1", '9x', '-1', '1.0', '99999999999999999999999', '9223372036854775808'];
     DB::enableQueryLog();
 
     $result = sheet()->saveMode(SaveMode::PerRow)->save(SavePayload::fromArray([
         'changed' => array_fill_keys($crafted, ['name' => 'X']) + [$product->id => ['name' => 'Ok']],
         'deleted' => $crafted,
     ]));
+    // whereKey() inlines integer keys into the SQL (whereIntegerInRaw), so both the bindings and the query text are checked.
     $bindings = collect(DB::getQueryLog())->flatMap(fn (array $q) => array_map(strval(...), $q['bindings']))->all();
+    $sql = collect(DB::getQueryLog())->pluck('query')->implode("\n");
     DB::disableQueryLog();
 
     expect(keys($result->saved))->toBe([(string) $product->id])
         ->and(keys($result->rowErrors))->toBe($crafted)
         ->and(array_unique($result->rowErrors))->toBe(['abc' => 'This row is no longer in the sheet.'])
         ->and(array_values(array_intersect($bindings, $crafted)))->toBe([])
+        ->and($sql)->not->toContain('99999999999999999999999', '9223372036854775808')
         ->and($bindings)->toContain((string) $product->id);
+
+    // The largest 64-bit key is still queried.
+    DB::enableQueryLog();
+    $result = sheet()->saveMode(SaveMode::PerRow)->save(SavePayload::fromArray(['changed' => ['9223372036854775807' => ['name' => 'X']]]));
+    $sql = collect(DB::getQueryLog())->pluck('query')->implode("\n");
+    DB::disableQueryLog();
+
+    expect($sql)->toContain('9223372036854775807')
+        ->and($result->rowErrors)->toBe(['9223372036854775807' => 'This row is no longer in the sheet.']);
 });
+
+it('marks the row the database refuses in AllOrNothing mode and rolls the batch back, every refused row reported', function () {
+    Exceptions::fake();
+    Event::fake([RowSaveFailed::class]);
+    $a = product('a-1');
+    $b = product('b-2', 'Product', ['cost' => 5]);
+    $c = product('c-3');
+
+    // cost is NOT NULL without a `required` rule, so the clear reaches the database; a-1 and c-3 are refused by the policy and a rule on top.
+    ProductPolicy::$updatable = ['B-2', 'C-3'];
+    $result = save(['changed' => [$a->id => ['name' => 'Fine'], $b->id => ['cost' => '', 'name' => 'Renamed'], $c->id => ['name' => '']]]);
+
+    expect($result->rolledBack)->toBeTrue()
+        ->and($result->message)->toBe('Nothing was saved: fix the marked cells and save again.')
+        ->and($result->rowErrors)->toBe([(string) $a->id => 'You cannot change this row.', (string) $b->id => 'This row could not be saved.'])
+        ->and($result->errors)->toBe([(string) $c->id => ['name' => 'The Name field is required.']])
+        ->and($b->fresh())->toMatchArray(['cost' => '5.00', 'name' => 'Product']);
+
+    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'NOT NULL'));
+    Event::assertDispatchedTimes(RowSaveFailed::class, 3);
+    Event::assertDispatched(RowSaveFailed::class, fn (RowSaveFailed $e) => $e->record?->is($b) && $e->reason === 'This row could not be saved.');
+    Event::assertDispatched(RowSaveFailed::class, fn (RowSaveFailed $e) => $e->record?->is($c) && $e->errors === ['name' => 'The Name field is required.']);
+
+    // Any other exception while writing still propagates for the caller to report.
+    ProductPolicy::reset();
+    Product::saving(fn () => throw new RuntimeException('observer down'));
+    expect(fn () => save(['changed' => [$b->id => ['name' => 'Again']]]))->toThrow(RuntimeException::class, 'observer down');
+});
+
+it('answers a delete the database refuses on its row, in both modes', function (SaveMode $mode) {
+    Exceptions::fake();
+    DB::statement('PRAGMA foreign_keys = ON');
+    Schema::create('order_items', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('product_id')->constrained('products');
+    });
+    $a = product('a-1');
+    $b = product('b-2');
+    DB::table('order_items')->insert(['product_id' => $a->id]);
+    ProductSheet::$saveMode = $mode;
+
+    $result = save(['deleted' => [$a->id, $b->id], 'changed' => [$b->id => ['name' => 'Kept']]]);
+
+    expect($result->rowErrors)->toBe([(string) $a->id => 'This row could not be deleted.'])
+        ->and($result->rolledBack)->toBe($mode === SaveMode::AllOrNothing)
+        ->and(Product::query()->whereKey($a->id)->exists())->toBeTrue();
+
+    if ($mode === SaveMode::PerRow) {
+        expect($result->deleted)->toBe([(string) $b->id])
+            ->and(keys($result->saved))->toBe([(string) $b->id])
+            ->and(Product::query()->count())->toBe(1);
+    } else {
+        expect($result->deleted)->toBe([])
+            ->and($result->saved)->toBe([])
+            ->and(Product::query()->count())->toBe(2)
+            ->and($b->fresh()->name)->toBe('Product');
+    }
+
+    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'FOREIGN KEY'));
+})->with([SaveMode::AllOrNothing, SaveMode::PerRow]);
 
 it('deletes through the same checks with delete()', function () {
     $a = product('a-1');

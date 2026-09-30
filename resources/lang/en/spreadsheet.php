@@ -45,6 +45,7 @@ return [
     'has_conflicts' => 'Some rows changed on the server while you edited them.',
     'offline' => 'Could not reach the server. Your changes are still here.',
     'paste_skipped' => '{1} :count cell could not be pasted (read-only or outside the sheet).|[2,*] :count cells could not be pasted (read-only or outside the sheet).',
+    'paste_capped' => '{1} :count row was not added: a save takes at most :max rows.|[2,*] :count rows were not added: a save takes at most :max rows.',
     'failed' => 'The save did not go through.',
     'load_failed' => 'The rows could not be loaded.',
 
@@ -66,6 +67,7 @@ return [
     'their_value' => 'Their value',
     'your_value' => 'Your value',
     'row_failed' => 'This row could not be saved.',
+    'row_delete_failed' => 'This row could not be deleted.',
     'too_many_cells' => 'This row carries more cells than the sheet has columns.',
     'too_many_rows' => 'Too many rows in one save (at most :max). Save in smaller batches.',
     'error_count' => '{1} :count cell needs attention|[2,*] :count cells need attention',

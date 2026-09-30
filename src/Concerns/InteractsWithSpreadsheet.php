@@ -152,6 +152,7 @@ trait InteractsWithSpreadsheet
             'readOnly' => $sheet->isReadOnly(),
             'saveMode' => $sheet->getSaveMode()->value,
             'versioned' => $sheet->getVersionColumn() !== null,
+            'maxRowsPerSave' => $sheet->getMaxRowsPerSave(),
             'confirmLeave' => (bool) config('packstub-spreadsheet.confirm_leave', true),
             'frozenFirstColumn' => (bool) config('packstub-spreadsheet.frozen_first_column', true),
             'rowHeight' => max(24, (int) config('packstub-spreadsheet.row_height', 32)),

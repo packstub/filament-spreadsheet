@@ -8,6 +8,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
@@ -79,6 +80,9 @@ class Spreadsheet
     protected ?string $key = null;
 
     protected bool $prepared = false;
+
+    /** Set by write() once the database refused a row in AllOrNothing mode: the batch is lost, the later rows are checked but not written. */
+    protected bool $writesAborted = false;
 
     public static function make(): static
     {
@@ -277,6 +281,12 @@ class Spreadsheet
     public function getMaxPerPage(): int
     {
         return max(1, (int) config('packstub-spreadsheet.max_per_page', 1000));
+    }
+
+    /** The most rows (updates, creates and deletes) one save may carry; the browser stops a paste from creating more. */
+    public function getMaxRowsPerSave(): int
+    {
+        return max(1, (int) config('packstub-spreadsheet.max_rows_per_save', 2000));
     }
 
     /** @return list<string> */
@@ -525,7 +535,7 @@ class Spreadsheet
             throw new SaveRejected(__('packstub-spreadsheet::spreadsheet.read_only'));
         }
 
-        $max = max(1, (int) config('packstub-spreadsheet.max_rows_per_save', 2000));
+        $max = $this->getMaxRowsPerSave();
 
         if ($payload->rowCount() > $max) {
             throw new SaveRejected(__('packstub-spreadsheet::spreadsheet.too_many_rows', ['max' => $max]));
@@ -547,6 +557,7 @@ class Spreadsheet
         /** @var list<array{0: ?Model, 1: array<string, mixed>, 2: array<string, string>, 3: ?string}> */
         $failed = [];
         $perRow = $this->getSaveMode() === SaveMode::PerRow;
+        $this->writesAborted = false;
 
         $work = function () use ($payload, $result, $updated, $created, &$deleted, &$failed, $perRow): void {
             $records = $this->findRecords([...array_keys($payload->changed), ...$payload->deleted]);
@@ -642,8 +653,8 @@ class Spreadsheet
                     continue;
                 }
 
-                if (! $this->write($result, $id, $perRow, fn () => $record->delete())) {
-                    $failed[] = [$record, [], [], __('packstub-spreadsheet::spreadsheet.row_failed')];
+                if (! $this->write($result, $id, $perRow, fn () => $record->delete(), 'row_delete_failed')) {
+                    $failed[] = [$record, [], [], __('packstub-spreadsheet::spreadsheet.row_delete_failed')];
 
                     continue;
                 }
@@ -749,7 +760,7 @@ class Spreadsheet
         if ($this->newModel()->getKeyType() === 'int') {
             // An integer key is queried with integers only: anything else is answered as
             // missing rather than sent to the database (Postgres refuses `id in ('abc')`).
-            $ids = array_values(array_filter($ids, fn ($id) => ctype_digit((string) $id)));
+            $ids = array_values(array_filter($ids, fn ($id) => $this->isIntegerKey((string) $id)));
         }
 
         if ($ids === []) {
@@ -763,6 +774,22 @@ class Spreadsheet
         }
 
         return $records;
+    }
+
+    /**
+     * A key an integer column can hold: digits only, and within 64 bits (Postgres
+     * raises "out of range for type bigint" for `id in ('99999999999999999999999')`,
+     * which would fail the whole batch).
+     */
+    protected function isIntegerKey(string $id): bool
+    {
+        if (! ctype_digit($id)) {
+            return false;
+        }
+
+        $digits = ltrim($id, '0') ?: '0';
+
+        return strlen($digits) <= 19 && (string) (int) $digits === $digits;
     }
 
     /** @return array{column: string, direction: string} */
@@ -918,28 +945,43 @@ class Spreadsheet
     }
 
     /**
-     * One row's write: in PerRow mode inside its own savepoint (a nested
-     * transaction), an exception rolling that row back, reported and turned into
-     * a row error; in AllOrNothing mode as part of the batch's transaction, an
-     * exception propagating to roll it all back.
+     * One row's write. In PerRow mode it runs inside its own savepoint (a nested
+     * transaction): any exception rolls that row back, is reported and becomes a
+     * row error. In AllOrNothing mode it is part of the batch's transaction: a
+     * database refusal (a NOT NULL or a foreign key the rules did not cover) is
+     * reported and lands on the row too, and since the batch will be rolled back
+     * the later rows are still checked but no longer written (on Postgres the
+     * transaction is aborted after the failed statement); any other exception
+     * propagates to roll it all back.
      */
-    protected function write(SaveResult $result, string $key, bool $perRow, Closure $operation): bool
+    protected function write(SaveResult $result, string $key, bool $perRow, Closure $operation, string $failure = 'row_failed'): bool
     {
-        if (! $perRow) {
-            $operation();
-
+        if (! $perRow && $this->writesAborted) {
             return true;
         }
 
         try {
-            DB::connection($this->newModel()->getConnectionName())->transaction($operation);
+            if ($perRow) {
+                DB::connection($this->newModel()->getConnectionName())->transaction($operation);
+            } else {
+                $operation();
+            }
         } catch (SaveRejected $e) {
+            if (! $perRow) {
+                throw $e;
+            }
+
             $result->rowError($key, $e->getMessage());
 
             return false;
         } catch (\Throwable $e) {
+            if (! $perRow && ! $e instanceof QueryException) {
+                throw $e;
+            }
+
             report($e);
-            $result->rowError($key, __('packstub-spreadsheet::spreadsheet.row_failed'));
+            $result->rowError($key, __('packstub-spreadsheet::spreadsheet.'.$failure));
+            $this->writesAborted = ! $perRow;
 
             return false;
         }

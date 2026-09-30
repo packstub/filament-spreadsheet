@@ -45,6 +45,7 @@ return [
     'has_conflicts' => 'Unele rânduri s-au schimbat pe server în timp ce le editai.',
     'offline' => 'Serverul nu a putut fi contactat. Modificările tale sunt încă aici.',
     'paste_skipped' => '{1} :count celulă nu a putut fi lipită (doar citire sau în afara foii).|[2,*] :count celule nu au putut fi lipite (doar citire sau în afara foii).',
+    'paste_capped' => '{1} :count rând nu a fost adăugat: o salvare poate avea cel mult :max rânduri.|[2,*] :count rânduri nu au fost adăugate: o salvare poate avea cel mult :max rânduri.',
     'failed' => 'Salvarea nu a reușit.',
     'load_failed' => 'Rândurile nu au putut fi încărcate.',
 
@@ -66,6 +67,7 @@ return [
     'their_value' => 'Valoarea lor',
     'your_value' => 'Valoarea ta',
     'row_failed' => 'Rândul nu a putut fi salvat.',
+    'row_delete_failed' => 'Rândul nu a putut fi șters.',
     'too_many_cells' => 'Acest rând conține mai multe celule decât are foaia coloane.',
     'too_many_rows' => 'Prea multe rânduri într-o salvare (cel mult :max). Salvează în loturi mai mici.',
     'error_count' => '{1} :count celulă necesită atenție|[2,*] :count celule necesită atenție',
