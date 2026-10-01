@@ -25,7 +25,7 @@
 | Ctrl + Enter | Add a row (when the sheet is creatable) |
 | Right-click a row | The row menu (delete / keep) |
 
-`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, Ctrl+Z takes the row away.
+`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, Ctrl+Z takes the row away.
 
 ## Paste from Excel, Google Sheets or Numbers
 
@@ -47,7 +47,7 @@ A changed cell keeps an amber corner until it is saved (or undone, or changed ba
 
 ## While a save is in flight
 
-From Ctrl+S until the answer lands the sheet takes no edits: the grid is dimmed, the pointer shows progress, no editor opens, and a paste, fill-down, undo, new row or deletion does nothing. What is typed meanwhile is dropped, not queued (the answer replaces the saved cells with what the server wrote, and an edit made in between would have been lost with them). A save takes a moment only for a big batch or a slow connection; editing resumes the instant it is answered, and the toolbar buttons follow.
+From Ctrl+S until the answer lands the sheet takes no edits: the grid is dimmed, the pointer shows progress, no editor opens, and a paste, fill-down, undo, new row or deletion does nothing. What is typed meanwhile is dropped, not queued (the answer replaces the saved cells with what the server wrote, and an edit made in between would have been lost with them). A save takes a moment only for a big batch or a slow connection; editing resumes the instant it is answered, and the toolbar buttons follow. A save that never reaches the server (the connection dropped, the session expired, a proxy answered instead) releases the sheet too, with everything unsaved still in place: see [Saving](saving.md#when-the-request-fails).
 
 ## Leaving the page
 

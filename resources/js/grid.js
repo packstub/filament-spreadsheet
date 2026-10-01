@@ -185,6 +185,7 @@ function editorFor(column) {
  *   on.sort(col)                        header clicked
  *   on.paste(text)                      text pasted into the grid
  *   on.select(count)                    rows in the active range
+ *   on.editing(open)                    an editor opened or closed
  *
  * Delete/Backspace and Ctrl+X are the component's (clear() through its own
  * editability check), never Tabulator's range clearing; a right-click is the
@@ -302,6 +303,15 @@ export function createGrid(element, options) {
         columns: defs,
     })
 
+    // Tabulator hands the focus back to the holder when an editor closes, without preventScroll: on a
+    // sheet taller than the window the page would jump under the pointer, and a click that closed the
+    // editor (on Save, say) would land somewhere else. The holder never scrolls the page for the focus.
+    const holder = table.rowManager?.element
+    if (holder) {
+        const focusHolder = holder.focus.bind(holder)
+        holder.focus = (options) => focusHolder({ ...(options ?? {}), preventScroll: true })
+    }
+
     const current = new Map()
 
     // Tabulator builds itself asynchronously: data calls wait for it.
@@ -323,6 +333,13 @@ export function createGrid(element, options) {
         if (current.has(id)) current.get(id)[col] = to
         on.edit?.(id, col, from, to)
     })
+
+    // Whether an editor is open, told after the event settles (an editor that closes without a change fires no cellEdited).
+    const editingChanged = () => setTimeout(() => on.editing?.(api.isEditing()), 0)
+    table.on('cellEditing', editingChanged)
+    table.on('cellEdited', editingChanged)
+    table.on('cellEditCancelled', editingChanged)
+    element.addEventListener('focusout', editingChanged)
 
     table.on('rangeEdited', (range) => {
         const edits = []
@@ -519,6 +536,7 @@ export function createGrid(element, options) {
         },
 
         destroy() {
+            element.removeEventListener('focusout', editingChanged)
             table.destroy()
         },
     }

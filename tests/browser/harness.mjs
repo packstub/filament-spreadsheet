@@ -2,7 +2,7 @@
  * A stand-alone page for the sheet: the real Blade view turned into static HTML,
  * the built bundle, Alpine from a CDN, a fake $wire with an in-memory "server"
  * (250 products, paging, sorting, search, a save that validates and can fake a
- * conflict). Used by run.mjs (headless Chromium) and openable by hand:
+ * conflict) and a fake Livewire (the commit hook, a commit that fails). Used by run.mjs (headless Chromium) and openable by hand:
  *
  *   node tests/browser/harness.mjs            writes tests/browser/.harness.html and serves it on :4177
  *
@@ -145,7 +145,29 @@ window.__server = (() => {
     }
 })()
 
+// What the component sees of Livewire: its id on $wire, and the commit hook. Livewire 3 leaves an action's promise
+// pending when its request fails and only runs the hook's fail callbacks; failCommit() does that for a commit
+// that carried the given methods.
+window.Livewire = (() => {
+    const listeners = {}
+
+    return {
+        listeners,
+        hook(name, callback) {
+            (listeners[name] ??= []).push(callback)
+
+            return () => { listeners[name] = listeners[name].filter((i) => i !== callback) }
+        },
+        failCommit(methods, id = window.__wire.$id) {
+            const fails = []
+            for (const callback of listeners.commit ?? []) callback({ component: { id }, commit: { calls: methods.map((method) => ({ method, params: [] })) }, respond() {}, succeed() {}, fail: (f) => fails.push(f) })
+            fails.forEach((f) => f())
+        },
+    }
+})()
+
 window.__wire = {
+    $id: 'harness-component',
     spreadsheetRows: async (req) => JSON.parse(JSON.stringify(window.__server.rows(req))),
     spreadsheetSave: async (payload) => JSON.parse(JSON.stringify(window.__server.save(payload))),
     spreadsheetDelete: async (ids) => JSON.parse(JSON.stringify(window.__server.save({ deleted: ids }))),

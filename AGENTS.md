@@ -14,7 +14,7 @@ composer test:js            # browser side's pure parts: node --test tests/js (p
 composer lint               # Pint
 npm run build               # resources/{js,css} → resources/dist (esbuild); commit the result
 npm run dev                 # rebuild on change
-node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, conflicts
+node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts
 ```
 
 CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.0 / 4.* / 5.*, and checks that `npm run build`
@@ -38,11 +38,11 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~291 KB / 74 KB gzip, 42 KB / 6 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~293 KB / 75 KB gzip, 42 KB / 6 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
-  (`harness.mjs` turns the real Blade view into a static page with a fake `$wire`; `run.mjs` drives it in Chromium
+  (`harness.mjs` turns the real Blade view into a static page with a fake `$wire` and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `run.mjs` drives it in Chromium
   through a sibling project's `playwright-core`; screenshots in `tests/browser/screenshots`, ignored).
 - `tests/Fixtures/ProductSheet.php` — a plain Livewire component holding a sheet, shaped by static flags;
   `Product` (decimal/int/bool/date/datetime/enum casts, an upper-casing SKU mutator), `Category`, `Status`,
@@ -93,7 +93,19 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   `markDeleted`, `undo`, `redo`, `deleteSelected`, `openMenu`, `runMenu` and `discard` return early (a keystroke is
   dropped, never queued; the toolbar's undo/redo disable too), the root carrying `ps-sheet-is-saving` (grid dimmed,
   `cursor: progress`) — `S.applyResult()` forgets the saved cells wholesale, so an edit made meanwhile would have
-  been lost with them. Undo steps: `edit`, `create`/`uncreate`, `delete`/`undelete`, and the
+  been lost with them. Every `$wire` call goes through `call(method, ...params)`, never `this.$wire.x()` directly: on
+  Livewire 3 (Filament 4) a failed request leaves the action's promise pending for good (Livewire 4 rejects it), so
+  `init()` registers `Livewire.hook('commit', ({ component, commit, fail }) => …)` for its own component
+  (`component.id === $wire.$id`; removed in `destroy()`; no `window.Livewire` in a test page is fine) and `call()` races
+  the promise against that failure: `requestFailed(commit)` rejects the oldest waiting call per method in
+  `commit.calls` (commits of one component go out in order), or everything waiting when the commit does not list its
+  calls. `saving` / `loading` are released in a `finally`; a failure leaves the buffer and the undo stack alone and
+  shows `offline`; an answer that lands after the failure is ignored (the race is settled). The waiting list is a
+  closure variable, not Alpine data (a reactive copy never compares equal). `save()` commits an open editor *before*
+  the dirty check (it may be the only change), and the Save button is enabled by `dirty.total || editing`
+  (`editing` comes from `grid.js`'s `on.editing`); the holder's `focus()` is wrapped to `preventScroll`, because
+  Tabulator focuses it when an editor closes and a page that scrolls under the pointer loses the click that closed
+  it. Undo steps: `edit`, `create`/`uncreate`, `delete`/`undelete`, and the
   compound `paste` (`S.applyPaste()`: the edits, the created rows with their temp ids and the cells it could not read,
   replayed together; a paste's new rows stop at `maxRowsPerSave` from the config, `capped` counted in the hint). A
   `pastePlan` invalid entry for a new row carries `created: k` (the index into `plan.created`), resolved to the temp id

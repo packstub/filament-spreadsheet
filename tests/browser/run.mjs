@@ -5,8 +5,10 @@
  * paste, fill-down, undo, dirty cells across pages, save (ok, errors,
  * conflicts), add and delete rows, Delete/Backspace/Ctrl+X over locked and
  * computed cells, a hostile select label, the shortcut scope, overlapping page
- * requests, read-only mode. Screenshots land in SCREENSHOT_DIR (default:
- * tests/browser/screenshots, ignored by git).
+ * requests, a failed save or page request (rejected, or never settled with
+ * Livewire's commit failure reported), Ctrl+S with an open editor, read-only
+ * mode. Screenshots land in SCREENSHOT_DIR (default: tests/browser/screenshots,
+ * ignored by git).
  *
  *   node tests/browser/run.mjs
  */
@@ -593,6 +595,142 @@ try {
     await page.waitForTimeout(150)
     s = await state()
     check('one undo takes the capped paste away', s.dirty.total === 0 && (await page.evaluate(() => window.sheet().grid.table.getRows().length)) === 25, JSON.stringify(s.dirty))
+
+    // Ctrl+S with an open editor as the only change: the editor is committed first, then saved (fresh page)
+    await page.goto(`http://127.0.0.1:${port}/`)
+    await page.waitForSelector('.tabulator-tableholder .tabulator-row')
+    await page.waitForFunction(() => window.sheet()?.rows?.length === 100)
+    const saveButton = page.locator('.ps-sheet-btn-primary')
+    const hintText = () => page.evaluate(() => window.sheet().hint ?? '')
+    check('Save is disabled on a clean sheet', await saveButton.isDisabled())
+    await cell(0, 'name').click()
+    await page.keyboard.type('Only edit')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('an open editor is not a buffered change yet, and Save is enabled for it', s.editing && s.dirty.total === 0 && (await saveButton.isEnabled()), JSON.stringify(s.dirty))
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction(() => ! window.sheet().saving && window.__server.calls.save.length > 0, null, { timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(80)
+    s = await state()
+    const soleSave = await page.evaluate(() => ({ calls: window.__server.calls.save.length, changed: window.__server.calls.save[0]?.changed ?? null, server: window.__server.products.find((p) => p.id === '1').name, text: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText, hint: window.sheet().hint }))
+    check('Ctrl+S with an open editor as the only change commits it and saves it in one call', soleSave.calls === 1 && JSON.stringify(soleSave.changed) === '{"1":{"name":"Only edit"}}' && soleSave.server === 'Only edit' && soleSave.text === 'Only edit' && s.dirty.total === 0 && ! s.editing && soleSave.hint !== 'Nothing to save.', JSON.stringify({ soleSave, dirty: s.dirty, editing: s.editing }))
+    check('Save is disabled again once it is saved', await saveButton.isDisabled())
+
+    // the same by mouse: the click on Save takes the focus, which commits the editor
+    await cell(1, 'name').click()
+    await page.keyboard.type('By mouse')
+    await page.waitForTimeout(50)
+    await saveButton.click({ timeout: 2000 }).catch(() => {})
+    await page.waitForFunction(() => ! window.sheet().saving && window.__server.calls.save.length > 1, null, { timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(80)
+    s = await state()
+    const mouseSave = await page.evaluate(() => ({ calls: window.__server.calls.save.length, changed: window.__server.calls.save[1]?.changed ?? null, server: window.__server.products.find((p) => p.id === '2').name }))
+    check('a click on Save with an open editor as the only change saves it too', mouseSave.calls === 2 && JSON.stringify(mouseSave.changed) === '{"2":{"name":"By mouse"}}' && mouseSave.server === 'By mouse' && s.dirty.total === 0 && ! s.editing, JSON.stringify({ mouseSave, dirty: s.dirty, editing: s.editing }))
+    await cell(2, 'name').click()
+    await page.keyboard.press('F2')
+    await page.waitForTimeout(50)
+    const enabledWhileOpen = await saveButton.isEnabled()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(50)
+    check('an editor closed with Escape leaves Save disabled and nothing to save', enabledWhileOpen && (await saveButton.isDisabled()) && (await state()).dirty.total === 0)
+
+    // a save whose request fails with a rejected promise (Livewire 4): the lock is released, nothing is lost, a retry saves
+    await cell(0, 'name').click()
+    await page.keyboard.type('Rejected')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    await page.evaluate(() => {
+        window.__wire.__origSave = window.__wire.spreadsheetSave
+        window.__wire.spreadsheetSave = async () => { await new Promise((r) => setTimeout(r, 200)); throw new Error('Failed to fetch') }
+    })
+    await page.keyboard.press('Control+s')
+    await page.waitForTimeout(60)
+    const rejectDuring = await page.evaluate(() => window.sheet().saving)
+    await page.waitForTimeout(400)
+    s = await state()
+    const rejected = await page.evaluate(() => { const sh = window.sheet(); return { saving: sh.saving, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-saving'), change: sh.buffer.changes['1']?.name, undo: sh.buffer.undo.length, calls: window.__server.calls.save.length, waiting: sh.waitingCalls() } })
+    check('a save whose promise rejects releases the lock, keeps the buffer and the undo stack, and says so', rejectDuring && ! rejected.saving && ! rejected.cue && rejected.change === 'Rejected' && rejected.undo === 1 && rejected.calls === 2 && rejected.waiting === 0 && s.dirty.total === 1 && (await hintText()).includes('Could not reach the server') && (await saveButton.isEnabled()), JSON.stringify({ rejectDuring, rejected, hint: await hintText() }))
+
+    // a save whose promise never settles while Livewire reports the commit failed (Livewire 3)
+    await page.evaluate(() => {
+        window.__wire.spreadsheetSave = () => new Promise((resolve) => { window.__lateSave = () => resolve({ ok: false, saved: {}, created: {}, deleted: [], errors: {}, rowErrors: { 1: 'A late answer.' }, conflicts: {}, versions: {}, message: 'A late answer.', rolledBack: false }) })
+    })
+    await page.keyboard.press('Control+s')
+    await page.waitForTimeout(300)
+    const stuck = await page.evaluate(() => {
+        const sh = window.sheet()
+        const before = sh.saving
+        window.Livewire.failCommit(['spreadsheetSave'], 'another-component')
+        window.Livewire.failCommit(['spreadsheetRows'])
+
+        return { before, afterOthers: sh.saving }
+    })
+    await page.evaluate(() => window.Livewire.failCommit(['spreadsheetSave']))
+    await page.waitForTimeout(80)
+    s = await state()
+    const signalled = await page.evaluate(() => { const sh = window.sheet(); return { saving: sh.saving, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-saving'), change: sh.buffer.changes['1']?.name, undo: sh.buffer.undo.length, waiting: sh.waitingCalls() } })
+    check('a save that never settles stays locked until its own commit fails: another component\'s, or a commit without the save, changes nothing', stuck.before && stuck.afterOthers, JSON.stringify(stuck))
+    check('the failure Livewire reports releases the lock, keeps the buffer and the undo stack, and says so', ! signalled.saving && ! signalled.cue && signalled.change === 'Rejected' && signalled.undo === 1 && signalled.waiting === 0 && s.dirty.total === 1 && (await hintText()).includes('Could not reach the server') && (await saveButton.isEnabled()), JSON.stringify({ signalled, hint: await hintText() }))
+    await cell(0, 'price').click()
+    await page.keyboard.type('6')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('editing works again after a failed save', s.dirty.rows === 1 && s.dirty.cells === 2, JSON.stringify(s.dirty))
+    await page.evaluate(() => window.__lateSave())
+    await page.waitForTimeout(80)
+    s = await state()
+    const late = await page.evaluate(() => { const sh = window.sheet(); return { changes: sh.buffer.changes['1'], rowError: sh.buffer.rowErrors['1'] ?? null, undo: sh.buffer.undo.length, hint: sh.hint, saving: sh.saving } })
+    check('an answer that lands after the reported failure is ignored', late.changes?.name === 'Rejected' && late.changes?.price === 6 && late.rowError === null && late.undo === 2 && late.hint !== 'A late answer.' && ! late.saving && s.errorCount === 0 && s.dirty.cells === 2, JSON.stringify(late))
+    await page.evaluate(() => { window.__wire.spreadsheetSave = window.__wire.__origSave })
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction(() => ! window.sheet().saving && window.__server.calls.save.length > 2, null, { timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(80)
+    s = await state()
+    const retried = await page.evaluate(() => { const p = window.__server.products.find((x) => x.id === '1'); return { calls: window.__server.calls.save.length, changed: window.__server.calls.save.at(-1).changed, name: p.name, price: p.price } })
+    check('the retry saves what the failed save held and what was edited since', retried.calls === 3 && JSON.stringify(retried.changed) === '{"1":{"name":"Rejected","price":6}}' && retried.name === 'Rejected' && retried.price === 6 && s.dirty.total === 0, JSON.stringify({ retried, dirty: s.dirty }))
+
+    // a page request that fails: rejected (Livewire 4), or never settled with the failure reported (Livewire 3)
+    await cell(1, 'stock').click()
+    await page.keyboard.type('4')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    const rowsRejected = await page.evaluate(async () => {
+        const sh = window.sheet()
+        window.__wire.__origRows = window.__wire.spreadsheetRows
+        window.__wire.spreadsheetRows = async () => { throw new Error('Failed to fetch') }
+        sh.hint = null
+        await sh.refresh()
+
+        return { loading: sh.loading, rows: sh.rows.length, hint: sh.hint, dirty: sh.dirty.total, waiting: sh.waitingCalls() }
+    })
+    check('a page request whose promise rejects clears the loading state and keeps the rows and the buffer', ! rowsRejected.loading && rowsRejected.rows === 100 && rowsRejected.dirty === 1 && rowsRejected.waiting === 0 && String(rowsRejected.hint).includes('Could not reach the server'), JSON.stringify(rowsRejected))
+    const rowsStuck = await page.evaluate(async () => {
+        const sh = window.sheet()
+        window.__wire.spreadsheetRows = () => new Promise((resolve) => { window.__lateRows = () => resolve({ ok: true, rows: [], total: 0, page: 1, perPage: 100, lastPage: 1 }) })
+        sh.hint = null
+        sh.refresh()
+        await new Promise((r) => setTimeout(r, 200))
+        const before = { loading: sh.loading, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-loading') }
+        window.Livewire.failCommit(['spreadsheetSave'])
+        const afterOther = sh.loading
+        window.Livewire.failCommit(['spreadsheetRows'])
+        await new Promise((r) => setTimeout(r, 50))
+        const after = { loading: sh.loading, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-loading'), rows: sh.rows.length, hint: sh.hint, dirty: sh.dirty.total, waiting: sh.waitingCalls() }
+        window.__lateRows()
+        await new Promise((r) => setTimeout(r, 50))
+        const late = { rows: sh.rows.length, total: sh.total, gridRows: sh.grid.table.getRows().length }
+        window.__wire.spreadsheetRows = window.__wire.__origRows
+        await sh.refresh()
+
+        return { before, afterOther, after, late, retry: { rows: sh.rows.length, loading: sh.loading, dirty: sh.dirty.total } }
+    })
+    check('a page request that never settles is released by the failure Livewire reports for its commit', rowsStuck.before.loading && rowsStuck.before.cue && rowsStuck.afterOther && ! rowsStuck.after.loading && ! rowsStuck.after.cue && rowsStuck.after.rows === 100 && rowsStuck.after.dirty === 1 && rowsStuck.after.waiting === 0 && String(rowsStuck.after.hint).includes('Could not reach the server'), JSON.stringify(rowsStuck))
+    check('its late answer is ignored and the next request loads the page', rowsStuck.late.rows === 100 && rowsStuck.late.total === 250 && rowsStuck.late.gridRows === 100 && rowsStuck.retry.rows === 100 && ! rowsStuck.retry.loading && rowsStuck.retry.dirty === 1, JSON.stringify(rowsStuck))
+
+    // the hook is the component's own and goes with it
+    const hooks = await page.evaluate(() => { const sh = window.sheet(); const before = window.Livewire.listeners.commit.length; sh._unhook(); return { before, after: window.Livewire.listeners.commit.length } })
+    check('the commit hook is registered once and removed by the function destroy() calls', hooks.before === 1 && hooks.after === 0, JSON.stringify(hooks))
 
     // dark mode and RTL screenshots
     await page.goto(`http://127.0.0.1:${port}/?dark`)

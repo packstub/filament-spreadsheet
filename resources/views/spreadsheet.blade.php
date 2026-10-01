@@ -23,7 +23,7 @@
     :style="height ? { '--ps-sheet-height': height } : {}"
 >
     <div class="ps-sheet-toolbar">
-        <button type="button" class="ps-sheet-btn ps-sheet-btn-primary" x-on:click="save()" :disabled="readOnly || saving || ! dirty.total" :title="t.save + ' (Ctrl+S)'">
+        <button type="button" class="ps-sheet-btn ps-sheet-btn-primary" x-on:click="save()" :disabled="readOnly || saving || ! (dirty.total || editing)" :title="t.save + ' (Ctrl+S)'">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4.5h9l3 3V16H4z"/><path d="M7 4.5v4h5v-4M7 16v-4h6v4"/></svg>
             <span x-text="t.save"></span>
             <span class="ps-sheet-badge" x-show="dirty.total" x-text="dirty.total"></span>

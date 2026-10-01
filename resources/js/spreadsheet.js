@@ -16,6 +16,8 @@ export { choice }
 export default function packstubSpreadsheet(config) {
     const t = config.i18n ?? {}
     const keys = {}
+    // The $wire calls not answered yet (see call()). Kept out of the Alpine data: a reactive copy would never compare equal.
+    let waiting = []
     for (const [name, spec] of Object.entries({ ...S.DEFAULT_KEYS, ...(config.keybindings ?? {}) })) keys[name] = S.parseKeybinding(spec)
 
     return {
@@ -38,6 +40,7 @@ export default function packstubSpreadsheet(config) {
         confirmLeave: config.confirmLeave !== false,
         loading: false,
         saving: false,
+        editing: false,
         dirty: { cells: 0, rows: 0, pages: 0, created: 0, deleted: 0, total: 0 },
         canUndo: false,
         canRedo: false,
@@ -64,6 +67,13 @@ export default function packstubSpreadsheet(config) {
             window.addEventListener('beforeunload', this._beforeUnload)
             document.addEventListener('livewire:navigate', this._navigate)
 
+            // Livewire 3 never settles an action's promise when its request fails (Livewire 4 rejects it):
+            // the commit hook's `fail` is the one signal both have. See call().
+            this._unhook = window.Livewire?.hook?.('commit', ({ component, commit, fail } = {}) => {
+                if (typeof fail !== 'function' || ! component || component.id !== this.$wire?.$id) return
+                fail(() => this.requestFailed(commit))
+            })
+
             this.$nextTick(() => {
                 this.grid = createGrid(this.$refs.grid, {
                     columns: this.columns,
@@ -81,6 +91,7 @@ export default function packstubSpreadsheet(config) {
                         sort: (col) => this.sortBy(col),
                         paste: (text) => this.onPaste(text),
                         select: (count) => { this.selected = this.readOnly || ! this.deletable ? 0 : count },
+                        editing: (open) => { this.editing = open },
                     },
                 })
 
@@ -93,6 +104,7 @@ export default function packstubSpreadsheet(config) {
             this.$root.removeEventListener('keydown', this._keydown, true)
             window.removeEventListener('beforeunload', this._beforeUnload)
             document.removeEventListener('livewire:navigate', this._navigate)
+            if (typeof this._unhook === 'function') this._unhook()
             clearTimeout(this._hint)
             this.grid?.destroy()
         },
@@ -170,13 +182,50 @@ export default function packstubSpreadsheet(config) {
             return { page: this.page, perPage: this.perPage, sort: this.sort, search: this.search, filters: JSON.parse(JSON.stringify(this.active)) }
         },
 
+        /**
+         * A $wire call that settles whatever happens to its request: with the answer, with
+         * the promise's own rejection (Livewire 4), or with the failure Livewire reports for
+         * the commit that carried it (Livewire 3, where the promise stays pending for good).
+         * Whichever comes first wins; an answer that lands after a reported failure is ignored.
+         */
+        call(method, ...params) {
+            const waiter = { method, reject: null }
+            const failed = new Promise((_, reject) => { waiter.reject = () => reject(new Error('The request failed.')) })
+            waiting.push(waiter)
+            let answer
+            try { answer = this.$wire[method](...params) } catch (e) { answer = Promise.reject(e) }
+
+            return Promise.race([answer, failed])
+                .finally(() => { waiting = waiting.filter((w) => w !== waiter) })
+        },
+
+        /** How many calls wait for an answer (the browser harness reads it). */
+        waitingCalls() {
+            return waiting.length
+        },
+
+        /**
+         * A commit of this component failed. Livewire sends a component's commits one after
+         * the other, so the calls it carried are the oldest ones waiting, per method; a commit
+         * that does not say what it carried releases everything that waits.
+         */
+        requestFailed(commit) {
+            const calls = Array.isArray(commit?.calls) ? commit.calls.map((c) => c?.method) : null
+            const open = [...waiting]
+            if (! calls) { for (const w of open) w.reject(); return }
+            for (const method of calls) {
+                const i = open.findIndex((w) => w && w.method === method)
+                if (i > -1) { open[i].reject(); open[i] = null }
+            }
+        },
+
         /** Ask for the page the toolbar describes. Requests can overlap (search, paging, a sort): only the latest one's answer is applied. */
         async refresh() {
             if (! this.grid) return
             const seq = ++this._req
             this.loading = true
             try {
-                const r = await this.$wire.spreadsheetRows(this.request())
+                const r = await this.call('spreadsheetRows', this.request())
                 if (seq !== this._req) return
                 if (! r || r.ok === false) this.notify(r?.message ?? t.load_failed, 'danger')
                 else this.applyPage(r)
@@ -363,8 +412,10 @@ export default function packstubSpreadsheet(config) {
 
         async save() {
             if (this.saving || this.readOnly) return
-            if (! this.dirty.total) { this.flash(t.nothing_to_save); this.refocus(); return }
+            // An open editor is committed first: it may be the only unsaved change.
             if (this.grid.isEditing()) { this.grid.focus(); await new Promise((r) => setTimeout(r, 0)) }
+            if (this.saving) return
+            if (! this.dirty.total) { this.flash(t.nothing_to_save); this.refocus(); return }
 
             // A page request still in flight (a debounced search, say) would land after the
             // save and lay its stale rows and versions over the saved ones: its answer is
@@ -387,15 +438,16 @@ export default function packstubSpreadsheet(config) {
             let result
 
             try {
-                result = await this.$wire.spreadsheetSave(payload)
+                result = await this.call('spreadsheetSave', payload)
             } catch (e) {
-                this.saving = false
+                // The buffer and the undo stack are untouched: Save again retries.
                 this.notify(t.offline, 'danger')
 
                 return
+            } finally {
+                this.saving = false
             }
 
-            this.saving = false
             if (! result || typeof result !== 'object') { this.notify(t.failed, 'danger'); return }
 
             const out = S.applyResult(this.buffer, result)

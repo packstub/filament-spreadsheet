@@ -51,6 +51,12 @@ Every row the browser loads carries a **version**: the raw value of `updated_at`
 
 `beforeSave()` runs before anything is written and may throw `SaveRejected` with a message the user sees; `afterSave()` runs inside the transaction in both modes (an exception rolls the save back; a `SaveRejected` shows its message, anything else a generic one). A database refusal while writing a row lands on that row (see above); any other exception (a model observer's, a hook's) is reported to the exception handler and answered with "The save did not go through.": an exception's text is for the log, never for the notification.
 
+## When the request fails
+
+A save that does not reach the server, or comes back as an error page (the connection dropped, a 419 after the session expired, a 500 or 502 from a proxy), changes nothing in the browser: every unsaved cell, new row and deletion stays, the undo history too, the sheet says "Could not reach the server. Your changes are still here." and takes edits again. Save once more when the connection is back: the same batch is sent, with whatever was edited since. The same goes for a page of rows that fails to load: the rows on screen stay, and the next sort, search or page asks again.
+
+This holds on both Filament lines. Livewire 4 (Filament 5) rejects the call; Livewire 3 (Filament 4) leaves it unanswered and only reports the failed request, which the sheet listens for.
+
 ## Deleting through the API
 
 `spreadsheetDelete(ids)` on the component and `Spreadsheet::delete(ids)` on the definition delete by key through the same checks as a Save (`deletable()`, the policy, the save mode). The toolbar itself marks rows and deletes them with the next Save, so a deletion can be undone until then.
