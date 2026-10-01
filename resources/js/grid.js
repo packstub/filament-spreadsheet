@@ -53,6 +53,9 @@ function isoEditor(withTime) {
         const once = (fn) => { if (settled) return; settled = true; fn() }
         const done = () => once(() => {
             const v = input.value
+            // A part missing (the day cleared, a year not typed yet) reads as '' with badInput: not a cleared
+            // date, the cell keeps its value. Every part cleared reads as '' without it: that one empties the cell.
+            if (! v && input.validity.badInput) { cancel(); return }
             success(v ? (withTime ? v.replace('T', ' ') + ':00' : v) : null)
         })
         // A typed date fires change on every key that alters the value (each digit, Backspace, an arrow
@@ -461,6 +464,32 @@ export function createGrid(element, options) {
     }
     element.addEventListener('keydown', editorKeys, true)
 
+    // currentCell is false, not null, while nothing is edited.
+    const listOpen = () => { const c = table.modules.edit.currentCell; return !! c && c.column.definition.editor === 'list' }
+
+    // Tabulator's list editor filters its options by the field's text on every keyup but the arrows, Enter and
+    // Escape: the keyup of F2 itself (the key that opened it), of a modifier, of Home / End / PageUp / PageDown
+    // would shrink the list to the current label. Those never reach it. A deny-list: any other key may have
+    // changed the text (a character, Backspace, Delete, an IME's `Process`).
+    const LIST_KEYUPS = ['F2', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Home', 'End', 'PageUp', 'PageDown']
+    const listKeyup = (e) => {
+        if (listOpen() && LIST_KEYUPS.includes(e.key)) e.stopPropagation()
+    }
+    element.addEventListener('keyup', listKeyup, true)
+
+    // The list editor ignores selectContents and leaves the caret after the label: a letter typed after F2 / Enter /
+    // a double-click would be appended to it and match nothing. The label is selected once the editor is open, so
+    // the letter replaces it and filters. Not when the cell was opened by typing (api.edit(initial)): that text stays.
+    let typedOpen = false
+    table.on('cellEditing', (cell) => {
+        if (typedOpen || cell.getColumn().getDefinition().editor !== 'list') return
+        setTimeout(() => {
+            const input = document.activeElement
+            if (destroyed || ! listOpen() || input?.tagName !== 'INPUT' || ! cell.getElement()?.contains(input)) return
+            input.select()
+        }, 0)
+    })
+
     element.addEventListener('paste', (e) => {
         if (table.modules.edit.currentCell) return
         const text = e.clipboardData?.getData('text/plain') ?? ''
@@ -672,7 +701,8 @@ export function createGrid(element, options) {
             // as it scrolled out, an undo, a save answer) rebuilds its cells when it renders again.
             const cell = row.getCell(a.col)
             if (! cell || ! editableCell(cell)) return false
-            cell.edit(true)
+            typedOpen = initial !== null
+            try { cell.edit(true) } finally { typedOpen = false }
             const ok = api.isEditing()
             if (ok && initial !== null) {
                 const input = cell.getElement().querySelector('input, textarea')
@@ -739,6 +769,7 @@ export function createGrid(element, options) {
             element.removeEventListener('focusout', editingChanged)
             element.removeEventListener('keydown', jumped)
             element.removeEventListener('keydown', editorKeys, true)
+            element.removeEventListener('keyup', listKeyup, true)
             document.removeEventListener('mousedown', pointerDown, true)
             table.destroy()
         },

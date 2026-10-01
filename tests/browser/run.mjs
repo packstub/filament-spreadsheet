@@ -14,8 +14,10 @@
  * Ctrl+ArrowDown / Ctrl+ArrowUp, the editing state after an outside click,
  * where a new page opens and what keeps the scroll, the active cell and the
  * range over a re-read of the same rows, the keys inside an open editor (a date
- * typed digit by digit, PageUp / PageDown / Home / End, ArrowUp / ArrowDown per
- * editor type), the leave guard, read-only mode.
+ * typed digit by digit, a date with a part cleared, PageUp / PageDown / Home /
+ * End, ArrowUp / ArrowDown per editor type, a select's list opened by F2 and
+ * the keys that must not filter it, Enter on a cell without an editor), the
+ * leave guard, read-only mode.
  * Screenshots land in SCREENSHOT_DIR (default: tests/browser/screenshots,
  * ignored by git).
  *
@@ -1700,7 +1702,107 @@ try {
     const l4 = await inEditor()
     check('ArrowUp and ArrowDown in a select editor move through its options, the list open on its cell, and Enter picks the one reached', clean() && [l0, l1, l2, l3].every((x) => x.editing && x.cell === '5/category_id' && x.active === '5/category_id') && l0.list === 'Tools,Paint,Garden' && l1.list === 'Tools,Paint*,Garden' && l2.list === 'Tools*,Paint,Garden' && l3.list === 'Tools,Paint*,Garden' && ! l4.editing && (await valueOf(5, 'category_id')) === '2' && l4.active === '6/category_id', JSON.stringify({ l0, l1, l2, l3, l4, value: await valueOf(5, 'category_id'), errors: errors.slice(errorsSeen) }))
 
-    // the listener goes with the sheet
+    // a date with a part missing is not a cleared date: leaving the editor keeps the cell's value; every part cleared empties it
+    await fresh()
+    errorsSeen = errors.length
+    const onServer = (id, field) => page.evaluate(([i, f]) => window.__server.products.find((p) => p.id === i)?.[f], [String(id), field])
+    const dateField = () => page.evaluate(() => { const i = document.activeElement; return { value: i.value, bad: !! i.validity?.badInput } })
+    for (const [field, label] of [['available_on', 'date'], ['published_at', 'date-time']]) {
+        const kept = await valueOf(15, field)
+        const leaves = []
+        for (const how of ['click', 'Enter', 'Control+s']) {
+            await (await cellOf(15, field)).click()
+            await press('F2')
+            await press('Backspace')
+            const half = { ...(await dateField()), editing: (await inEditor()).editing }
+            const saves = await page.evaluate(() => window.__server.calls.save.length)
+            if (how === 'click') await (await cellOf(17, 'name')).click()
+            else await page.keyboard.press(how)
+            await page.waitForTimeout(150)
+            await page.waitForFunction(() => ! window.sheet().saving)
+            const e = await inEditor()
+            leaves.push({ how, half, editing: e.editing, dirty: e.dirty, active: e.active, value: await valueOf(15, field), server: await onServer(15, field), saved: (await page.evaluate(() => window.__server.calls.save.length)) - saves })
+        }
+        check(`a ${label} with one part cleared is not a cleared ${label}: a click on another cell, Enter or Ctrl+S leave the cell, the unsaved count and the server as they were`, clean() && kept !== null && leaves.every((x) => x.half.editing && x.half.value === '' && x.half.bad && ! x.editing && x.dirty === 0 && x.value === kept && x.server === kept && x.saved === 0) && leaves[0].active === '17/name' && leaves[1].active === `16/${field}`, JSON.stringify({ kept, leaves, errors: errors.slice(errorsSeen) }))
+
+        await (await cellOf(15, field)).click()
+        await press('F2')
+        let parts = { value: null, bad: true }
+        for (let n = 0; n < 8 && parts.bad !== false; n++) { await press('Backspace', 40); await press('ArrowRight', 40); parts = await dateField() }
+        await press('Enter')
+        const e = await inEditor()
+        check(`every part of a ${label} cleared and Enter empties the cell`, clean() && parts.value === '' && parts.bad === false && ! e.editing && (await valueOf(15, field)) === null && e.dirty === 1 && e.active === `16/${field}`, JSON.stringify({ parts, e, value: await valueOf(15, field) }))
+        await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+        await page.waitForTimeout(100)
+    }
+
+    // a select opened by F2 shows every option: the keyup of F2 (and of a modifier, Home, PageDown …) never filters the list
+    const optionCount = await page.evaluate(() => window.sheet().columns.find((c) => c.name === 'category_id').options.length)
+    const listed = (x) => (x.list === '' ? [] : x.list.split(','))
+    await (await cellOf(4, 'category_id')).click()
+    const before4 = await valueOf(4, 'category_id')
+    await press('F2', 300)
+    const f2 = await inEditor()
+    await press('ArrowDown')
+    const f2Down = await inEditor()
+    await press('Enter')
+    const f2Picked = await inEditor()
+    check('F2 on a select cell opens the list with every option, its label selected, and ArrowDown + Enter pick the next one', clean() && f2.editing && f2.cell === '4/category_id' && listed(f2).length === optionCount && optionCount === 3 && f2.input === 'Paint' && f2.caret === '0-5' && f2Down.list === 'Tools,Paint,Garden*' && ! f2Picked.editing && before4 === '2' && (await valueOf(4, 'category_id')) === '3' && f2Picked.active === '5/category_id', JSON.stringify({ optionCount, f2, f2Down, f2Picked, value: await valueOf(4, 'category_id'), errors: errors.slice(errorsSeen) }))
+
+    for (const [opener, label] of [['F2', 'F2'], ['Enter', 'Enter'], ['dblclick', 'a double-click']]) {
+        await (await cellOf(7, 'category_id')).click()
+        if (opener === 'dblclick') { await (await cellOf(7, 'category_id')).dblclick(); await page.waitForTimeout(300) } else await press(opener, 300)
+        const opened = await inEditor()
+        const shrunk = []
+        for (const key of ['Shift', 'Control', 'Alt', 'Home', 'End', 'PageUp', 'PageDown']) {
+            await press(key)
+            const x = await inEditor()
+            if (! x.editing || x.cell !== '7/category_id' || listed(x).length !== optionCount) shrunk.push({ key, x })
+        }
+        await press('Escape')
+        check(`in a select's list opened by ${label}, Shift, Control, Alt, Home, End, PageUp and PageDown leave every option listed`, clean() && opened.editing && listed(opened).length === optionCount && opened.caret === '0-5' && shrunk.length === 0 && ! (await inEditor()).editing && (await valueOf(7, 'category_id')) === '2', JSON.stringify({ opened, shrunk, errors: errors.slice(errorsSeen) }))
+    }
+
+    // typing still filters: on the selected cell (the letter is the search text), and after F2 (the letter replaces the selected label)
+    await (await cellOf(7, 'category_id')).click()
+    await press('p')
+    const typedP = await inEditor()
+    await press('x')
+    const typedPx = await inEditor()
+    await press('Backspace')
+    const typedBack = await inEditor()
+    await press('Escape')
+    await press('g')
+    const typedG = await inEditor()
+    await press('Escape')
+    check('typing on a select cell filters its list by the typed text, and Backspace filters again', clean() && typedP.input === 'p' && typedP.list === 'Paint' && typedPx.input === 'px' && typedPx.list === '' && typedBack.input === 'p' && typedBack.list === 'Paint' && typedG.input === 'g' && typedG.list === 'Garden' && ! (await inEditor()).editing && (await valueOf(7, 'category_id')) === '2', JSON.stringify({ typedP, typedPx, typedBack, typedG }))
+    await press('F2', 300)
+    await press('g')
+    const f2g = await inEditor()
+    await press('ArrowDown')
+    const f2gDown = await inEditor()
+    await press('Enter')
+    const f2gPicked = await inEditor()
+    check('F2 and a letter replace the label and filter the list: "g" shows Garden, ArrowDown + Enter pick it', clean() && f2g.editing && f2g.input === 'g' && f2g.list === 'Garden' && f2gDown.list === 'Garden*' && ! f2gPicked.editing && (await valueOf(7, 'category_id')) === '3' && f2gPicked.active === '8/category_id', JSON.stringify({ f2g, f2gDown, f2gPicked, value: await valueOf(7, 'category_id'), errors: errors.slice(errorsSeen) }))
+
+    // Enter on a cell without an editor does nothing (Tabulator's own Enter would throw there); a boolean still flips, a text cell still opens
+    const enterDirty = (await state()).dirty.total
+    await (await cellOf(5, 'margin')).click()
+    const marginBefore = await valueOf(5, 'margin')
+    await press('Enter', 200)
+    const onComputed = await inEditor()
+    await (await cellOf(5, 'is_active')).click()
+    const activeBefore = await valueOf(5, 'is_active')
+    await press('Enter', 200)
+    const onBoolean = await inEditor()
+    const activeAfter = await valueOf(5, 'is_active')
+    await (await cellOf(5, 'name')).click()
+    await press('Enter', 200)
+    const onText = await inEditor()
+    await press('Escape')
+    check('Enter on a computed cell does nothing and throws nothing; on a boolean it still flips the cell, on a text cell it still opens the editor', clean() && ! onComputed.editing && onComputed.active === '5/margin' && onComputed.dirty === enterDirty && (await valueOf(5, 'margin')) === marginBefore && ! onBoolean.editing && activeAfter === ! activeBefore && onBoolean.dirty === enterDirty + 1 && onBoolean.active === '5/is_active' && onText.editing && onText.cell === '5/name' && onText.input === 'Product 5', JSON.stringify({ onComputed, onBoolean, activeBefore, activeAfter, onText, errors: errors.slice(errorsSeen) }))
+
+    // the listeners go with the sheet
     const keyListener = await page.evaluate(() => {
         const el = window.sheet().grid.table.element
         const calls = []
@@ -1708,9 +1810,9 @@ try {
         el.removeEventListener = function (type, listener, options) { calls.push(type + ':' + String(options)); return orig.call(this, type, listener, options) }
         window.sheet().grid.destroy()
 
-        return calls.includes('keydown:true')
+        return calls.includes('keydown:true') && calls.includes('keyup:true')
     })
-    check('destroying the grid removes the editor-key listener', keyListener)
+    check('destroying the grid removes the editor-key listeners (keydown, and the keyup kept from the select list)', keyListener)
 
     /* ---------------------------------------------------------------- leaving with text in an open editor; removing the sheet with one */
 
@@ -1777,6 +1879,19 @@ try {
     await page.waitForTimeout(80)
     s = await state()
     check('a read-only sheet takes no typing, no paste, and disables Save and Add row', s.dirty.total === 0 && ! s.editing && (await page.locator('.ps-sheet-btn-primary').isDisabled()) && (await page.locator('.ps-sheet-pill-readonly').isVisible()) && ! (await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).isVisible()), JSON.stringify(s.dirty))
+
+    // Enter on a boolean or a computed cell of a read-only sheet: no editor to open, nothing thrown, nothing changed
+    errorsSeen = errors.length
+    const readOnlyEnter = []
+    for (const field of ['is_active', 'margin']) {
+        await cell(0, field).click()
+        const before = await page.evaluate((f) => window.sheet().grid.value('1', f), field)
+        await page.keyboard.press('Enter')
+        await page.waitForTimeout(200)
+        s = await state()
+        readOnlyEnter.push({ field, same: (await page.evaluate((f) => window.sheet().grid.value('1', f), field)) === before, editing: s.editing, dirty: s.dirty.total, active: `${s.active?.id}/${s.active?.col}` })
+    }
+    check('Enter on a boolean and on a computed cell of a read-only sheet does nothing and throws nothing', errors.length === errorsSeen && readOnlyEnter.every((x) => x.same && ! x.editing && x.dirty === 0 && x.active === `1/${x.field}`), JSON.stringify({ readOnlyEnter, errors: errors.slice(errorsSeen) }))
 } catch (e) {
     check('the run did not throw', false, String(e.stack ?? e))
 } finally {

@@ -45,7 +45,9 @@ While a cell is being edited, the keys belong to its editor first. What each one
 
 Enter, Tab and ↑ / ↓ select the neighbouring cell without opening its editor, so a column of numbers is typed as in a spreadsheet: a value, ↓, a value, ↓. None of these keys scrolls the grid away from the cell you are in: Page Up, Page Down, Home and End act on the grid again once the editor is closed.
 
-A date or a date-time can be typed part by part (the order of the parts follows the browser's locale): the editor stays open until Enter, Tab or a click elsewhere commits what it holds, and Escape leaves the cell as it was. A date picked from the browser's calendar is committed at once.
+A date or a date-time can be typed part by part (the order of the parts follows the browser's locale): the editor stays open until Enter, Tab or a click elsewhere commits what it holds, and Escape leaves the cell as it was. A date picked from the browser's calendar is committed at once. An incomplete date (one part cleared, a year not typed yet) leaves the cell as it was: clear every part, or press Delete on the selected cell, to empty it.
+
+A select opened with Enter, F2 or a double-click lists every option, with the current label selected in the search field: ↑ / ↓ and Enter pick another option, a typed letter replaces the label and searches the list (then ↓ and Enter pick from what is left). Typing on the selected cell opens the list already searched by that letter.
 
 ## Paste from Excel, Google Sheets or Numbers
 

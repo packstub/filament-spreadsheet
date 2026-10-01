@@ -14,7 +14,7 @@ composer test:js            # browser side's pure parts: node --test tests/js (p
 composer lint               # Pint
 npm run build               # resources/{js,css} → resources/dist (esbuild); commit the result
 npm run dev                 # rebuild on change
-node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys
+node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list
 ```
 
 CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.0 / 4.* / 5.*, and checks that `npm run build`
@@ -38,7 +38,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~300 KB / 79 KB gzip, 42 KB / 7 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~301 KB / 79 KB gzip, 42 KB / 7 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
@@ -181,9 +181,23 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   on the field (the calendar button) clears it; Enter, Tab (the component's blur) and blur commit, Escape cancels. It
   stops ArrowUp / ArrowDown itself, at the target, so they step the segment and never reach `navUp` / `navDown`
   (`editorKeys` cannot stop them in the capture phase: the input's own listener would not run and `keyed` would stay
-  false). The harness types 11/11/2027: the segment order follows the system locale. Known and left: F2 on a select
-  opens its list filtered to the current label (the list editor filters on the F2 `keyup`); Enter and a double-click
-  show every option.
+  false). The harness types 11/11/2027: the segment order follows the system locale. `done` cancels when the field
+  reads `''` with `validity.badInput` (a part missing: one segment cleared, a year not typed yet), so a blur, Enter or
+  Ctrl+S on a half-typed date keeps the cell's value; every part cleared reads `''` without `badInput` and commits
+  null (the harness clears parts until `badInput` is false: their number follows the locale).
+- Select editor (`grid.js`): Tabulator's list editor re-filters by the field's text on every `keyup` but the arrows,
+  Enter and Escape, so `listKeyup`, a **capture-phase** `keyup` listener on the grid element (removed in `destroy()`),
+  stops a deny-list of keys while a list editor is open (`listOpen()`): F2 (the key that opened it), Shift, Control,
+  Alt, Meta, CapsLock, Home, End, PageUp, PageDown. A deny-list, not "anything that is not one character": an IME
+  reports `Process`. `currentCell` is `false`, not null, when nothing is edited (`?.` does not guard it). The list
+  editor ignores `selectContents` and leaves the caret after the label, so a `cellEditing` handler selects the
+  label one tick later (the editor is built after that event) for F2 / Enter / a double-click; `api.edit(initial)`
+  sets `typedOpen` around `cell.edit(true)` and keeps its typed text. Tabulator's own rule stays: Enter after typed
+  text resolves the text (cancel when it is no option, null when it is empty, `allowEmpty`), it does not pick the one
+  option left; ArrowDown + Enter pick it.
+- Enter on a cell without an editor (`spreadsheet.js` `onKeydown`): Tabulator's range module calls `editCell` on the
+  active cell and throws for a column with `editor: false`, so the component stops Enter on a computed cell and on a
+  boolean in a read-only sheet (an editable boolean is flipped by `toggleActive()` further down).
 - In the Blade view, an element with `x-show` binds `:style` with the object syntax; nothing stored is interpolated
   into `wire:click` / `x-on:` expressions.
 - Render once: `$spreadsheetRendered` (`#[Locked]`) makes `getSpreadsheetConfig()` skip `rows()` after the render

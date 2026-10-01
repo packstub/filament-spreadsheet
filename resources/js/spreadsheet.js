@@ -607,6 +607,14 @@ export default function packstubSpreadsheet(config) {
                 return
             }
 
+            // A column without an editor (computed; a boolean in a read-only sheet): Tabulator's Enter would call
+            // editCell on it and throw. An editable boolean is flipped below.
+            if (e.key === 'Enter' && ! e.ctrlKey && ! e.metaKey) {
+                const a = this.grid.activeCell()
+                const type = a && this.column(a.col)?.type
+                if (type === 'computed' || (type === 'boolean' && this.readOnly)) { e.preventDefault(); e.stopPropagation(); return }
+            }
+
             if (this.readOnly || e.target?.closest?.('input, select, textarea, button')) return
 
             if ((e.key === 'Delete' || e.key === 'Backspace') && ! e.ctrlKey && ! e.metaKey && ! e.altKey) { e.preventDefault(); this.clearSelection(); return }
