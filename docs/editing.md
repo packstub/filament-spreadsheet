@@ -52,4 +52,4 @@ From Ctrl+S until the answer lands the sheet takes no edits: the grid is dimmed,
 
 ## Leaving the page
 
-With unsaved changes, closing the tab or navigating away (Livewire's navigate too) asks first (`confirm_leave` in the config). Text in a cell you are still typing in counts as one. Discard drops everything unsaved after a confirmation.
+With unsaved changes, closing the tab or navigating away (Livewire's navigate too) asks first (`confirm_leave` in the config). Text in a cell you are still typing in counts as one. Discard drops everything unsaved after a confirmation; the grid stays where it was scrolled to and the active cell where it was.

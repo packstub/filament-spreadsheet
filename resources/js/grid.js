@@ -396,16 +396,18 @@ export function createGrid(element, options) {
     // handled the key, the row the range moved to is brought into view by scrollTo(), which corrects.
     // The range overlay is laid out first: Tabulator does that 200 ms after a scroll, the overlay still
     // at its old place holds the holder's scroll height until then, and the holder would move again
-    // (the row out of view once more) when it lets go.
+    // (the row out of view once more) when it lets go. Alt is not looked at: Tabulator's keybinding
+    // jumps with it held too.
+    const layoutRanges = () => table.modules.selectRange?.layoutRanges?.()
     const jumped = (e) => {
-        if (! (e.ctrlKey || e.metaKey) || e.altKey || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || api.isEditing()) return
+        if (! (e.ctrlKey || e.metaKey) || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || api.isEditing()) return
         const down = e.key === 'ArrowDown'
         setTimeout(() => {
             if (destroyed || api.isEditing()) return
             const rows = table.getRanges().at(-1)?.getRows() ?? []
             const row = down ? rows.at(-1) : rows[0]
             if (! row) return
-            table.modules.selectRange?.layoutRanges?.()
+            layoutRanges()
             api.scrollTo(row.getIndex())
         }, 0)
     }
@@ -441,11 +443,30 @@ export function createGrid(element, options) {
         for (let round = 0, still = 0; round < 8 && still < 2; round++) {
             const el = row.getElement()
             if (destroyed || ! el?.isConnected) return
+            // The range overlay follows its rows at once (Tabulator lays it out 200 ms after a scroll): left
+            // where the rows were, under the last row it holds the scroll height open, and the holder
+            // moves when it lets go (under a click, which then misses its cell).
+            layoutRanges()
             const before = holder.scrollTop
             holder.scrollTop += el.getBoundingClientRect().top - (holder.getBoundingClientRect().top + holder.clientTop) - anchor.offset
             still = Math.abs(holder.scrollTop - before) < 1 ? still + 1 : 0
             await new Promise((resolve) => setTimeout(resolve, 16))
         }
+    }
+
+    /**
+     * Put the active range back on the same rows and columns after the data was replaced (Tabulator
+     * resets it to the first cell, and the next keystroke would go there); a row that is gone gives its
+     * place to the one now there.
+     */
+    const restoreRange = (kept) => {
+        if (destroyed || ! kept?.rows.length || ! kept.cols.length) return
+        const rows = table.getRows()
+        if (! rows.length) return
+        const at = (id, position) => rows.find((r) => String(r.getIndex()) === id) ?? rows[Math.min(Math.max(position, 0), rows.length - 1)]
+        const first = at(kept.rows[0], kept.top)?.getCell(kept.cols[0])
+        const last = at(kept.rows.at(-1), kept.bottom)?.getCell(kept.cols.at(-1))
+        if (first && last) table.getRanges().at(-1)?.setBounds(first, last)
     }
 
     const api = {
@@ -457,7 +478,9 @@ export function createGrid(element, options) {
          * Replace every row. Other rows (a new page, a sort, a search or filter result) open at the top:
          * setData renders from the first row. `top` false is for the same rows read again (a refresh, a
          * discard), which stay where they are scrolled to: replaceData re-renders around the old position,
-         * from estimated heights, so the row that was at the top of the window is put back there.
+         * from estimated heights, so the row that was at the top of the window is put back there. The
+         * active range is put back too, before the scroll is corrected: a key typed meanwhile reaches the
+         * cell the user was on (a restore after the correction would undo a move made during it).
          */
         async setRows(rows, top = true) {
             await ready
@@ -466,7 +489,9 @@ export function createGrid(element, options) {
             if (top) return table.setData(rows)
 
             const anchor = topRow()
+            const kept = api.selection()
             await table.replaceData(rows)
+            restoreRange(kept)
             if (anchor) await restoreTop(anchor)
         },
 

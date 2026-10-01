@@ -12,7 +12,8 @@
  * failed page / sort / page-size request, a cell edited after its row was
  * updated out of the window, a sheet built while hidden and a window resize,
  * Ctrl+ArrowDown / Ctrl+ArrowUp, the editing state after an outside click,
- * where a new page opens and what keeps the scroll, the leave guard,
+ * where a new page opens and what keeps the scroll, the active cell and the
+ * range over a re-read of the same rows, the leave guard,
  * read-only mode.
  * Screenshots land in SCREENSHOT_DIR (default: tests/browser/screenshots,
  * ignored by git).
@@ -1217,6 +1218,37 @@ try {
     check('Ctrl+Shift+ArrowUp extends it to the first row and shows that end', clean() && sel.rows === 5 && sel.first === '1' && sel.last === '5' && seen.inside, JSON.stringify({ sel, seen }))
     await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
     await page.waitForTimeout(60)
+    // Alt held as well: Tabulator's keybinding does not look at it and jumps, so the cell is brought into view all the same
+    await fresh()
+    errorsSeen = errors.length
+    await cell(0, 'name').click()
+    await page.keyboard.press('Control+Alt+ArrowDown')
+    await page.waitForTimeout(400)
+    s = await state()
+    seen = await inView(100)
+    check('Ctrl+Alt+ArrowDown jumps to the last row too, inside the visible window', clean() && s.active?.id === '100' && s.active?.col === 'name' && seen.inside, JSON.stringify({ active: s.active, seen }))
+    await page.keyboard.press('Control+Alt+ArrowUp')
+    await page.waitForTimeout(400)
+    s = await state()
+    seen = await inView(1)
+    check('and Ctrl+Alt+ArrowUp back to the first one', clean() && s.active?.id === '1' && seen.inside, JSON.stringify({ active: s.active, seen }))
+    // in an open editor the arrows are the text field's: Alt+ArrowLeft moves the caret (a word back on macOS), a jump key leaves the editor, the active cell and the scroll alone
+    await cell(2, 'name').click()
+    await page.keyboard.type('hello big world')
+    const caret = () => page.evaluate(() => { const i = document.querySelector('.tabulator-editing input'); const h = document.querySelector('.ps-sheet .tabulator-tableholder'); const sh = window.sheet(); return { open: sh.grid.isEditing(), value: i?.value ?? null, at: i?.selectionStart ?? null, active: sh.grid.activeCell(), scrollTop: h.scrollTop } })
+    const caretBefore = await caret()
+    await page.keyboard.press('Alt+ArrowLeft')
+    await page.keyboard.type('X')
+    await page.waitForTimeout(60)
+    const caretAlt = await caret()
+    await page.keyboard.press('Control+Alt+ArrowDown')
+    await page.waitForTimeout(300)
+    const caretJump = await caret()
+    // elsewhere than on macOS Alt+ArrowLeft is not a caret key: the X lands at the end, the editor stays open all the same
+    const typedAt = process.platform === 'darwin' ? 'hello big Xworld' : caretAlt.value
+    check('in an open editor Alt+ArrowLeft moves the caret, and Ctrl+Alt+ArrowDown leaves the editor, its text, the active cell and the scroll as they were', clean() && caretBefore.open && caretBefore.at === 15 && caretAlt.open && caretAlt.value === typedAt && caretJump.open && caretJump.value === caretAlt.value && caretJump.active?.id === '3' && caretJump.active?.col === 'name' && caretJump.scrollTop === caretBefore.scrollTop, JSON.stringify({ caretBefore, caretAlt, caretJump }))
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(60)
 
     /* ---------------------------------------------------------------- the editing state after a click outside the grid */
 
@@ -1347,6 +1379,146 @@ try {
     await page.waitForTimeout(200)
     v = await firstVisible()
     check('Discard keeps the scroll position', (await state()).dirty.total === 0 && samePlace(before5, v), JSON.stringify({ before5, v }))
+
+    /* ---------------------------------------------------------------- the same rows read again keep the active cell and the range */
+
+    // replaceData makes Tabulator put the range on the first cell of the page: with the scroll kept, the next
+    // keystroke would be written into a row that is not on screen.
+    const selectionOf = () => page.evaluate(() => { const x = window.sheet().grid.selection(); return x && { rows: x.rows.join(), cols: x.cols.join(), ranges: window.sheet().grid.table.getRanges().length } })
+    const changesOf = () => page.evaluate(() => JSON.stringify(window.sheet().buffer.changes))
+    const refreshEvent = async () => {
+        const n = await page.evaluate(() => window.__server.calls.rows.length)
+        await page.evaluate(() => window.dispatchEvent(new CustomEvent('packstub-spreadsheet-refresh')))
+        await page.waitForFunction((k) => window.__server.calls.rows.length === k + 1, n)
+    }
+    // The text is typed, the place read once the grid is at rest, then Enter commits (Enter moves the active cell down, and Tabulator may scroll a row for that).
+    const typeInto = async (text) => { await page.keyboard.type(text); await atRest(); const place = await firstVisible(); await page.keyboard.press('Enter'); await page.waitForTimeout(60); return place }
+    const at70 = async () => {
+        await fresh()
+        errorsSeen = errors.length
+        await scrollToRow(70)
+        await atRest()
+    }
+
+    // (a) Discard
+    await at70()
+    await (await cellOf(69, 'name')).click()
+    await page.keyboard.type('Dirty')
+    await page.keyboard.press('Enter')
+    await atRest()
+    before5 = await firstVisible()
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(20)
+    let a = (await state()).active
+    v = await typeInto('Soon')
+    check('Discard keeps the active cell: a key typed 20 ms later goes into that row, the first visible row unchanged', clean() && a?.id === '70' && a?.col === 'name' && (await changesOf()) === '{"70":{"name":"Soon"}}' && samePlace(before5, v), JSON.stringify({ a, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
+    await atRest()
+    before5 = await firstVisible()
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(700)
+    a = (await state()).active
+    v = await typeInto('Later')
+    check('and one typed 700 ms later', clean() && a?.id === '71' && a?.col === 'name' && (await changesOf()) === '{"71":{"name":"Later"}}' && samePlace(before5, v), JSON.stringify({ a, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
+
+    // (b) the refresh event
+    for (const wait of [20, 700]) {
+        await at70()
+        await (await cellOf(70, 'name')).click()
+        await atRest()
+        before5 = await firstVisible()
+        await refreshEvent()
+        await page.waitForTimeout(wait)
+        a = (await state()).active
+        v = await typeInto('Hello')
+        check(`a packstub-spreadsheet-refresh keeps the active cell: a key typed ${wait} ms later goes into that row, the first visible row unchanged`, clean() && a?.id === '70' && a?.col === 'name' && (await changesOf()) === '{"70":{"name":"Hello"}}' && samePlace(before5, v), JSON.stringify({ a, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
+    }
+
+    // a range of several cells
+    await at70()
+    await (await cellOf(70, 'name')).click()
+    await page.keyboard.press('Shift+ArrowDown')
+    await page.keyboard.press('Shift+ArrowRight')
+    await atRest()
+    before5 = await firstVisible()
+    const rangeBefore = await selectionOf()
+    await refreshEvent()
+    await settled()
+    let rangeAfter = await selectionOf()
+    v = await firstVisible()
+    check('a range of several cells is kept over a refresh', clean() && rangeBefore.rows === '70,71' && rangeBefore.cols === 'name,category_id' && rangeAfter?.rows === '70,71' && rangeAfter?.cols === 'name,category_id' && samePlace(before5, v), JSON.stringify({ rangeBefore, rangeAfter, before5, v }))
+    await (await cellOf(69, 'stock')).click()
+    await page.keyboard.type('3')
+    await page.keyboard.press('Enter')
+    await (await cellOf(70, 'name')).click()
+    await page.keyboard.press('Shift+ArrowDown')
+    await page.keyboard.press('Shift+ArrowRight')
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(300)
+    rangeAfter = await selectionOf()
+    check('and over Discard', clean() && (await state()).dirty.total === 0 && rangeAfter?.rows === '70,71' && rangeAfter?.cols === 'name,category_id', JSON.stringify({ rangeAfter }))
+
+    // Ctrl+click: the sheet keeps one range (selectableRange: 1), so the click moves it; the pointer-down is dispatched,
+    // on macOS a real Ctrl+click is the context click
+    await at70()
+    await (await cellOf(70, 'name')).click()
+    await page.evaluate(() => { const el = window.sheet().grid.table.getRow('66').getCell('price').getElement(); el.dispatchEvent(new MouseEvent('mousedown', { ctrlKey: true, button: 0, bubbles: true, cancelable: true })); el.dispatchEvent(new MouseEvent('mouseup', { ctrlKey: true, button: 0, bubbles: true, cancelable: true })) })
+    await atRest()
+    before5 = await firstVisible()
+    const multiBefore = await selectionOf()
+    await refreshEvent()
+    await settled()
+    const multiAfter = await selectionOf()
+    v = await typeInto('12')
+    check('a Ctrl+click moves the one range the sheet keeps, and a refresh after it does not throw: the range stays there and typing goes into it', clean() && multiBefore.ranges === 1 && multiBefore.rows === '66' && multiAfter?.ranges === 1 && multiAfter?.rows === '66' && multiAfter?.cols === 'price' && (await changesOf()) === '{"66":{"price":12}}' && samePlace(before5, v), JSON.stringify({ multiBefore, multiAfter, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
+
+    // the active row deleted on the server: the range goes to the row now at its place
+    await at70()
+    await (await cellOf(70, 'name')).click()
+    await atRest()
+    before5 = await firstVisible()
+    const place = await page.evaluate(() => { window.__server.save({ deleted: ['70'] }); return window.sheet().grid.ids().indexOf('70') })
+    await refreshEvent()
+    await settled()
+    const moved70 = await page.evaluate((i) => { const g = window.sheet().grid; return { active: g.activeCell(), there: g.ids()[i], has70: g.ids().includes('70') } }, place)
+    v = await typeInto('Next')
+    check('the active row deleted on the server and a refresh: the active cell is on the row now at that place', clean() && place === 69 && ! moved70.has70 && moved70.there === '71' && moved70.active?.id === '71' && moved70.active?.col === 'name' && (await changesOf()) === '{"71":{"name":"Next"}}' && samePlace(before5, v), JSON.stringify({ place, moved70, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
+
+    // nothing left on the server: no row to put the range on
+    await at70()
+    await (await cellOf(70, 'name')).click()
+    await page.evaluate(() => { window.__server.products.length = 0 })
+    await refreshEvent()
+    await settled()
+    await page.keyboard.type('x')
+    await page.waitForTimeout(100)
+    const emptied = await page.evaluate(() => { const sh = window.sheet(); return { rows: sh.grid.ids().length, total: sh.total, active: sh.grid.activeCell(), editing: sh.grid.isEditing(), dirty: sh.dirty.total } })
+    check('an empty answer with a cell selected does not throw', clean() && emptied.rows === 0 && emptied.total === 0 && emptied.active === null && ! emptied.editing && emptied.dirty === 0, JSON.stringify({ emptied, errors: errors.slice(errorsSeen) }))
+
+    // (c) the re-read after a save that found a page request in flight
+    for (const wait of [20, 700]) {
+        await at70()
+        await (await cellOf(69, 'stock')).click()
+        await page.keyboard.type('41')
+        await page.keyboard.press('Enter')
+        await atRest()
+        before5 = await firstVisible()
+        await slowRows(300)
+        const landing = await page.evaluate(async () => {
+            const sh = window.sheet()
+            const n = window.__server.calls.rows.length
+            sh.refresh()
+            await new Promise((r) => setTimeout(r, 20))
+            await sh.save()
+            // until the re-read's rows are in the grid (the scroll is still being corrected then)
+            while (sh.loading || window.__server.calls.rows.length < n + 2) await new Promise((r) => setTimeout(r, 5))
+
+            return { calls: window.__server.calls.rows.length - n, dirty: sh.dirty.total }
+        })
+        await page.waitForTimeout(wait)
+        a = (await state()).active
+        v = await typeInto('9')
+        check(`the re-read after a save with a page request in flight keeps the active cell: a key typed ${wait} ms later goes into that row, the first visible row unchanged`, clean() && landing.calls === 2 && landing.dirty === 0 && a?.id === '70' && a?.col === 'stock' && (await changesOf()) === '{"70":{"stock":9}}' && samePlace(before5, v), JSON.stringify({ landing, a, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
+    }
 
     /* ---------------------------------------------------------------- leaving with text in an open editor; removing the sheet with one */
 

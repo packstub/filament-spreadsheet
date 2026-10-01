@@ -47,7 +47,10 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   renders only the rows around its window: `cell(index, …)` counts the row elements in the DOM, so a case that
   addresses a row further down calls `scrollToRow(id)` and takes the cell with `cellOf(id, field)`; never work
   around it by making the grid taller. A scroll position is compared as the first visible row and its offset
-  (`firstVisible()` / `samePlace()`), read in the middle of a page and after `atRest()`: `scrollTop` moves with
+  (`firstVisible()` / `samePlace()`), read in the middle of a page and after `atRest()`, and before the Enter that
+  commits a typed cell (Enter moves the active cell down, and Tabulator scrolls a row when the next one is cut off;
+  `scrollToRow(id)` leaves the row at the bottom of the window, so a row two further down is out of it and a click
+  on it scrolls): `scrollTop` moves with
   Tabulator's estimated heights, and 200 ms after a scroll its range overlay is laid out again, which can move the
   holder (most at the very end of a page).
 - `tests/Fixtures/ProductSheet.php` — a plain Livewire component holding a sheet, shaped by static flags;
@@ -128,7 +131,8 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   before opening its editor, and takes the cell *after* the scroll: a row updated while it had no element (an editor
   committed as it scrolled out, an undo, a save answer) rebuilds its cells when it renders again, and a cell
   component taken earlier is a deleted one. Ctrl+ArrowDown / Ctrl+ArrowUp (with Shift too) are Tabulator's jump,
-  followed by `grid.js`'s `jumped()`: it lays the range overlay out at once (`modules.selectRange.layoutRanges()`,
+  followed by `grid.js`'s `jumped()` (which does not look at Alt, as Tabulator's keybinding does not: a handler that
+  skipped Ctrl+Alt+Arrow left the jump out of view; in an open editor it does nothing, the arrows are the field's): it lays the range overlay out at once (`modules.selectRange.layoutRanges()`,
   otherwise the overlay's old place holds the scroll height for 200 ms and the holder moves again when it lets go)
   and then `scrollTo()`s the row the range moved to. `ResizeTableModule` is registered: a sheet built while hidden
   (a tab, a collapsed section) redraws when it becomes visible, and on a size change; it leaves the inline
@@ -139,7 +143,15 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   (`query` is `queryKey(request)`: the search and filters the answer was asked with, not the ones typed since). When
   all four equal the previous `_applied` the rows are the same ones read again and the scroll is kept
   (`grid.setRows(rows, false)`: `replaceData`, then the row that was at the top of the window is put back with its
-  offset, Tabulator's own re-render in position drifts by several rows); anything else opens at the top
+  offset, Tabulator's own re-render in position drifts by several rows) and so is the range: `replaceData` resets it
+  to the first cell of the page, where the next keystroke would be written with the user looking at row 58, so
+  `setRows()` takes `api.selection()` before and `restoreRange(kept)` puts the last range's bounds back right after
+  `replaceData`, *before* `restoreTop()` and only there (after it, the first ~130 ms of typing go to row 1; a second
+  restore after it would undo a move the user made meanwhile). Rows are found by id, a row that is gone by the
+  position it had (clamped); no rows, no restore. `restoreTop()` calls `layoutRanges()` in each round: the overlay
+  left where its rows were (Tabulator lays it out 200 ms after a scroll) holds the scroll height open under the last
+  row, and the holder moving when it lets go makes a click miss its cell (the focus then stays on the cell element
+  and is lost with it). The sheet keeps one range (`selectableRange: 1`: a Ctrl+click moves it); anything else opens at the top
   (`setRows(rows, true)`: `setData`, which renders from the first row; setting `scrollTop = 0` after `replaceData`
   leaves the old window's rows on screen). `discard()` re-renders with `renderPage()` (no `top`), the scroll kept. `setPage()`,
   `setPerPage()` and `sortBy()` set the asked-for state at once; when the latest request throws or answers
