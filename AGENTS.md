@@ -14,7 +14,7 @@ composer test:js            # browser side's pure parts: node --test tests/js (p
 composer lint               # Pint
 npm run build               # resources/{js,css} → resources/dist (esbuild); commit the result
 npm run dev                 # rebuild on change
-node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, a keyboard-only pass
+node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, keys on a boolean cell, Alt+arrows, a keyboard-only pass
 ```
 
 CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.0 / 4.* / 5.*, and checks that `npm run build`
@@ -195,9 +195,19 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   sets `typedOpen` around `cell.edit(true)` and keeps its typed text. Tabulator's own rule stays: Enter after typed
   text resolves the text (cancel when it is no option, null when it is empty, `allowEmpty`), it does not pick the one
   option left; ArrowDown + Enter pick it.
-- Enter on a cell without an editor (`spreadsheet.js` `onKeydown`): Tabulator's range module calls `editCell` on the
-  active cell and throws for a column with `editor: false`, so the component stops Enter, with any modifier, on a
-  computed cell and on a boolean in a read-only sheet (an editable boolean is flipped by `toggleActive()` further down).
+- A cell without an editor (boolean, computed: `editor: false`): Tabulator's `editCell` / `cell.edit()` throws there
+  (`column.modules.edit` is undefined), and two paths reach it. Enter (`spreadsheet.js` `onKeydown`): Tabulator's range
+  module calls `editCell` on the active cell, so the component stops Enter, with any modifier, on a computed cell and
+  on a boolean in a read-only sheet; an editable boolean is flipped by `toggleActive()` further down on a plain Enter
+  and stops there with Ctrl / Meta (reachable when `add_row` is bound to another key; the harness's `?addrow=<key>`).
+  F2 and typing (`grid.js` `api.edit()`): a boolean passes `editableCell()`, so `edit()` also returns false when the
+  column's definition has no `editor`. Nothing else calls `cell.edit()`; a double-click is bound by Tabulator only on
+  columns with an editor (the boolean's is the column's own `cellDblClick`).
+- Alt+ArrowLeft / Alt+ArrowRight are the browser's (Back / Forward on Windows and Linux, a word step in a text field on
+  macOS): Tabulator's keybindings do not look at Alt, so they moved the active cell and prevented the default.
+  `altArrows`, a **capture-phase** `keydown` listener on the grid element (removed in `destroy()`), stops the
+  propagation only, with Shift too, never with Ctrl / Meta (Ctrl+Alt+Arrow is still Tabulator's jump, see `jumped()`).
+  The key therefore does not bubble past the grid: a page listener for it has to be a capture one.
 - A key the component acts on is the component's alone: every such branch of `onKeydown` calls `own()`
   (`preventDefault` + `stopPropagation`, in the capture phase on the root, so neither the target nor Tabulator sees
   the key). Tabulator has two keydown handlers of its own: the range module's on the holder (Enter, with any modifier,

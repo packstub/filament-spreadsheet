@@ -632,12 +632,13 @@ export default function packstubSpreadsheet(config) {
                 return
             }
 
-            // A column without an editor (computed; a boolean in a read-only sheet): Tabulator's Enter would call
-            // editCell on it and throw, with any modifier held. An editable boolean is flipped below.
+            // A column without an editor (computed; a boolean): Tabulator's Enter would call editCell on it and throw,
+            // with any modifier held. An editable boolean is flipped below by a plain Enter; with Ctrl or Meta
+            // (not the add-row key, handled above) the key does nothing.
             if (e.key === 'Enter') {
                 const a = this.grid.activeCell()
                 const type = a && this.column(a.col)?.type
-                if (type === 'computed' || (type === 'boolean' && this.readOnly)) { own(); return }
+                if (type === 'computed' || (type === 'boolean' && (this.readOnly || e.ctrlKey || e.metaKey))) { own(); return }
             }
 
             if (this.readOnly || e.target?.closest?.('input, select, textarea, button')) return

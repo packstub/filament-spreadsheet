@@ -19,8 +19,10 @@
  * the keys that must not filter it, Enter on a cell without an editor), digits
  * typed on a selected date cell, Ctrl+Enter (on a text cell, a computed cell,
  * the last row, in an open editor), the active cell after Add row and its undo
- * and save, characters whose codes are key codes, a keyboard-only pass, the
- * leave guard, read-only mode.
+ * and save, characters whose codes are key codes, a character or F2 on a
+ * boolean cell, Ctrl+Enter with add row on another key, Alt+ArrowLeft /
+ * Alt+ArrowRight left to the browser, a keyboard-only pass, the leave guard,
+ * read-only mode.
  * Screenshots land in SCREENSHOT_DIR (default: tests/browser/screenshots,
  * ignored by git).
  *
@@ -1970,6 +1972,62 @@ try {
         if (! opened.editing || opened.cell !== '50/name' || opened.input !== key || opened.scrollTop !== x0.scrollTop || prevented || ! again.editing || again.cell !== '50/name' || again.input !== key || again.scrollTop !== x0.scrollTop || again.dirty !== 0 || computed.editing || computed.active !== '50/margin' || computed.scrollTop !== x0.scrollTop || computed.dirty !== 0) stray.push({ key, opened, prevented, again, computed })
     }
     check('the characters ( & # ! $ " \' % sent as keys of their own are text: on a selected cell they open its editor with the character, in an open editor they are left to the field, on a computed cell they do nothing; the grid neither moves, scrolls nor writes', clean() && stray.length === 0, JSON.stringify({ stray, errors: errors.slice(errorsSeen) }))
+
+    // a boolean has no editor: a character or F2 on it opens nothing and throws nothing (Tabulator's cell.edit() would), Space still flips it
+    await fresh()
+    errorsSeen = errors.length
+    const noEditor = []
+    for (const field of ['is_active', 'margin']) {
+        await (await cellOf(3, field)).click()
+        const before = await valueOf(3, field)
+        for (const key of ['x', '1', '(', 'F2', 'sent (']) {
+            if (key.startsWith('sent ')) await sendKey(key.slice(5))
+            else await page.keyboard.press(key)
+            await page.waitForTimeout(120)
+            const now = await inEditor()
+            if (now.editing || now.active !== `3/${field}` || now.dirty !== 0 || (await valueOf(3, field)) !== before || now.scrollTop !== 0) noEditor.push({ field, key, now, value: await valueOf(3, field) })
+        }
+    }
+    await (await cellOf(3, 'is_active')).click()
+    const keyedBefore = await valueOf(3, 'is_active')
+    await press(' ')
+    const keyedFlip = { ...(await inEditor()), value: await valueOf(3, 'is_active') }
+    check('a character or F2 on a boolean cell opens nothing, changes nothing and throws nothing, as on a computed cell; Space still flips the boolean', clean() && noEditor.length === 0 && ! keyedFlip.editing && keyedFlip.value === ! keyedBefore && keyedFlip.dirty === 1 && keyedFlip.active === '3/is_active', JSON.stringify({ noEditor, keyedBefore, keyedFlip, errors: errors.slice(errorsSeen) }))
+
+    // with the add-row shortcut on another key, Ctrl+Enter is nobody's: on a boolean it is not a flip and never Tabulator's Enter (which would throw)
+    await fresh('?addrow=mod%2Bshift%2Ba')
+    errorsSeen = errors.length
+    await (await cellOf(3, 'is_active')).click()
+    const reboundBefore = await valueOf(3, 'is_active')
+    const rebound = []
+    for (const combo of ['Control+Enter', 'Meta+Enter']) {
+        await press(combo, 200)
+        rebound.push({ combo, ...(await inEditor()), value: await valueOf(3, 'is_active'), rows: (await state()).rows })
+    }
+    await press('Enter', 200)
+    const reboundEnter = { ...(await inEditor()), value: await valueOf(3, 'is_active') }
+    await press('Control+Shift+a', 300)
+    const reboundAdd = await page.evaluate(() => window.sheet().buffer.createdOrder.length)
+    check('with add row bound to another key, Ctrl+Enter and Meta+Enter on a boolean do nothing and throw nothing; Enter still flips it and the new key adds the row', clean() && rebound.every((x) => ! x.editing && x.value === reboundBefore && x.dirty === 0 && x.active === '3/is_active' && x.rows === 100) && reboundEnter.value === ! reboundBefore && reboundEnter.dirty === 1 && reboundAdd === 1, JSON.stringify({ rebound, reboundBefore, reboundEnter, reboundAdd, errors: errors.slice(errorsSeen) }))
+
+    // Alt+ArrowLeft / Alt+ArrowRight are the browser's (Back / Forward): the grid neither moves nor prevents them; the plain arrows still move
+    await fresh()
+    errorsSeen = errors.length
+    await page.evaluate(() => { window.__alt = []; window.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') window.__alt.push(e) }, true) })
+    await (await cellOf(3, 'category_id')).click()
+    const altSeen = []
+    for (const combo of ['Alt+ArrowLeft', 'Alt+ArrowRight', 'Alt+Shift+ArrowRight']) {
+        await press(combo)
+        const now = await inEditor()
+        const sel = await page.evaluate(() => { const x = window.sheet().grid.selection(); return `${x.rows.length}x${x.cols.length}` })
+        altSeen.push({ combo, active: now.active, editing: now.editing, sel, holder: await page.evaluate(() => !! document.activeElement?.classList.contains('tabulator-tableholder')) })
+    }
+    await press('ArrowLeft')
+    const plainLeft = (await inEditor()).active
+    await press('ArrowRight')
+    const plainRight = (await inEditor()).active
+    const altEvents = await page.evaluate(() => window.__alt.map((e) => ({ key: e.key, alt: e.altKey, prevented: e.defaultPrevented })))
+    check('Alt+ArrowLeft and Alt+ArrowRight on a selected cell are left to the browser: not prevented, the active cell and the range stay; the plain arrows still move it', clean() && altSeen.every((x) => x.active === '3/category_id' && ! x.editing && x.sel === '1x1' && x.holder) && plainLeft === '3/name' && plainRight === '3/category_id' && altEvents.length === 5 && altEvents.filter((e) => e.alt).length === 3 && altEvents.every((e) => e.prevented === ! e.alt), JSON.stringify({ altSeen, plainLeft, plainRight, altEvents, errors: errors.slice(errorsSeen) }))
 
     // the keyboard-only pass: no pointer from the load to the save
     await fresh()

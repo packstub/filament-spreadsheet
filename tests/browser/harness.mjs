@@ -194,11 +194,12 @@ export function viewHtml() {
     return html
 }
 
-export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false, hidden = false } = {}) {
+export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false, hidden = false, addRowKey = null } = {}) {
     // The server sends creatable/deletable false on a read-only sheet (Spreadsheet::canCreate()/isDeletable()).
     // autoHeight is what getSpreadsheetHeight() answers by default (null): the stylesheet's --ps-sheet-height applies.
     // hidden builds the sheet inside a display:none wrapper (#harness-wrap), as in a tab that is not the open one.
-    const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height }
+    // addRowKey rebinds the add-row shortcut (?addrow=mod+shift+a), which leaves Ctrl+Enter to nobody.
+    const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height, keybindings: addRowKey ? { add_row: addRowKey } : config.keybindings }
     return `<!doctype html>
 <html lang="en"${rtl ? ' dir="rtl"' : ''} class="${dark ? 'dark' : ''}">
 <head>
@@ -236,7 +237,7 @@ export function serve(port = 0) {
         const url = new URL(req.url, 'http://localhost')
         if (url.pathname === '/' || url.pathname === '/index.html') {
             res.writeHead(200, { 'content-type': 'text/html' })
-            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight'), hidden: url.searchParams.has('hidden') }))
+            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight'), hidden: url.searchParams.has('hidden'), addRowKey: url.searchParams.get('addrow') }))
 
             return
         }
@@ -252,5 +253,5 @@ export function serve(port = 0) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     writeFileSync(join(root, 'tests/browser/.harness.html'), pageHtml())
     const { port } = await serve(4177)
-    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight, ?hidden)`)
+    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight, ?hidden, ?addrow=<key>)`)
 }

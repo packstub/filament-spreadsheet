@@ -467,6 +467,15 @@ export function createGrid(element, options) {
     }
     element.addEventListener('keydown', editorKeys, true)
 
+    // Alt+ArrowLeft / Alt+ArrowRight are the browser's Back / Forward (Windows, Linux) and a text field's word
+    // step (macOS). Tabulator's keybindings do not look at Alt: they would move the active cell and prevent the
+    // default. The key never reaches them (capture phase, only the propagation stops); with Ctrl or Meta held it
+    // is Tabulator's jump, as before.
+    const altArrows = (e) => {
+        if (e.altKey && ! e.ctrlKey && ! e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) e.stopPropagation()
+    }
+    element.addEventListener('keydown', altArrows, true)
+
     // Tabulator's keybindings read a one-character key as that character's code, and the codes of ! " # $ % & ' (
     // are 33 to 40: the key codes of PageUp, PageDown, End, Home and the four arrows. Where one of them is a key of
     // its own (an unshifted `(`, `&`, `!` or `#` on many layouts) typing it in an open editor would page the grid,
@@ -739,7 +748,9 @@ export function createGrid(element, options) {
             // The cell is taken after the scroll: a row updated while it had no element (an editor committed
             // as it scrolled out, an undo, a save answer) rebuilds its cells when it renders again.
             const cell = row.getCell(a.col)
-            if (! cell || ! editableCell(cell)) return false
+            // A column without an editor (a boolean, flipped by toggleActive(); a computed one) has nothing to open:
+            // Tabulator's cell.edit() throws there.
+            if (! cell || ! editableCell(cell) || ! cell.getColumn().getDefinition().editor) return false
             typedOpen = initial !== null
             try { cell.edit(true) } finally { typedOpen = false }
             const ok = api.isEditing()
@@ -814,6 +825,7 @@ export function createGrid(element, options) {
             element.removeEventListener('focusout', editingChanged)
             element.removeEventListener('keydown', jumped)
             element.removeEventListener('keydown', editorKeys, true)
+            element.removeEventListener('keydown', altArrows, true)
             element.removeEventListener('keyup', listKeyup, true)
             holder?.removeEventListener('keydown', characterKeys)
             document.removeEventListener('mousedown', pointerDown, true)
