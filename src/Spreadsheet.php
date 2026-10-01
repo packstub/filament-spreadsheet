@@ -81,9 +81,6 @@ class Spreadsheet
 
     protected bool $prepared = false;
 
-    /** Set by write() once the database refused a row in AllOrNothing mode: the batch is lost, the later rows are checked but not written. */
-    protected bool $writesAborted = false;
-
     public static function make(): static
     {
         return new static;
@@ -433,8 +430,8 @@ class Spreadsheet
     {
         $this->prepare();
 
-        $page = max(1, (int) ($request['page'] ?? 1));
         $perPage = $this->clampPerPage($request['perPage'] ?? null);
+        $page = $this->clampPage($request['page'] ?? null, $perPage);
         $sort = $this->resolveSort($request['sort'] ?? null);
         $search = is_string($request['search'] ?? null) ? trim(mb_substr($request['search'], 0, 200)) : '';
         $filters = is_array($request['filters'] ?? null) ? $request['filters'] : [];
@@ -517,10 +514,10 @@ class Spreadsheet
 
     /**
      * Write a batch. Every row is authorised, coerced and validated on the server,
-     * inside one transaction in both modes: AllOrNothing rolls everything back on
-     * the first refused row (all the errors still come back); PerRow writes each
-     * row to a savepoint, so a refused row is rolled back on its own and the good
-     * ones are kept. A refused batch (read-only sheet, too many rows, beforeSave())
+     * inside one transaction in both modes, each row written to a savepoint of it:
+     * AllOrNothing rolls everything back on the first refused row (all the errors
+     * still come back); PerRow rolls a refused row back to its savepoint on its
+     * own and keeps the good ones. A refused batch (read-only sheet, too many rows, beforeSave())
      * throws SaveRejected with the message for the user; an exception thrown after
      * the rows (afterSave()'s, say) rolls the whole batch back in both modes and
      * propagates, for the caller to report.
@@ -557,7 +554,6 @@ class Spreadsheet
         /** @var list<array{0: ?Model, 1: array<string, mixed>, 2: array<string, string>, 3: ?string}> */
         $failed = [];
         $perRow = $this->getSaveMode() === SaveMode::PerRow;
-        $this->writesAborted = false;
 
         $work = function () use ($payload, $result, $updated, $created, &$deleted, &$failed, $perRow): void {
             $records = $this->findRecords([...array_keys($payload->changed), ...$payload->deleted]);
@@ -672,7 +668,7 @@ class Spreadsheet
         };
 
         try {
-            // One transaction in both modes; in PerRow mode write() nests a savepoint per row.
+            // One transaction in both modes; write() nests a savepoint per row.
             DB::connection($this->newModel()->getConnectionName())->transaction($work);
         } catch (RolledBack) {
             $result->rolledBack = true;
@@ -845,6 +841,21 @@ class Spreadsheet
     }
 
     /**
+     * A page number the paginator can offset: at least 1, and no more than
+     * PHP_INT_MAX / perPage (a crafted `page` past that would overflow the
+     * offset's multiplication; the browser itself never asks past `lastPage`).
+     * Anything that is not a number is page 1.
+     */
+    protected function clampPage(mixed $page, int $perPage): int
+    {
+        if (! is_numeric($page)) {
+            return 1;
+        }
+
+        return (int) max(1, min(intdiv(PHP_INT_MAX, $perPage), $page));
+    }
+
+    /**
      * Whether the record changed since the browser loaded it. When it did, the
      * result gets the other user's value for every changed column and the current
      * version, so the user can take theirs or save again to win.
@@ -945,27 +956,20 @@ class Spreadsheet
     }
 
     /**
-     * One row's write. In PerRow mode it runs inside its own savepoint (a nested
-     * transaction): any exception rolls that row back, is reported and becomes a
-     * row error. In AllOrNothing mode it is part of the batch's transaction: a
-     * database refusal (a NOT NULL or a foreign key the rules did not cover) is
-     * reported and lands on the row too, and since the batch will be rolled back
-     * the later rows are still checked but no longer written (on Postgres the
-     * transaction is aborted after the failed statement); any other exception
-     * propagates to roll it all back.
+     * One row's write, inside its own savepoint (a nested transaction) in both
+     * modes: a statement the database refuses (a NOT NULL or a foreign key the
+     * rules did not cover) rolls back to the savepoint, is reported and lands on
+     * the row, and the batch's transaction stays usable for the later rows' checks
+     * (a `unique` rule, a policy that queries), which Postgres would otherwise
+     * refuse until the end of the aborted transaction. In PerRow mode any
+     * exception is a row error and the other rows go on; in AllOrNothing mode the
+     * batch is rolled back at the end (RolledBack) and any exception that is not
+     * the database's propagates to roll it back at once.
      */
     protected function write(SaveResult $result, string $key, bool $perRow, Closure $operation, string $failure = 'row_failed'): bool
     {
-        if (! $perRow && $this->writesAborted) {
-            return true;
-        }
-
         try {
-            if ($perRow) {
-                DB::connection($this->newModel()->getConnectionName())->transaction($operation);
-            } else {
-                $operation();
-            }
+            DB::connection($this->newModel()->getConnectionName())->transaction($operation);
         } catch (SaveRejected $e) {
             if (! $perRow) {
                 throw $e;
@@ -981,7 +985,6 @@ class Spreadsheet
 
             report($e);
             $result->rowError($key, __('packstub-spreadsheet::spreadsheet.'.$failure));
-            $this->writesAborted = ! $perRow;
 
             return false;
         }

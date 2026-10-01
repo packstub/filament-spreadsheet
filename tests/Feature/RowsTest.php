@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
 use Packstub\Spreadsheet\Tests\Fixtures\ProductPolicy;
 use Packstub\Spreadsheet\Tests\Fixtures\ProductSheet;
@@ -157,6 +158,28 @@ it('paginates with the page size clamped to the config', function () {
         ->and(sheet()->rows(['perPage' => 'lots'])['perPage'])->toBe(5)
         ->and(sheet()->rows(['page' => 'x'])['page'])->toBe(1)
         ->and(sheet()->rows(['page' => 99])['rows'])->toBe([]);
+});
+
+it('answers an empty page for a page number past the 64-bit range, without an exception', function () {
+    Exceptions::fake();
+    product('P-1');
+
+    // The offset is page × perPage: a page near PHP_INT_MAX would overflow it (a float-to-int
+    // warning on PHP 8.5, answered as "The rows could not be loaded." and reported).
+    foreach (['9223372036854775807', 1e18, '1e30', PHP_INT_MAX, -PHP_INT_MAX, [], true] as $page) {
+        $answer = Livewire::test(ProductSheet::class)->call('spreadsheetRows', ['page' => $page, 'perPage' => 1000])->effects['returns'][0];
+
+        expect($answer)->toMatchArray(['ok' => true, 'total' => 1, 'lastPage' => 1])
+            ->and($answer['page'])->toBeInt()
+            ->and($answer['rows'])->toBe($answer['page'] === 1 ? $answer['rows'] : [], json_encode($page));
+    }
+
+    expect(sheet()->rows(['page' => '9223372036854775807', 'perPage' => 1000]))->toMatchArray(['page' => intdiv(PHP_INT_MAX, 1000), 'rows' => []])
+        ->and(sheet()->rows(['page' => 1e18, 'perPage' => 1000])['page'])->toBe(intdiv(PHP_INT_MAX, 1000))
+        ->and(sheet()->rows(['page' => '2.9'])['page'])->toBe(2)
+        ->and(sheet()->rows(['page' => 0])['page'])->toBe(1);
+
+    Exceptions::assertNothingReported();
 });
 
 it('hands the browser everything it needs in the config, the first page of rows included once', function () {

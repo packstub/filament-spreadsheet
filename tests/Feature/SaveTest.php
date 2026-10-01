@@ -473,9 +473,15 @@ it('marks the row the database refuses in AllOrNothing mode and rolls the batch 
 
     // cost is NOT NULL without a `required` rule, so the clear reaches the database; a-1 and c-3 are refused by the policy and a rule on top.
     ProductPolicy::$updatable = ['B-2', 'C-3'];
+    // Every row is written inside a savepoint of the batch's transaction (level 2), so a refused statement leaves the transaction usable.
+    $levels = [];
+    Product::saving(function () use (&$levels): void {
+        $levels[] = DB::transactionLevel();
+    });
     $result = save(['changed' => [$a->id => ['name' => 'Fine'], $b->id => ['cost' => '', 'name' => 'Renamed'], $c->id => ['name' => '']]]);
 
-    expect($result->rolledBack)->toBeTrue()
+    expect($levels)->toBe([2])
+        ->and($result->rolledBack)->toBeTrue()
         ->and($result->message)->toBe('Nothing was saved: fix the marked cells and save again.')
         ->and($result->rowErrors)->toBe([(string) $a->id => 'You cannot change this row.', (string) $b->id => 'This row could not be saved.'])
         ->and($result->errors)->toBe([(string) $c->id => ['name' => 'The Name field is required.']])
@@ -490,6 +496,31 @@ it('marks the row the database refuses in AllOrNothing mode and rolls the batch 
     ProductPolicy::reset();
     Product::saving(fn () => throw new RuntimeException('observer down'));
     expect(fn () => save(['changed' => [$b->id => ['name' => 'Again']]]))->toThrow(RuntimeException::class, 'observer down');
+});
+
+it('keeps checking the rows after one the database refused in AllOrNothing mode, a rule that queries included', function () {
+    Exceptions::fake();
+    $a = product('a-1', 'Product', ['cost' => 5]);
+    $b = product('b-2');
+
+    // a-1's clear is refused by the database (NOT NULL); b-2's `unique` rule then queries inside the same
+    // transaction, which Postgres allows only because the refused statement was rolled back to its savepoint.
+    DB::enableQueryLog();
+    $result = save(['changed' => [$a->id => ['cost' => ''], $b->id => ['sku' => 'A-1', 'name' => 'Renamed']]]);
+    $queries = collect(DB::getQueryLog())->pluck('query');
+    DB::disableQueryLog();
+
+    // The refused update is not logged (a query is logged once it ran); the rule's count query after it is.
+    expect($result->rolledBack)->toBeTrue()
+        ->and($result->rowErrors)->toBe([(string) $a->id => 'This row could not be saved.'])
+        ->and($result->errors)->toBe([(string) $b->id => ['sku' => 'The Sku has already been taken.']])
+        ->and($result->saved)->toBe([])
+        ->and($queries->contains(fn (string $q) => str_starts_with($q, 'select count(*)') && str_contains($q, '"sku" = ?')))->toBeTrue()
+        ->and($queries->first(fn (string $q) => str_starts_with($q, 'update')))->toBeNull()
+        ->and($a->fresh()->cost)->toBe('5.00')
+        ->and($b->fresh())->toMatchArray(['sku' => 'B-2', 'name' => 'Product']);
+
+    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'NOT NULL'));
 });
 
 it('answers a delete the database refuses on its row, in both modes', function (SaveMode $mode) {
