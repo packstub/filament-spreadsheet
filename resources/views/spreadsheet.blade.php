@@ -32,10 +32,10 @@
         <button type="button" class="ps-sheet-btn" x-on:click="discard()" :disabled="saving || ! dirty.total" x-text="t.discard"></button>
 
         <div class="ps-sheet-seg" role="group">
-            <button type="button" class="ps-sheet-seg-btn" x-on:click="undo()" :disabled="! canUndo" :title="t.undo + ' (Ctrl+Z)'" :aria-label="t.undo">
+            <button type="button" class="ps-sheet-seg-btn" x-on:click="undo()" :disabled="saving || ! canUndo" :title="t.undo + ' (Ctrl+Z)'" :aria-label="t.undo">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 5 3.5 8.5 7 12"/><path d="M4 8.5h8a4 4 0 0 1 0 8H9"/></svg>
             </button>
-            <button type="button" class="ps-sheet-seg-btn" x-on:click="redo()" :disabled="! canRedo" :title="t.redo + ' (Ctrl+Y)'" :aria-label="t.redo">
+            <button type="button" class="ps-sheet-seg-btn" x-on:click="redo()" :disabled="saving || ! canRedo" :title="t.redo + ' (Ctrl+Y)'" :aria-label="t.redo">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m13 5 3.5 3.5L13 12"/><path d="M16 8.5H8a4 4 0 0 0 0 8h3"/></svg>
             </button>
         </div>

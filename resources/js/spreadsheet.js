@@ -74,6 +74,7 @@ export default function packstubSpreadsheet(config) {
                     frozenFirstColumn: config.frozenFirstColumn !== false,
                     rowOffset: () => (this.page - 1) * this.perPage,
                     sortState: () => this.sort,
+                    saving: () => this.saving,
                     on: {
                         edit: (id, col, from, to) => this.onEdit(id, col, from, to),
                         rangeEdit: (edits) => this.onRangeEdit(edits),
@@ -198,10 +199,18 @@ export default function packstubSpreadsheet(config) {
 
         /* ------------------------------------------------------------ editing */
 
+        /*
+         * While a save is in flight (`saving`) the sheet takes no edits: the grid opens no
+         * editor (grid.js asks `saving()`), and every operation below returns early, so a
+         * keystroke meanwhile is dropped, never queued. The answer forgets the saved cells
+         * wholesale (S.applyResult), so an edit made meanwhile would have been lost with them.
+         */
+
         /** A cell edited in place: what the editor gave, read by the column's rules. */
         onEdit(id, col, from, to) {
             const column = this.column(col)
             if (! column) return
+            if (this.saving) { this.repaint([id]); return }
             const res = S.coerce(column, to, t)
             const row = this.rows.find((r) => r.id === id)
             const applied = S.applyEdits(this.buffer, [{ id, col, from, to: res.value, version: row?.version ?? null }], { page: this.page })
@@ -215,6 +224,7 @@ export default function packstubSpreadsheet(config) {
 
         /** Cells written by the fill handle. Each is checked again here: what the grid wrote into a cell it must not edit is repainted back. */
         onRangeEdit(edits) {
+            if (this.saving) { this.repaint(edits.map((e) => e.id)); return }
             const rows = this.visibleRows()
             const list = []
             const invalid = []
@@ -236,7 +246,7 @@ export default function packstubSpreadsheet(config) {
 
         /** Delete / Backspace: every editable cell of the selection becomes empty; locked, read-only and computed cells stay. */
         clearSelection() {
-            if (this.readOnly) return
+            if (this.readOnly || this.saving) return
             const sel = this.grid.selection()
             if (! sel || sel.left < 0) return
             const edits = S.clearPlan({ rows: this.visibleRows(), columns: this.columns, top: sel.top, bottom: sel.bottom, left: sel.left, right: sel.right, readOnly: this.readOnly })
@@ -251,7 +261,7 @@ export default function packstubSpreadsheet(config) {
         },
 
         onPaste(text) {
-            if (this.readOnly) return
+            if (this.readOnly || this.saving) return
             const sel = this.grid.selection()
             if (! sel || sel.left < 0) return
             const matrix = S.parseTsv(text)
@@ -276,7 +286,7 @@ export default function packstubSpreadsheet(config) {
         },
 
         fillDown() {
-            if (this.readOnly) return
+            if (this.readOnly || this.saving) return
             const sel = this.grid.selection()
             if (! sel || sel.left < 0) return
             const edits = S.fillDownPlan({ rows: this.visibleRows(), columns: this.columns, top: sel.top, bottom: sel.bottom, left: sel.left, right: sel.right, readOnly: this.readOnly })
@@ -285,12 +295,14 @@ export default function packstubSpreadsheet(config) {
         },
 
         undo() {
+            if (this.saving) return
             const r = S.undo(this.buffer)
             if (r) this.applyReplay(r)
             this.refocus()
         },
 
         redo() {
+            if (this.saving) return
             const r = S.redo(this.buffer)
             if (r) this.applyReplay(r)
             this.refocus()
@@ -303,7 +315,7 @@ export default function packstubSpreadsheet(config) {
         },
 
         addRow() {
-            if (this.readOnly || ! this.creatable) return
+            if (this.readOnly || ! this.creatable || this.saving) return
             const temp = S.addCreated(this.buffer, this.defaults())
             this.grid.addRows([this.createdRow(temp)])
             this.sync()
@@ -311,7 +323,7 @@ export default function packstubSpreadsheet(config) {
         },
 
         deleteSelected() {
-            if (this.readOnly || ! this.deletable) return
+            if (this.readOnly || ! this.deletable || this.saving) return
             const sel = this.grid.selection()
             if (! sel || ! sel.rows.length) return
             const ids = sel.rows.filter((id) => S.isCreated(this.buffer, id) || this.rows.find((r) => r.id === id)?.deletable)
@@ -336,6 +348,7 @@ export default function packstubSpreadsheet(config) {
         },
 
         markDeleted(ids) {
+            if (this.saving) return
             const r = S.markDeleted(this.buffer, ids)
             if (r.dropped.length) this.grid.removeRows(r.dropped)
             this.repaint(r.deleted)
@@ -419,7 +432,7 @@ export default function packstubSpreadsheet(config) {
         },
 
         discard() {
-            if (! this.dirty.total) return
+            if (! this.dirty.total || this.saving) return
             if (! window.confirm(t.confirm_discard)) return
             S.discard(this.buffer)
             this.renderPage()
@@ -527,7 +540,7 @@ export default function packstubSpreadsheet(config) {
         /** The view's contextmenu handler on the grid element (the one path: Tabulator's rowContext would open it a second time). */
         openMenu(e) {
             const id = this.grid?.rowAt(e)
-            if (! id || this.readOnly || ! this.deletable) return
+            if (! id || this.readOnly || ! this.deletable || this.saving) return
             const created = S.isCreated(this.buffer, id)
             const row = this.rows.find((r) => r.id === id)
             if (! created && ! row?.deletable) return
@@ -542,7 +555,7 @@ export default function packstubSpreadsheet(config) {
         runMenu(name) {
             const id = this.menu?.id
             this.closeMenu()
-            if (! id) return
+            if (! id || this.saving) return
             if (name === 'delete') this.markDeleted([id])
             if (name === 'keep') this.keepRow(id)
             this.refocus()

@@ -179,6 +179,7 @@ function editorFor(column) {
  *   columns, rowHeight, frozenFirstColumn, readOnly, locale, t (strings)
  *   rowOffset()         the number of the first row on the page, minus one
  *   sortState()         { column, direction } for the header arrows
+ *   saving()            true while a save is in flight: no cell is editable then
  *   on.edit(id, col, from, to)          one cell edited in place
  *   on.rangeEdit([{ id, col, from, to }])  cells written by the fill handle (the component re-checks each)
  *   on.sort(col)                        header clicked
@@ -192,9 +193,10 @@ function editorFor(column) {
 export function createGrid(element, options) {
     const { columns, t, locale = 'en', readOnly = false, on = {} } = options
     const sortState = options.sortState ?? (() => ({ column: null, direction: 'asc' }))
+    const saving = options.saving ?? (() => false)
 
     const editableCell = (cell) => {
-        if (readOnly) return false
+        if (readOnly || saving()) return false
         const column = columns.find((c) => c.name === cell.getField())
         if (! column || ! column.editable || column.readOnly) return false
         const m = cell.getRow().getData()._m ?? {}

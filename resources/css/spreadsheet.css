@@ -366,7 +366,9 @@
 /* ------------------------------------------------------------------ states */
 
 .ps-sheet-is-loading .ps-sheet-grid { opacity: 0.6; transition: opacity 0.15s; }
-.ps-sheet-is-saving .ps-sheet-grid { pointer-events: none; opacity: 0.8; }
+/* While a save is in flight the sheet takes no edits (spreadsheet.js): the grid is dimmed and the pointer says so. */
+.ps-sheet-is-saving { cursor: progress; }
+.ps-sheet-is-saving .ps-sheet-grid { pointer-events: none; opacity: 0.6; transition: opacity 0.15s; }
 
 /* ------------------------------------------------------------------ small screens */
 

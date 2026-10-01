@@ -491,6 +491,87 @@ try {
     await page.locator('.ps-sheet-search input').fill('')
     await page.waitForFunction(() => window.sheet().total === 250)
 
+    // while a save is in flight the sheet takes no edits: what is typed, pasted, filled, added, deleted or undone meanwhile is dropped, the answer lands cleanly, and editing works again afterwards
+    await cell(0, 'name').click()
+    await page.keyboard.type('Held')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    const delaySave = () => page.evaluate(() => {
+        window.__wire.__origSave ??= window.__wire.spreadsheetSave
+        const orig = window.__wire.__origSave
+        window.__wire.spreadsheetSave = async (p) => { await new Promise((r) => setTimeout(r, 600)); return orig(p) }
+        window.__savePromise = window.sheet().save()
+    })
+    const awaitSave = (fn) => page.evaluate(async (src) => {
+        await window.__savePromise
+        window.__wire.spreadsheetSave = window.__wire.__origSave
+        await new Promise((r) => setTimeout(r, 80))
+
+        return (0, eval)(src)()
+    }, `() => (${fn.toString()})()`)
+    await delaySave()
+    await page.waitForTimeout(50)
+    await page.keyboard.type('77')
+    await page.keyboard.press('F2')
+    await page.keyboard.press('Delete')
+    await page.keyboard.press('Control+Enter')
+    await page.keyboard.press('Control+d')
+    await page.keyboard.press('Control+z')
+    const during = await page.evaluate(() => {
+        const sh = window.sheet()
+        const focusInGrid = !! document.activeElement?.closest('.ps-sheet-grid')
+        sh.onEdit('1', 'price', sh.rows[0].values.price, 77)
+        sh.onPaste('Pasted\tTools')
+        sh.addRow()
+        sh.markDeleted(['3'])
+        sh.undo()
+
+        return { focusInGrid, saving: sh.saving, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-saving'), editing: sh.grid.isEditing(), dirty: { ...sh.dirty }, changes1: Object.keys(sh.buffer.changes['1'] ?? {}), changes2: sh.buffer.changes['2'] ?? null, created: sh.buffer.createdOrder.length, undoDisabled: document.querySelector('.ps-sheet-seg-btn[aria-label="Undo"]').disabled, priceText: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="price"]').innerText }
+    })
+    check('while a save is in flight typing, F2, Delete, Ctrl+Enter, Ctrl+D, Ctrl+Z, a paste, Add row, a deletion and an edit change nothing, and the sheet says so', during.focusInGrid && during.saving && during.cue && ! during.editing && during.dirty.total === 1 && during.dirty.cells === 1 && during.changes1.join() === 'name' && during.changes2 === null && during.created === 0 && during.undoDisabled && during.priceText === '42.00', JSON.stringify(during))
+    const afterHeld = await awaitSave(() => {
+        const sh = window.sheet()
+        const server = window.__server.products.find((p) => p.id === '1')
+
+        return { saving: sh.saving, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-saving'), dirty: sh.dirty.total, changes1: sh.buffer.changes['1'] ?? null, undo: sh.buffer.undo.length, canUndo: sh.canUndo, serverName: server.name, serverPrice: server.price, nameText: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText, priceText: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="price"]').innerText, version: sh.rows[0].version === server.version }
+    })
+    check('the answer lands cleanly: the held cell is saved, nothing from meanwhile is in the buffer or on the grid', ! afterHeld.saving && ! afterHeld.cue && afterHeld.dirty === 0 && afterHeld.changes1 === null && afterHeld.undo === 0 && ! afterHeld.canUndo && afterHeld.serverName === 'Held' && afterHeld.serverPrice === 42 && afterHeld.nameText === 'Held' && afterHeld.priceText === '42.00' && afterHeld.version, JSON.stringify(afterHeld))
+    await cell(0, 'price').click()
+    await page.keyboard.type('5')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    s = await state()
+    check('editing works again once the save is answered', s.dirty.total === 1 && s.dirty.cells === 1 && (await page.evaluate(() => window.sheet().buffer.changes['1']?.price)) === 5, JSON.stringify(s.dirty))
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(50)
+
+    // a new row being saved takes no edit during the save, no row can be added meanwhile, and it is created as sent
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await page.waitForTimeout(50)
+    const heldTemp = await page.evaluate(() => { const sh = window.sheet(); const temp = sh.buffer.createdOrder[0]; sh.onEdit(temp, 'sku', null, 'SKU-HELD'); sh.onEdit(temp, 'name', null, 'Held row'); return temp })
+    await delaySave()
+    await page.waitForTimeout(50)
+    const heldDuring = await page.evaluate((temp) => {
+        const sh = window.sheet()
+        sh.onEdit(temp, 'price', null, 12.5)
+        sh.addRow()
+
+        return { created: sh.buffer.createdOrder.length, price: sh.buffer.created[temp]?.price ?? null, saving: sh.saving }
+    }, heldTemp)
+    const heldAfter = await awaitSave(() => {
+        const sh = window.sheet()
+        const created = window.__server.products.find((p) => p.sku === 'SKU-HELD')
+
+        return { dirty: sh.dirty.total, created: sh.buffer.createdOrder.length, server: created ? { name: created.name, price: created.price } : null, createdRows: document.querySelectorAll('.ps-sheet-row-created').length, gridRows: sh.grid.table.getRows().length, total: sh.total }
+    })
+    check('a new row being saved takes no edit and no sibling during the save, and is created as sent', heldDuring.saving && heldDuring.created === 1 && heldDuring.price === null && heldAfter.dirty === 0 && heldAfter.created === 0 && heldAfter.server?.name === 'Held row' && heldAfter.server?.price === 0 && heldAfter.createdRows === 0 && heldAfter.gridRows === 101 && heldAfter.total === 251, JSON.stringify({ heldDuring, heldAfter }))
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await page.waitForTimeout(50)
+    s = await state()
+    check('Add row works again once the save is answered', s.dirty.created === 1, JSON.stringify(s.dirty))
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(50)
+
     // a paste past the last row stops creating rows at the server's cap on rows per save (300 in the harness), and says so
     await page.locator('.ps-sheet-per-page select').selectOption('25')
     await page.waitForFunction(() => window.sheet().rows.length === 25)
