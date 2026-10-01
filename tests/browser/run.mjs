@@ -13,8 +13,9 @@
  * updated out of the window, a sheet built while hidden and a window resize,
  * Ctrl+ArrowDown / Ctrl+ArrowUp, the editing state after an outside click,
  * where a new page opens and what keeps the scroll, the active cell and the
- * range over a re-read of the same rows, the leave guard,
- * read-only mode.
+ * range over a re-read of the same rows, the keys inside an open editor (a date
+ * typed digit by digit, PageUp / PageDown / Home / End, ArrowUp / ArrowDown per
+ * editor type), the leave guard, read-only mode.
  * Screenshots land in SCREENSHOT_DIR (default: tests/browser/screenshots,
  * ignored by git).
  *
@@ -1519,6 +1520,197 @@ try {
         v = await typeInto('9')
         check(`the re-read after a save with a page request in flight keeps the active cell: a key typed ${wait} ms later goes into that row, the first visible row unchanged`, clean() && landing.calls === 2 && landing.dirty === 0 && a?.id === '70' && a?.col === 'stock' && (await changesOf()) === '{"70":{"stock":9}}' && samePlace(before5, v), JSON.stringify({ landing, a, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
     }
+
+    /* ---------------------------------------------------------------- keys inside an open editor: a typed date, PageUp / PageDown / Home / End, ArrowUp / ArrowDown */
+
+    await fresh()
+    errorsSeen = errors.length
+    const press = async (key, wait = 120) => { await page.keyboard.press(key); await page.waitForTimeout(wait) }
+    const inEditor = () => page.evaluate(() => {
+        const sh = window.sheet(); const g = sh.grid; const i = document.activeElement; const ed = g.table.modules.edit.currentCell; const a = g.activeCell()
+        let caret = null
+        try { caret = i.selectionStart === null ? null : `${i.selectionStart}-${i.selectionEnd}` } catch (e) {}
+
+        return { editing: g.isEditing(), cell: ed ? `${ed.row.data.id}/${ed.column.field}` : null, input: g.isEditing() && i.tagName === 'INPUT' ? i.value : null, caret, active: a && `${a.id}/${a.col}`, scrollTop: Math.round(g.table.rowManager.element.scrollTop), dirty: sh.dirty.total, list: [...document.querySelectorAll('.tabulator-edit-list-item')].map((x) => x.textContent + (x.classList.contains('focused') ? '*' : '')).join(',') }
+    })
+    const valueOf = (id, field) => page.evaluate(([i, f]) => window.sheet().grid.value(i, f), [String(id), field])
+    // what a native picker does to the field: the pointer goes down on it, the value is set, change fires
+    const pick = async (value) => { await page.evaluate((v) => { const i = document.activeElement; i.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); i.value = v; i.dispatchEvent(new Event('change', { bubbles: true })) }, value); await page.waitForTimeout(100) }
+
+    // a date and a date-time typed with the keyboard: 11/11/2027 reads the same with the day or the month first
+    for (const [field, label, typed, picked, pickedAs] of [['available_on', 'date', '2027-11-11', '2026-12-24', '2026-12-24'], ['published_at', 'date-time', '2027-11-11 08:30:00', '2026-12-24T10:15', '2026-12-24 10:15:00']]) {
+        await (await cellOf(5, field)).click()
+        await press('F2')
+        const steps = [await inEditor()]
+        for (const digit of '11112027') { await press(digit, 50); steps.push(await inEditor()) }
+        const stayed = steps.every((x) => x.editing && x.cell === `5/${field}` && x.active === `5/${field}` && x.dirty === steps[0].dirty)
+        await press('Enter')
+        let e = await inEditor()
+        check(`a ${label} typed digit by digit keeps its editor open after every digit, and Enter commits that ${label} and moves down`, clean() && stayed && (await valueOf(5, field)) === typed && ! e.editing && e.active === `6/${field}` && e.dirty === steps[0].dirty + 1, JSON.stringify({ steps: steps.map((x) => `${x.editing}:${x.input}`), value: await valueOf(5, field), e, errors: errors.slice(errorsSeen) }))
+
+        await (await cellOf(10, field)).click()
+        const kept = await valueOf(10, field)
+        await press('F2')
+        await press('Backspace')
+        const cleared = await inEditor()
+        await press('Delete')
+        const deleted = await inEditor()
+        await press('Escape')
+        e = await inEditor()
+        check(`Backspace and Delete in a ${label} editor clear a segment and keep the editor open, the cell as it was; Escape leaves it unchanged`, clean() && cleared.editing && cleared.cell === `10/${field}` && deleted.editing && deleted.cell === `10/${field}` && cleared.dirty === e.dirty && ! e.editing && (await valueOf(10, field)) === kept && e.active === `10/${field}`, JSON.stringify({ cleared, deleted, e, value: await valueOf(10, field) }))
+
+        await press('F2')
+        await press('1', 50)
+        await press('5', 50)
+        const digits = await inEditor()
+        await press('Escape')
+        e = await inEditor()
+        check(`digits and then Escape in a ${label} editor leave the cell unchanged`, clean() && digits.editing && digits.input !== null && ! e.editing && (await valueOf(10, field)) === kept && e.dirty === digits.dirty, JSON.stringify({ digits, e, value: await valueOf(10, field) }))
+
+        await press('F2')
+        const open = await inEditor()
+        await pick(picked)
+        e = await inEditor()
+        const pickedValue = await valueOf(10, field)
+        // and after a typed digit the pointer makes it a picked one again
+        await (await cellOf(15, field)).click()
+        await press('F2')
+        await press('1', 50)
+        const typedFirst = await inEditor()
+        await pick(picked)
+        const e2 = await inEditor()
+        check(`a picked ${label} (pointer down, the value, change) commits at once, also after a typed digit`, clean() && open.editing && ! e.editing && pickedValue === pickedAs && e.dirty === open.dirty + 1 && typedFirst.editing && ! e2.editing && (await valueOf(15, field)) === pickedAs && e2.dirty === e.dirty + 1, JSON.stringify({ open, e, pickedValue, typedFirst, e2, value: await valueOf(15, field) }))
+
+        await (await cellOf(20, field)).click()
+        await press('F2')
+        for (const digit of '11112027') await press(digit, 40)
+        await press('Tab')
+        e = await inEditor()
+        check(`Tab commits a typed ${label} and moves right`, clean() && ! e.editing && (await valueOf(20, field)) === typed && e.active !== `20/${field}` && e.active?.startsWith('20/'), JSON.stringify({ e, value: await valueOf(20, field) }))
+    }
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(100)
+
+    // PageUp / PageDown / Home / End: the editor keeps them, in the middle of the page where the grid could scroll both ways
+    await scrollToRow(50)
+    await atRest()
+    const samePlaceInEditor = (x, y, cellName) => x.editing && y.editing && y.cell === cellName && x.cell === cellName && y.active === x.active && y.scrollTop === x.scrollTop && y.dirty === x.dirty
+    for (const [field, label] of [['name', 'text'], ['price', 'number'], ['available_on', 'date'], ['published_at', 'date-time'], ['category_id', 'select']]) {
+        await (await cellOf(50, field)).click()
+        // typing on the selected cell opens the text editor with that text; Enter opens the select with its whole list
+        if (field === 'name') await page.keyboard.type('Sheet row')
+        else await press(field === 'category_id' ? 'Enter' : 'F2', 200)
+        const bad = []
+        for (const key of ['PageUp', 'PageDown', 'Home', 'End']) {
+            const x = await inEditor()
+            await press(key, 250)
+            const y = await inEditor()
+            if (! samePlaceInEditor(x, y, `50/${field}`) || y.scrollTop < 300 || (field !== 'category_id' && y.input !== x.input) || (field === 'category_id' && y.list === '')) bad.push({ key, x, y })
+        }
+        check(`PageUp, PageDown, Home and End in an open ${label} editor leave the editor open on its cell, the active cell, the scroll and the unsaved count as they were`, clean() && bad.length === 0, JSON.stringify({ bad, errors: errors.slice(errorsSeen) }))
+        if (field === 'name') {
+            const caretAt = async (n, key) => { await page.evaluate((n) => document.activeElement.setSelectionRange(n, n), n); const x = await inEditor(); await press(key); const y = await inEditor(); return { ...y, same: samePlaceInEditor(x, y, '50/name') } }
+            const home = await caretAt(3, 'Home')
+            const end = await caretAt(3, 'End')
+            const shiftHome = await caretAt(3, 'Shift+Home')
+            const shiftEnd = await caretAt(3, 'Shift+End')
+            check('Home and End move the caret to the start and the end of a text editor; Shift+Home and Shift+End select', clean() && home.same && home.caret === '0-0' && end.same && end.caret === '9-9' && shiftHome.same && shiftHome.caret === '0-3' && shiftEnd.same && shiftEnd.caret === '3-9' && end.input === 'Sheet row', JSON.stringify({ home, end, shiftHome, shiftEnd }))
+        }
+        await press('Escape')
+    }
+    s = await state()
+    check('and nothing was written meanwhile', clean() && ! s.editing && s.dirty.total === 0, JSON.stringify(s.dirty))
+
+    // ArrowUp / ArrowDown: a text or number editor commits and moves one row, no editor opened there
+    await (await cellOf(50, 'name')).click()
+    await page.keyboard.type('Moved')
+    await press('ArrowDown', 200)
+    let ek = await inEditor()
+    const downOk = ! ek.editing && ek.active === '51/name' && (await valueOf(50, 'name')) === 'Moved' && ek.dirty === 1
+    await page.keyboard.type('Back')
+    await press('ArrowUp', 200)
+    let ek2 = await inEditor()
+    check('ArrowDown and ArrowUp in a text editor commit the text and move the selection one row, without opening the next editor', clean() && downOk && ! ek2.editing && ek2.active === '50/name' && (await valueOf(51, 'name')) === 'Back' && ek2.dirty === 2 && (await page.evaluate(() => document.activeElement?.classList.contains('tabulator-tableholder'))), JSON.stringify({ ek, ek2, errors: errors.slice(errorsSeen) }))
+    await press('F2')
+    await press('ArrowDown', 200)
+    ek = await inEditor()
+    check('an editor left unchanged by ArrowDown closes without a change and the selection moves', clean() && ! ek.editing && ek.active === '51/name' && ek.dirty === 2 && (await valueOf(50, 'name')) === 'Moved', JSON.stringify(ek))
+    await (await cellOf(50, 'price')).click()
+    await page.keyboard.type('7')
+    await press('ArrowDown', 200)
+    ek = await inEditor()
+    await page.keyboard.type('8')
+    await press('ArrowUp', 200)
+    ek2 = await inEditor()
+    check('and in a number editor too', clean() && ! ek.editing && ek.active === '51/price' && ! ek2.editing && ek2.active === '50/price' && String(await valueOf(50, 'price')) === '7' && String(await valueOf(51, 'price')) === '8' && ek2.dirty === 4, JSON.stringify({ ek, ek2, v50: await valueOf(50, 'price'), v51: await valueOf(51, 'price') }))
+    await page.keyboard.type('abc')
+    await press('ArrowLeft')
+    await page.keyboard.type('X')
+    const left = await inEditor()
+    await press('ArrowRight')
+    await page.keyboard.type('Y')
+    const right = await inEditor()
+    await press('Alt+ArrowDown')
+    const alt = await inEditor()
+    await press('Escape')
+    check('ArrowLeft and ArrowRight stay caret movement, and Alt+ArrowDown leaves the editor open on its cell', clean() && left.editing && left.input === 'abXc' && right.editing && right.input === 'abXcY' && alt.editing && alt.cell === '50/price' && alt.active === '50/price' && alt.input === 'abXcY' && alt.dirty === 4, JSON.stringify({ left, right, alt }))
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(100)
+    await fresh()
+    errorsSeen = errors.length
+    await cell(0, 'name').click()
+    await page.keyboard.type('Top')
+    await press('ArrowUp', 200)
+    ek = await inEditor()
+    check('ArrowUp in the first row\'s editor commits and stays on that row', clean() && ! ek.editing && ek.active === '1/name' && (await valueOf(1, 'name')) === 'Top' && ek.dirty === 1, JSON.stringify(ek))
+
+    // in a date / date-time editor the arrows step the focused segment
+    for (const [field, label] of [['available_on', 'date'], ['published_at', 'date-time']]) {
+        await (await cellOf(10, field)).click()
+        const kept = await valueOf(10, field)
+        await press('F2')
+        const d0 = await inEditor()
+        await press('ArrowUp')
+        const d1 = await inEditor()
+        await press('ArrowDown')
+        await press('ArrowDown')
+        const d2 = await inEditor()
+        await press('Escape')
+        const d3 = await inEditor()
+        check(`ArrowUp and ArrowDown in a ${label} editor step the focused segment, the editor open on its cell, and Escape leaves the cell unchanged`, clean() && [d0, d1, d2].every((x) => x.editing && x.cell === `10/${field}` && x.active === `10/${field}` && x.dirty === d0.dirty) && new Set([d0.input, d1.input, d2.input]).size === 3 && ! d3.editing && d3.dirty === d0.dirty && (await valueOf(10, field)) === kept, JSON.stringify({ d0, d1, d2, d3, errors: errors.slice(errorsSeen) }))
+        await press('F2')
+        await press('ArrowUp')
+        const stepped = (await inEditor()).input
+        await press('Enter')
+        const d4 = await inEditor()
+        check(`and Enter commits the stepped ${label}`, clean() && ! d4.editing && d4.active === `11/${field}` && (await valueOf(10, field)) === (field === 'available_on' ? stepped : stepped.replace('T', ' ') + ':00') && (await valueOf(10, field)) !== kept, JSON.stringify({ stepped, d4, value: await valueOf(10, field) }))
+    }
+
+    // in a select the arrows move through the options (row 5's category is the last one)
+    await (await cellOf(5, 'category_id')).click()
+    await press('Enter', 300)
+    const l0 = await inEditor()
+    await press('ArrowUp')
+    const l1 = await inEditor()
+    await press('ArrowUp')
+    const l2 = await inEditor()
+    await press('ArrowDown')
+    const l3 = await inEditor()
+    await press('Enter')
+    const l4 = await inEditor()
+    check('ArrowUp and ArrowDown in a select editor move through its options, the list open on its cell, and Enter picks the one reached', clean() && [l0, l1, l2, l3].every((x) => x.editing && x.cell === '5/category_id' && x.active === '5/category_id') && l0.list === 'Tools,Paint,Garden' && l1.list === 'Tools,Paint*,Garden' && l2.list === 'Tools*,Paint,Garden' && l3.list === 'Tools,Paint*,Garden' && ! l4.editing && (await valueOf(5, 'category_id')) === '2' && l4.active === '6/category_id', JSON.stringify({ l0, l1, l2, l3, l4, value: await valueOf(5, 'category_id'), errors: errors.slice(errorsSeen) }))
+
+    // the listener goes with the sheet
+    const keyListener = await page.evaluate(() => {
+        const el = window.sheet().grid.table.element
+        const calls = []
+        const orig = el.removeEventListener
+        el.removeEventListener = function (type, listener, options) { calls.push(type + ':' + String(options)); return orig.call(this, type, listener, options) }
+        window.sheet().grid.destroy()
+
+        return calls.includes('keydown:true')
+    })
+    check('destroying the grid removes the editor-key listener', keyListener)
 
     /* ---------------------------------------------------------------- leaving with text in an open editor; removing the sheet with one */
 

@@ -55,11 +55,20 @@ function isoEditor(withTime) {
             const v = input.value
             success(v ? (withTime ? v.replace('T', ' ') + ':00' : v) : null)
         })
-        input.addEventListener('change', done)
+        // A typed date fires change on every key that alters the value (each digit, Backspace, an arrow
+        // that steps a segment): only Enter, Tab or a blur settle that one. The pointer going down on the
+        // field (its calendar button) makes the next change a picked date again.
+        let keyed = false
+        input.addEventListener('pointerdown', () => { keyed = false })
+        input.addEventListener('change', () => { if (! keyed) done() })
         input.addEventListener('blur', done)
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); done() }
-            if (e.key === 'Escape') once(cancel)
+            if (e.key === 'Enter') { e.preventDefault(); done(); return }
+            if (e.key === 'Escape') { once(cancel); return }
+            if (e.key === 'Tab') return
+            keyed = true
+            // ArrowUp / ArrowDown step the focused segment: the grid's own arrows (commit, next row) never see them.
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.stopPropagation()
         })
 
         return input
@@ -413,6 +422,45 @@ export function createGrid(element, options) {
     }
     element.addEventListener('keydown', jumped)
 
+    // The keys an open editor keeps from the grid, in the capture phase (Tabulator's input editor stops
+    // Home / End before they bubble, and the browser's own scroll is not a binding that could be switched off).
+    //
+    // PageUp / PageDown / Home / End: Tabulator's bindings page or jump the grid, macOS scrolls the holder
+    // on Home / End, and the row leaving the window commits the editor. They do nothing to the grid here;
+    // Home / End put the caret at the start / end of a text field (with a modifier they are the field's own).
+    //
+    // ArrowUp / ArrowDown in a text or number editor commit and move the selection one row, as Enter and
+    // Tab do, without opening the next row's editor (Tabulator's own navUp / navDown would open it). The
+    // editor commits on blur, synchronously. With Alt they are the field's (the caret, on macOS); with
+    // Shift, Ctrl or Meta nothing changes here. A select's option list keeps its arrows, and a date
+    // editor stops them itself (see isoEditor: they step the focused segment).
+    const editorKeys = (e) => {
+        if (! api.isEditing()) return
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            if (e.shiftKey || e.ctrlKey || e.metaKey || e.target?.tagName !== 'INPUT') return
+            if (table.modules.edit.currentCell?.column.definition.editor !== 'input') return
+            e.stopPropagation()
+            if (e.altKey) return
+            e.preventDefault()
+            const direction = e.key === 'ArrowUp' ? 'up' : 'down'
+            e.target.blur()
+            if (! api.isEditing()) api.navigate(direction)
+
+            return
+        }
+        if (! ['PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) return
+        e.stopPropagation()
+        if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); return }
+        if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return
+        e.preventDefault()
+        const input = e.target
+        if (input?.tagName === 'INPUT' && input.type === 'text') {
+            const at = e.key === 'Home' ? 0 : input.value.length
+            input.setSelectionRange(at, at)
+        }
+    }
+    element.addEventListener('keydown', editorKeys, true)
+
     element.addEventListener('paste', (e) => {
         if (table.modules.edit.currentCell) return
         const text = e.clipboardData?.getData('text/plain') ?? ''
@@ -690,6 +738,7 @@ export function createGrid(element, options) {
             destroyed = true
             element.removeEventListener('focusout', editingChanged)
             element.removeEventListener('keydown', jumped)
+            element.removeEventListener('keydown', editorKeys, true)
             document.removeEventListener('mousedown', pointerDown, true)
             table.destroy()
         },

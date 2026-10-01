@@ -28,6 +28,25 @@
 
 `mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, Ctrl+Z takes the row away. A click into the search box or a filter while you are typing in a cell keeps what you typed as a change and puts the caret where you clicked.
 
+## Keys inside an open editor
+
+While a cell is being edited, the keys belong to its editor first. What each one does depends on the column's type:
+
+| Keys | Text, number | Date, date-time | Select |
+| --- | --- | --- | --- |
+| Enter | Commit and move down | Commit and move down | Pick the highlighted option and move down |
+| Tab / Shift + Tab | Commit and move right / left | Commit and move right / left | Close the list without picking and move right / left |
+| Escape | Cancel | Cancel | Cancel |
+| ↑ / ↓ | Commit and move up / down | Step the focused part (day, month, year, hour, minute) | Move through the options |
+| ← / → | Move the caret | Move to the previous / next part | Move the caret in the search text |
+| Home / End | Caret to the start / end of the text (with Shift: select to there) | Nothing | Caret to the start / end of the search text |
+| Page Up / Page Down | Nothing | Nothing | Nothing |
+| Backspace, Delete | Delete text | Clear the focused part | Delete search text |
+
+Enter, Tab and ↑ / ↓ select the neighbouring cell without opening its editor, so a column of numbers is typed as in a spreadsheet: a value, ↓, a value, ↓. None of these keys scrolls the grid away from the cell you are in: Page Up, Page Down, Home and End act on the grid again once the editor is closed.
+
+A date or a date-time can be typed part by part (the order of the parts follows the browser's locale): the editor stays open until Enter, Tab or a click elsewhere commits what it holds, and Escape leaves the cell as it was. A date picked from the browser's calendar is committed at once.
+
 ## Paste from Excel, Google Sheets or Numbers
 
 Copy a block in your spreadsheet, select the top-left cell in the sheet, Ctrl+V. The block lands there, column by column, each cell read by the column's type ([Columns](columns.md)): `1 234,50` becomes 1234.5 in a number column, `Paint` the option with that label in a select, `yes` a tick, `28/02/2026` a date when the column shows `d/m/Y`. Quoted cells (a newline inside a cell) are read the way Excel writes them.

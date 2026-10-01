@@ -14,7 +14,7 @@ composer test:js            # browser side's pure parts: node --test tests/js (p
 composer lint               # Pint
 npm run build               # resources/{js,css} → resources/dist (esbuild); commit the result
 npm run dev                 # rebuild on change
-node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window
+node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys
 ```
 
 CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.0 / 4.* / 5.*, and checks that `npm run build`
@@ -38,7 +38,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~299 KB / 77 KB gzip, 42 KB / 7 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~300 KB / 79 KB gzip, 42 KB / 7 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
@@ -132,7 +132,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   committed as it scrolled out, an undo, a save answer) rebuilds its cells when it renders again, and a cell
   component taken earlier is a deleted one. Ctrl+ArrowDown / Ctrl+ArrowUp (with Shift too) are Tabulator's jump,
   followed by `grid.js`'s `jumped()` (which does not look at Alt, as Tabulator's keybinding does not: a handler that
-  skipped Ctrl+Alt+Arrow left the jump out of view; in an open editor it does nothing, the arrows are the field's): it lays the range overlay out at once (`modules.selectRange.layoutRanges()`,
+  skipped Ctrl+Alt+Arrow left the jump out of view; in an open editor it does nothing, the arrows are the editor's, see Editor keys below): it lays the range overlay out at once (`modules.selectRange.layoutRanges()`,
   otherwise the overlay's old place holds the scroll height for 200 ms and the holder moves again when it lets go)
   and then `scrollTo()`s the row the range moved to. `ResizeTableModule` is registered: a sheet built while hidden
   (a tab, a collapsed section) redraws when it becomes visible, and on a size change; it leaves the inline
@@ -166,6 +166,24 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   unchanged date editor fires no edit event, so `editing` would stay true and Save enabled); `api.focus()` calls the original, so
   `refocus()` after a toolbar click still works. The leave guard is `unsaved()`: `dirty.total` or an open editor.
   `updateRows()` and `scrollTo()` do nothing after `destroy()` (an editor that commits while the sheet is removed).
+- Editor keys (`grid.js`): `editorKeys` is a **capture-phase** `keydown` listener on the grid element (removed in
+  `destroy()`), a no-op unless an editor is open. PageUp / PageDown / Home / End stop there: Tabulator's bindings page
+  or jump the grid (`scrollPageUp`, `scrollToStart`, …), macOS scrolls the holder on Home / End, and a row leaving the
+  window commits its editor; a bubble-phase guard is too late (Tabulator's input editor stops Home / End itself, the
+  browser's scroll stays). Plain Home / End put the caret at the start / end of a `type=text` input by hand; with a
+  modifier they are the field's. ArrowUp / ArrowDown in an `editor: 'input'` cell (text, number) blur the input (the
+  commit is synchronous) and `navigate()`, like the component's Tab: the selection moves, no editor opens (Tabulator's
+  `navUp` / `navDown` would open the next row's); with Alt the key is only kept from Tabulator, with Shift / Ctrl / Meta
+  nothing is done. The list editor is left alone (its arrows walk the options). The component's own `keydown` listener
+  is a capture listener on the root, so it still sees every key first (Enter, Tab, Ctrl+S). `isoEditor` (date,
+  date-time): Chromium fires `change` on every key that alters the value (a digit, Backspace, an arrow stepping a
+  segment), so `change` commits only while `keyed` is false: any key but Enter / Escape / Tab sets it, a `pointerdown`
+  on the field (the calendar button) clears it; Enter, Tab (the component's blur) and blur commit, Escape cancels. It
+  stops ArrowUp / ArrowDown itself, at the target, so they step the segment and never reach `navUp` / `navDown`
+  (`editorKeys` cannot stop them in the capture phase: the input's own listener would not run and `keyed` would stay
+  false). The harness types 11/11/2027: the segment order follows the system locale. Known and left: F2 on a select
+  opens its list filtered to the current label (the list editor filters on the F2 `keyup`); Enter and a double-click
+  show every option.
 - In the Blade view, an element with `x-show` binds `:style` with the object syntax; nothing stored is interpolated
   into `wire:click` / `x-on:` expressions.
 - Render once: `$spreadsheetRendered` (`#[Locked]`) makes `getSpreadsheetConfig()` skip `rows()` after the render
