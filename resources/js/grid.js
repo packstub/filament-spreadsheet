@@ -260,7 +260,10 @@ export function createGrid(element, options) {
     const table = new Tabulator(element, {
         data: [],
         index: 'id',
-        height: '100%',
+        // The grid's own height, never '100%': the element is .ps-sheet-grid itself, its parent has no
+        // height, so a percentage would resolve to "as tall as the rows" and nothing would be windowed.
+        // The variable is set on .ps-sheet (the stylesheet's default, or the page's getSpreadsheetHeight()).
+        height: 'var(--ps-sheet-height)',
         layout: 'fitDataStretch',
         renderHorizontal: 'virtual',
         renderVertical: 'virtual',
@@ -306,11 +309,30 @@ export function createGrid(element, options) {
     // Tabulator hands the focus back to the holder when an editor closes, without preventScroll: on a
     // sheet taller than the window the page would jump under the pointer, and a click that closed the
     // editor (on Save, say) would land somewhere else. The holder never scrolls the page for the focus.
+    //
+    // And it never takes the focus from a field the pointer just went down on: a click into the
+    // search box with an editor open closes the editor (Tabulator's own mousedown listener), which
+    // focuses the holder before the browser focuses the clicked field, and the click would end in the
+    // grid. A pointer-down outside the grid is remembered for the current tick; Tabulator's focus is
+    // dropped meanwhile. api.focus() (the component's refocus()) goes to the original directly. A select
+    // editor's option list is the grid's own although Tabulator appends it to the body: picking an option
+    // with the mouse hands the keyboard back to the grid as before.
     const holder = table.rowManager?.element
-    if (holder) {
-        const focusHolder = holder.focus.bind(holder)
-        holder.focus = (options) => focusHolder({ ...(options ?? {}), preventScroll: true })
+    const focusHolder = holder ? holder.focus.bind(holder) : () => {}
+    let outside = false
+    const pointerDown = (e) => {
+        outside = ! element.contains(e.target) && ! e.target?.closest?.('.tabulator-popup-container')
+        setTimeout(() => { outside = false }, 0)
     }
+    document.addEventListener('mousedown', pointerDown, true)
+    if (holder) {
+        holder.focus = (options) => {
+            if (outside) return
+            focusHolder({ ...(options ?? {}), preventScroll: true })
+        }
+    }
+
+    let destroyed = false
 
     const current = new Map()
 
@@ -386,6 +408,8 @@ export function createGrid(element, options) {
         /** Update rows in place (values and meta) and repaint them; a changed cell re-renders itself, the others are painted here. */
         async updateRows(rows) {
             await ready
+            // An editor that commits while the table goes away (the sheet removed with it open) has nothing left to repaint.
+            if (destroyed) return
             remember(rows)
 
             return table.updateData(rows).then(() => api.repaint(rows.map((r) => r.id)))
@@ -410,6 +434,36 @@ export function createGrid(element, options) {
                 }
             } finally {
                 if (many) table.restoreRedraw()
+            }
+        },
+
+        /**
+         * Bring a row into view. The grid renders only the rows around the visible window, so a row
+         * further away has no element until it is scrolled to; a row already in view stays where it is.
+         */
+        async scrollTo(id, position = 'nearest') {
+            await ready
+            const row = destroyed ? null : table.getRows().find((r) => String(r.getIndex()) === String(id))
+            if (! row) return
+            await table.scrollToRow(row, position, false).catch(() => {})
+            // Tabulator places the row from estimated heights and can stop short of it (the last row of a
+            // long page, say): what is still cut off is scrolled the rest of the way.
+            // The renderer re-pads the table on each scroll it sees, which moves the row again: the check is
+            // repeated over the next frames until the row stays put (a handful of rounds at most).
+            const reveal = () => {
+                const el = row.getElement()
+                if (destroyed || ! holder || ! el?.isConnected) return false
+                const top = holder.getBoundingClientRect().top + holder.clientTop
+                const rect = el.getBoundingClientRect()
+                const before = holder.scrollTop
+                if (rect.bottom > top + holder.clientHeight) holder.scrollTop += rect.bottom - top - holder.clientHeight
+                else if (rect.top < top) holder.scrollTop -= top - rect.top
+
+                return holder.scrollTop !== before
+            }
+            for (let round = 0, still = 0; round < 8 && still < 2; round++) {
+                still = reveal() ? 0 : still + 1
+                await new Promise((resolve) => setTimeout(resolve, 16))
             }
         },
 
@@ -472,8 +526,11 @@ export function createGrid(element, options) {
         edit(initial = null) {
             const a = api.activeCell()
             if (! a) return false
-            const cell = table.getRow(a.id)?.getCell(a.col)
+            const row = table.getRow(a.id) || null
+            const cell = row?.getCell(a.col)
             if (! cell || ! editableCell(cell)) return false
+            // The active cell may have been scrolled out of the rendered window: an editor needs its element.
+            if (! row.getElement()?.isConnected) table.scrollToRow(row, 'center', false).catch(() => {})
             cell.edit(true)
             const ok = api.isEditing()
             if (ok && initial !== null) {
@@ -506,8 +563,9 @@ export function createGrid(element, options) {
             table.element.dispatchEvent(new KeyboardEvent('keydown', { key, keyCode, bubbles: true, cancelable: true }))
         },
 
+        /** Hand the keyboard to the grid (closing an open editor, which commits it). Not subject to the pointer-down rule above. */
         focus() {
-            table.rowManager.element.focus({ preventScroll: true })
+            focusHolder({ preventScroll: true })
         },
 
         /** Put the active range on the clipboard as TSV (what Ctrl+C does). */
@@ -536,7 +594,9 @@ export function createGrid(element, options) {
         },
 
         destroy() {
+            destroyed = true
             element.removeEventListener('focusout', editingChanged)
+            document.removeEventListener('mousedown', pointerDown, true)
             table.destroy()
         },
     }

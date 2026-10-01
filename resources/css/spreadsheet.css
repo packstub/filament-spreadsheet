@@ -186,6 +186,11 @@
 
 /* ------------------------------------------------------------------ grid */
 
+/*
+ * Tabulator is built on .ps-sheet-grid itself and writes the same height inline
+ * (grid.js: height: 'var(--ps-sheet-height)'): the grid has a height of its own,
+ * scrolls inside it and renders only the rows around the visible window.
+ */
 .ps-sheet-grid {
     height: var(--ps-sheet-height);
     min-height: 16rem;
@@ -194,7 +199,6 @@
 }
 
 .ps-sheet .tabulator {
-    height: 100%;
     border: 1px solid var(--ps-sheet-border);
     border-radius: var(--ps-sheet-radius);
     background: var(--ps-sheet-bg);

@@ -60,6 +60,8 @@ export default function packstubSpreadsheet(config) {
             for (const f of this.filters) this.active[f.name] = f.type === 'dateRange' ? { from: '', until: '' } : ''
 
             this._req = 0
+            // What the grid shows: the page, page size and sort of the last answer applied (see applyPage() and restoreApplied()).
+            this._applied = { page: this.page, perPage: this.perPage, sort: { ...this.sort } }
             this._keydown = (e) => this.onKeydown(e)
             this._beforeUnload = (e) => this.onBeforeUnload(e)
             this._navigate = (e) => this.onNavigate(e)
@@ -82,7 +84,8 @@ export default function packstubSpreadsheet(config) {
                     readOnly: this.readOnly,
                     rowHeight: config.rowHeight,
                     frozenFirstColumn: config.frozenFirstColumn !== false,
-                    rowOffset: () => (this.page - 1) * this.perPage,
+                    // Rows are numbered (and render, as they scroll into view) by the page shown, not by one still asked for.
+                    rowOffset: () => (this._applied.page - 1) * this._applied.perPage,
                     sortState: () => this.sort,
                     saving: () => this.saving,
                     on: {
@@ -227,10 +230,25 @@ export default function packstubSpreadsheet(config) {
             try {
                 const r = await this.call('spreadsheetRows', this.request())
                 if (seq !== this._req) return
-                if (! r || r.ok === false) this.notify(r?.message ?? t.load_failed, 'danger')
-                else this.applyPage(r)
+                if (! r || r.ok === false) {
+                    this.restoreApplied()
+                    this.notify(r?.message ?? t.load_failed, 'danger')
+
+                    return
+                }
+                // An open editor is committed before its row is replaced (as save() does): the typed text
+                // becomes an unsaved cell, and the grid is not rebuilt under an editor (Tabulator throws).
+                if (this.grid.isEditing()) {
+                    this.grid.focus()
+                    await new Promise((resolve) => setTimeout(resolve, 0))
+                    if (seq !== this._req) return
+                }
+                this.applyPage(r)
             } catch (e) {
-                if (seq === this._req) this.notify(t.offline, 'danger')
+                if (seq === this._req) {
+                    this.restoreApplied()
+                    this.notify(t.offline, 'danger')
+                }
             } finally {
                 if (seq === this._req) this.loading = false
             }
@@ -243,7 +261,22 @@ export default function packstubSpreadsheet(config) {
             this.total = r.total ?? this.rows.length
             if (r.perPage) this.perPage = r.perPage
             if (r.sort) this.sort = { ...r.sort }
+            this._applied = { page: this.page, perPage: this.perPage, sort: { ...this.sort } }
             this.renderPage()
+        },
+
+        /**
+         * The latest page request failed: the pager, the page size and the sort arrow go back to
+         * what the rows on screen are (they were set when the request left). The search text and
+         * the filter fields stay as typed: the next request sends them again.
+         */
+        restoreApplied() {
+            const a = this._applied
+            const sorted = a.sort.column !== this.sort.column || a.sort.direction !== this.sort.direction
+            this.page = a.page
+            this.perPage = a.perPage
+            this.sort = { ...a.sort }
+            if (sorted) this.grid?.redrawHeader()
         },
 
         /* ------------------------------------------------------------ editing */
@@ -262,7 +295,7 @@ export default function packstubSpreadsheet(config) {
             if (this.saving) { this.repaint([id]); return }
             const res = S.coerce(column, to, t)
             const row = this.rows.find((r) => r.id === id)
-            const applied = S.applyEdits(this.buffer, [{ id, col, from, to: res.value, version: row?.version ?? null }], { page: this.page })
+            const applied = S.applyEdits(this.buffer, [{ id, col, from, to: res.value, version: row?.version ?? null }], { page: this._applied.page })
             if (! res.ok) {
                 this.buffer.errors[id] ??= {}
                 this.buffer.errors[id][col] = res.error
@@ -288,7 +321,7 @@ export default function packstubSpreadsheet(config) {
                 list.push({ id: e.id, col: e.col, from: e.from, to: res.value, version: row.version })
                 if (! res.ok) invalid.push({ id: e.id, col: e.col, error: res.error })
             }
-            S.applyEdits(this.buffer, list, { page: this.page })
+            S.applyEdits(this.buffer, list, { page: this._applied.page })
             for (const i of invalid) { this.buffer.errors[i.id] ??= {}; this.buffer.errors[i.id][i.col] = i.error }
             this.repaint([...touched])
         },
@@ -299,7 +332,7 @@ export default function packstubSpreadsheet(config) {
             const sel = this.grid.selection()
             if (! sel || sel.left < 0) return
             const edits = S.clearPlan({ rows: this.visibleRows(), columns: this.columns, top: sel.top, bottom: sel.bottom, left: sel.left, right: sel.right, readOnly: this.readOnly })
-            const applied = S.applyEdits(this.buffer, edits, { page: this.page })
+            const applied = S.applyEdits(this.buffer, edits, { page: this._applied.page })
             if (applied.length) this.repaint(applied.map((e) => e.id))
         },
 
@@ -324,7 +357,7 @@ export default function packstubSpreadsheet(config) {
             })
 
             // One undo step for the whole paste; new rows stop at the server's cap on rows per save.
-            const out = S.applyPaste(this.buffer, plan, { page: this.page, maxRows: this.maxRowsPerSave })
+            const out = S.applyPaste(this.buffer, plan, { page: this._applied.page, maxRows: this.maxRowsPerSave })
             if (out.created.length) this.grid.addRows(out.created.map((c) => this.createdRow(c.id)))
             this.repaint(plan.edits.map((e) => e.id))
 
@@ -339,7 +372,7 @@ export default function packstubSpreadsheet(config) {
             const sel = this.grid.selection()
             if (! sel || sel.left < 0) return
             const edits = S.fillDownPlan({ rows: this.visibleRows(), columns: this.columns, top: sel.top, bottom: sel.bottom, left: sel.left, right: sel.right, readOnly: this.readOnly })
-            const applied = S.applyEdits(this.buffer, edits, { page: this.page })
+            const applied = S.applyEdits(this.buffer, edits, { page: this._applied.page })
             if (applied.length) this.repaint(applied.map((e) => e.id))
         },
 
@@ -366,7 +399,8 @@ export default function packstubSpreadsheet(config) {
         addRow() {
             if (this.readOnly || ! this.creatable || this.saving) return
             const temp = S.addCreated(this.buffer, this.defaults())
-            this.grid.addRows([this.createdRow(temp)])
+            // The new row is appended below the last one: out of the rendered window on a long page, so it is scrolled to.
+            this.grid.addRows([this.createdRow(temp)]).then(() => this.grid?.scrollTo(temp, 'bottom'))
             this.sync()
             this.refocus()
         },
@@ -576,14 +610,19 @@ export default function packstubSpreadsheet(config) {
 
         /* ------------------------------------------------------------ leaving */
 
+        /** Something would be lost by leaving: unsaved cells, or text in an open editor (not a buffered change yet). */
+        unsaved() {
+            return !! (this.dirty.total || this.grid?.isEditing())
+        },
+
         onBeforeUnload(e) {
-            if (! this.confirmLeave || ! this.dirty.total) return
+            if (! this.confirmLeave || ! this.unsaved()) return
             e.preventDefault()
             e.returnValue = ''
         },
 
         onNavigate(e) {
-            if (! this.confirmLeave || ! this.dirty.total) return
+            if (! this.confirmLeave || ! this.unsaved()) return
             if (! window.confirm(t.confirm_leave)) e.preventDefault()
         },
 

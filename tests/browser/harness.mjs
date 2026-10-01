@@ -194,9 +194,10 @@ export function viewHtml() {
     return html
 }
 
-export function pageHtml({ dark = false, rtl = false, readOnly = false } = {}) {
+export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false } = {}) {
     // The server sends creatable/deletable false on a read-only sheet (Spreadsheet::canCreate()/isDeletable()).
-    const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly }
+    // autoHeight is what getSpreadsheetHeight() answers by default (null): the stylesheet's --ps-sheet-height applies.
+    const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height }
     return `<!doctype html>
 <html lang="en"${rtl ? ' dir="rtl"' : ''} class="${dark ? 'dark' : ''}">
 <head>
@@ -232,7 +233,7 @@ export function serve(port = 0) {
         const url = new URL(req.url, 'http://localhost')
         if (url.pathname === '/' || url.pathname === '/index.html') {
             res.writeHead(200, { 'content-type': 'text/html' })
-            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly') }))
+            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight') }))
 
             return
         }
@@ -248,5 +249,5 @@ export function serve(port = 0) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     writeFileSync(join(root, 'tests/browser/.harness.html'), pageHtml())
     const { port } = await serve(4177)
-    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl)`)
+    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight)`)
 }

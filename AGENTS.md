@@ -14,7 +14,7 @@ composer test:js            # browser side's pure parts: node --test tests/js (p
 composer lint               # Pint
 npm run build               # resources/{js,css} → resources/dist (esbuild); commit the result
 npm run dev                 # rebuild on change
-node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts
+node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window
 ```
 
 CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.0 / 4.* / 5.*, and checks that `npm run build`
@@ -38,12 +38,15 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~293 KB / 75 KB gzip, 42 KB / 6 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~294 KB / 76 KB gzip, 42 KB / 7 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
-  (`harness.mjs` turns the real Blade view into a static page with a fake `$wire` and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `run.mjs` drives it in Chromium
-  through a sibling project's `playwright-core`; screenshots in `tests/browser/screenshots`, ignored).
+  (`harness.mjs` turns the real Blade view into a static page with a fake `$wire` and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `?autoheight` sends `height: null`, the real default; `run.mjs` drives it in Chromium
+  through a sibling project's `playwright-core`; screenshots in `tests/browser/screenshots`, ignored). The grid
+  renders only the rows around its window: `cell(index, …)` counts the row elements in the DOM, so a case that
+  addresses a row further down calls `scrollToRow(id)` and takes the cell with `cellOf(id, field)`; never work
+  around it by making the grid taller.
 - `tests/Fixtures/ProductSheet.php` — a plain Livewire component holding a sheet, shaped by static flags;
   `Product` (decimal/int/bool/date/datetime/enum casts, an upper-casing SKU mutator), `Category`, `Status`,
   `ProductPolicy` (static flags), `AdminPanelProvider` + `ProductResource` (`$scope` narrows its query like a tenant)
@@ -112,6 +115,27 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   by `applyPaste()`. `removeRows()` of many ids runs under `blockRedraw()`. Anything Tabulator renders from data goes in
   as an element with `textContent` (select option labels via `itemFormatter`, the placeholder), never as a string it
   would `innerHTML`. Data calls await `tableBuilt`.
+- Grid height and the row window: Tabulator is built on `.ps-sheet-grid` itself with `height: 'var(--ps-sheet-height)'`
+  (never `'100%'`: the parent has no height, the grid would grow to its rows and nothing would be windowed; no
+  `height` on `.ps-sheet .tabulator` either, it is the same element). The variable is the stylesheet's default or
+  `config.height` (`getSpreadsheetHeight()`), bound on the root by the view. So **a row may have no element**: address
+  rows by id through the table (`getRow(id)`, which answers `false` for an unknown id), never by DOM position;
+  `grid.scrollTo(id, position)` brings one into view (Tabulator's `scrollToRow` plus a few rounds of correction, its
+  estimates stop short of the last row); `addRow()` scrolls to the new row; `grid.edit()` scrolls the active cell back
+  before opening its editor. Marks on a row out of the window need nothing: `updateRows()` updates the data and the
+  formatters paint when the row renders. `rowOffset` and the page an edit is recorded under come from `_applied`
+  (below), not from `page`: rows render lazily, also while another page is being asked for.
+- Page state: `applyPage()` keeps `_applied = { page, perPage, sort }`, what the rows on screen are. `setPage()`,
+  `setPerPage()` and `sortBy()` set the asked-for state at once; when the latest request throws or answers
+  `ok: false`, `refresh()` calls `restoreApplied()` (and `redrawHeader()` if the sort moved). The search text and the
+  filters are not restored. Before `applyPage()`, `refresh()` commits an open editor (`grid.focus()`, one tick, `seq`
+  checked again): `replaceData` under an open editor throws inside Tabulator and loses the text.
+- Focus: Tabulator focuses the holder when an editor closes, before the browser has focused what was clicked. The
+  wrapped `holder.focus` drops that call while a `mousedown` outside the grid is being handled (`outside`, a capture
+  listener on `document`, reset on the next tick, removed in `destroy()`; a select editor's option list, which Tabulator
+  appends to the body as `.tabulator-popup-container`, counts as inside); `api.focus()` calls the original, so
+  `refocus()` after a toolbar click still works. The leave guard is `unsaved()`: `dirty.total` or an open editor.
+  `updateRows()` and `scrollTo()` do nothing after `destroy()` (an editor that commits while the sheet is removed).
 - In the Blade view, an element with `x-show` binds `:style` with the object syntax; nothing stored is interpolated
   into `wire:click` / `x-on:` expressions.
 - Render once: `$spreadsheetRendered` (`#[Locked]`) makes `getSpreadsheetConfig()` skip `rows()` after the render

@@ -39,6 +39,8 @@ class ProductSheet extends Component
 
     public static bool $brokenQuery = false;
 
+    public static ?string $height = null;
+
     /** @var list<array<string, mixed>> */
     public static array $afterSave = [];
 
@@ -55,6 +57,7 @@ class ProductSheet extends Component
         static::$rejectInBeforeSave = false;
         static::$failInAfterSave = false;
         static::$brokenQuery = false;
+        static::$height = null;
         static::$afterSave = [];
         static::$beforeSave = [];
     }
@@ -100,6 +103,11 @@ class ProductSheet extends Component
 
                 throw_if(static::$failInAfterSave, new \RuntimeException('indexer down'));
             });
+    }
+
+    protected function getSpreadsheetHeight(): ?string
+    {
+        return static::$height;
     }
 
     public function render(): string

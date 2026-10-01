@@ -25,7 +25,7 @@
 | Ctrl + Enter | Add a row (when the sheet is creatable) |
 | Right-click a row | The row menu (delete / keep) |
 
-`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, Ctrl+Z takes the row away.
+`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, Ctrl+Z takes the row away. A click into the search box or a filter while you are typing in a cell keeps what you typed as a change and puts the caret where you clicked.
 
 ## Paste from Excel, Google Sheets or Numbers
 
@@ -51,4 +51,4 @@ From Ctrl+S until the answer lands the sheet takes no edits: the grid is dimmed,
 
 ## Leaving the page
 
-With unsaved changes, closing the tab or navigating away (Livewire's navigate too) asks first (`confirm_leave` in the config). Discard drops everything unsaved after a confirmation.
+With unsaved changes, closing the tab or navigating away (Livewire's navigate too) asks first (`confirm_leave` in the config). Text in a cell you are still typing in counts as one. Discard drops everything unsaved after a confirmation.

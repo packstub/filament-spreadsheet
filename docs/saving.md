@@ -53,7 +53,7 @@ Every row the browser loads carries a **version**: the raw value of `updated_at`
 
 ## When the request fails
 
-A save that does not reach the server, or comes back as an error page (the connection dropped, a 419 after the session expired, a 500 or 502 from a proxy), changes nothing in the browser: every unsaved cell, new row and deletion stays, the undo history too, the sheet says "Could not reach the server. Your changes are still here." and takes edits again. Save once more when the connection is back: the same batch is sent, with whatever was edited since. The same goes for a page of rows that fails to load: the rows on screen stay, and the next sort, search or page asks again.
+A save that does not reach the server, or comes back as an error page (the connection dropped, a 419 after the session expired, a 500 or 502 from a proxy), changes nothing in the browser: every unsaved cell, new row and deletion stays, the undo history too, the sheet says "Could not reach the server. Your changes are still here." and takes edits again. Save once more when the connection is back: the same batch is sent, with whatever was edited since. The same goes for a page of rows that fails to load: the rows on screen stay, the pager, the sort arrow and the page size go back to what those rows are, and the next sort, search or page asks again.
 
 This holds on both Filament lines. Livewire 4 (Filament 5) rejects the call; Livewire 3 (Filament 4) leaves it unanswered and only reports the failed request, which the sheet listens for.
 

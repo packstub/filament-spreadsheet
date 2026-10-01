@@ -64,4 +64,4 @@ class OrderLines extends Component
 }
 ```
 
-The component needs no Filament actions or schemas: the sheet is renderless on the server. `getSpreadsheetHeight()` returns a CSS height for the grid (`null` fits it to the window below its top edge); `spreadsheetSaved(SaveResult $result)` is a hook after every save.
+The component needs no Filament actions or schemas: the sheet is renderless on the server. `getSpreadsheetHeight()` returns a CSS height for the grid, which scrolls inside it (`null` fits it to the window below the top bar and the toolbar); `spreadsheetSaved(SaveResult $result)` is a hook after every save.

@@ -23,6 +23,21 @@ it('renders the sheet with its config and first page as JSON for the browser', f
         ->assertSeeHtml('wire:ignore');
 });
 
+it('hands the height of getSpreadsheetHeight() to the view, which sets --ps-sheet-height from it', function () {
+    $view = file_get_contents(__DIR__.'/../../resources/views/spreadsheet.blade.php');
+
+    // The grid takes its height from the variable (grid.js); the root sets it from the config, or leaves the stylesheet's.
+    expect($view)->toContain(':style="height ? { \'--ps-sheet-height\': height } : {}"')
+        ->and(Livewire::test(ProductSheet::class)->instance()->getSpreadsheetConfig()['height'])->toBeNull();
+
+    ProductSheet::$height = '28rem';
+
+    $component = Livewire::test(ProductSheet::class)->assertSeeHtml('--ps-sheet-height');
+
+    expect($component->instance()->getSpreadsheetConfig()['height'])->toBe('28rem')
+        ->and($component->html())->toContain('28rem');
+});
+
 it('queries the rows on the first render only: a re-render carries none, the browser keeps its own', function () {
     product('a-1', 'Hammer');
 

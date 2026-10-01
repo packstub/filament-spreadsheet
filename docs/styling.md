@@ -25,7 +25,7 @@ Restyle it by overriding the `--ps-sheet-*` variables on `.ps-sheet` in your the
 }
 ```
 
-The dark palette is set under `.dark .ps-sheet`. The grid's height is the page's height minus the top bar and the toolbar by default; `getSpreadsheetHeight()` on the page returns another CSS height, or set `--ps-sheet-height`.
+The dark palette is set under `.dark .ps-sheet`. The grid's height is the window's height minus the top bar and the toolbar by default; `getSpreadsheetHeight()` on the page returns another CSS height (`'32rem'`, `'calc(100dvh - 20rem)'`), which the sheet sets as `--ps-sheet-height` on its root, or set the variable in your theme. The grid scrolls inside that height (never less than `16rem`) and renders only the rows around the visible window, so give it a real height: a percentage of a parent without one would not be a height at all.
 
 ## Classes to hook
 
