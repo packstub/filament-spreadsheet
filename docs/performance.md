@@ -13,7 +13,7 @@ The default page is 100 rows; the toolbar goes up to `max_per_page` (1,000). The
 
 ## Saves
 
-`max_rows_per_save` (2,000) caps a batch; the browser knows the cap, so a paste past the last row stops creating rows there and says how many lines were left out. A few hundred rows save in a fraction of a second in either mode; both run in one transaction, `PerRow` with a savepoint per row. Heavy `afterSave()` work belongs in a queued job dispatched from the hook or from a `RowsSaved` listener.
+`max_rows_per_save` (2,000) caps a batch; the browser knows the cap, so a paste past the last row stops creating rows there and says how many lines were left out. A few hundred rows save in a fraction of a second in either mode; both run in one transaction with a savepoint per row (a `SAVEPOINT` / `RELEASE` pair around each write, cheap on every database). Heavy `afterSave()` work belongs in a queued job dispatched from the hook or from a `RowsSaved` listener.
 
 ## The bundle
 

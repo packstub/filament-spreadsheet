@@ -8,6 +8,7 @@
 namespace App\Filament\Resources\Products\Pages;
 
 use App\Filament\Resources\Products\ProductResource;
+use App\Models\Category;
 use App\Models\Product;
 use Packstub\Spreadsheet\Columns\BooleanColumn;
 use Packstub\Spreadsheet\Columns\ComputedColumn;

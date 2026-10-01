@@ -41,6 +41,6 @@ A sheet lives on a page. `SpreadsheetResourcePage` sits next to a resource's lis
 | `confirm_leave` | `true` | Ask before leaving the page with unsaved changes |
 | `frozen_first_column` | `true` | Pin the first column while scrolling sideways |
 | `row_height` | `32` | Pixels |
-| `keybindings` | `[]` | Overrides: `save`, `fill_down`, `undo`, `redo`, `add_row` as `mod+s`-style strings (`mod` is Ctrl or ⌘) |
+| `keybindings` | `[]` | Overrides: `save`, `fill_down`, `undo`, `redo`, `add_row`, `cut` as `mod+s`-style strings (`mod` is Ctrl or ⌘) |
 | `date_format` | `Y-m-d` | PHP format a date cell shows (`format()` on a column wins) |
 | `datetime_format` | `Y-m-d H:i` | PHP format a date-time cell shows |

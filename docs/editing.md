@@ -45,6 +45,10 @@ Select a range whose first row holds the values you want, press Ctrl+D: every co
 
 A changed cell keeps an amber corner until it is saved (or undone, or changed back to what the server sent, which is not a change at all). The toolbar counts them, and the pages they sit on: sorting, searching, filtering or paging never loses them. A red cell is one the column or the server refused, with the message on hover; a purple one changed on the server while you were editing ([Saving](saving.md#conflicts)).
 
+## While a save is in flight
+
+From Ctrl+S until the answer lands the sheet takes no edits: the grid is dimmed, the pointer shows progress, no editor opens, and a paste, fill-down, undo, new row or deletion does nothing. What is typed meanwhile is dropped, not queued (the answer replaces the saved cells with what the server wrote, and an edit made in between would have been lost with them). A save takes a moment only for a big batch or a slow connection; editing resumes the instant it is answered, and the toolbar buttons follow.
+
 ## Leaving the page
 
 With unsaved changes, closing the tab or navigating away (Livewire's navigate too) asks first (`confirm_leave` in the config). Discard drops everything unsaved after a confirmation.

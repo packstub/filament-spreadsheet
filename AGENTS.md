@@ -60,10 +60,12 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   maps are cast `(object)` in `toArray()` so an id-keyed map never becomes a JSON list.
 - Errors: a `SaveRejected`'s message is shown; any other exception is `report()`ed and answered with the generic
   string (`failed`, `load_failed`, `row_failed`). `Spreadsheet::save()` lets exceptions propagate after the rollback;
-  the trait catches them. `write()` turns a `QueryException` into a row error in both modes (`row_failed`, or
-  `row_delete_failed` for a delete): in PerRow the savepoint rolls the row back, in AllOrNothing `$writesAborted`
-  stops the later writes (Postgres aborts the transaction after a failed statement) while their checks still run,
-  then `RolledBack` answers with every row marked. Anything that is not a `QueryException` propagates in AllOrNothing.
+  the trait catches them. `write()` runs every row's operation in a savepoint of the batch's transaction (both
+  modes) and turns a `QueryException` into a row error (`row_failed`, or `row_delete_failed` for a delete): the
+  refused statement rolls back to the savepoint, so the transaction stays usable for the later rows' checks (a
+  `unique` rule, a policy that queries; Postgres refuses every statement of an aborted transaction otherwise). In
+  PerRow the other rows go on; in AllOrNothing `RolledBack` answers at the end with every row marked. Anything
+  that is not a `QueryException` propagates in AllOrNothing.
 - `findRecords()` on an integer key type keeps only keys that fit a 64-bit integer (`isIntegerKey()`); the rest are
   answered as missing without a query.
 - Every error of a row at once: a cell that fails coercion does not stop the validation of the row's other cells.
@@ -86,7 +88,12 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   `refocus()`, which hands the focus back to the grid unless a text field holds it (Ctrl+S from the search box keeps
   the caret there). `refresh()` carries a sequence number (`_req`); a stale answer is dropped, and `save()` bumps it
   too: a page request in flight when a save lands is dropped (`loading` reset) and re-run after the save, so its stale
-  rows and versions never cover the saved ones. Undo steps: `edit`, `create`/`uncreate`, `delete`/`undelete`, and the
+  rows and versions never cover the saved ones. While `saving` is true the sheet takes no edits: `grid.js` asks
+  `saving()` in `editableCell`, and `onEdit`, `onRangeEdit`, `onPaste`, `clearSelection`, `fillDown`, `addRow`,
+  `markDeleted`, `undo`, `redo`, `deleteSelected`, `openMenu`, `runMenu` and `discard` return early (a keystroke is
+  dropped, never queued; the toolbar's undo/redo disable too), the root carrying `ps-sheet-is-saving` (grid dimmed,
+  `cursor: progress`) — `S.applyResult()` forgets the saved cells wholesale, so an edit made meanwhile would have
+  been lost with them. Undo steps: `edit`, `create`/`uncreate`, `delete`/`undelete`, and the
   compound `paste` (`S.applyPaste()`: the edits, the created rows with their temp ids and the cells it could not read,
   replayed together; a paste's new rows stop at `maxRowsPerSave` from the config, `capped` counted in the hint). A
   `pastePlan` invalid entry for a new row carries `created: k` (the index into `plan.created`), resolved to the temp id
