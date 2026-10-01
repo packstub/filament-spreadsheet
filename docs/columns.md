@@ -22,7 +22,7 @@ TextColumn::make('name')
 
 Rules are validated with Laravel's validator, with the type's own rules added. A `unique` rule, as a string (`unique:products,sku`) or as `Rule::unique('products', 'sku')`, ignores the record being updated, so an unchanged SKU never conflicts with itself.
 
-A cleared cell (Delete, an empty pasted cell, the empty choice of a select) is written as `null` unless a `required` rule refuses it: the type's rules (`numeric`, `date_format`, `in`…) are marked `nullable`, so they let the empty cell through, while a `required` rule still fails on it (`nullable` never silences `required`). Give every `NOT NULL` column a `required` rule, so an emptied cell is refused with a message on the cell; without one the database refuses the row and the sheet marks it "This row could not be saved." ([Saving](saving.md#refusing-a-save)).
+A cleared cell (Delete, an empty pasted cell, a select whose search field was cleared) is written as `null` unless a `required` rule refuses it: the type's rules (`numeric`, `date_format`, `in`…) are marked `nullable`, so they let the empty cell through, while a `required` rule still fails on it (`nullable` never silences `required`). Give every `NOT NULL` column a `required` rule, so an emptied cell is refused with a message on the cell; without one the database refuses the row and the sheet marks it "This row could not be saved." ([Saving](saving.md#refusing-a-save)).
 
 A column whose name contains a dot (`category.name`) reads through the relation and is read-only.
 

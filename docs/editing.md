@@ -23,10 +23,10 @@
 | Drag the small square at the selection's corner | Fill neighbouring cells |
 | Ctrl + Z, Ctrl + Y (or Ctrl + Shift + Z) | Undo, redo — edits, pastes, fill-downs, new rows and deletions, across pages |
 | Ctrl + S | Save |
-| Ctrl + Enter | Add a row (when the sheet is creatable) |
+| Ctrl + Enter | Add a row (when the sheet is creatable); the selection moves to its first editable cell. In an open editor it commits the cell first |
 | Right-click a row | The row menu (delete / keep) |
 
-`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, Ctrl+Z takes the row away. A click into the search box or a filter while you are typing in a cell keeps what you typed as a change and puts the caret where you clicked.
+`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, what you type goes into the new row (the selection is on its first editable cell, scrolled into view), and Ctrl+Z takes the row away. A click into the search box or a filter while you are typing in a cell keeps what you typed as a change and puts the caret where you clicked.
 
 ## Keys inside an open editor
 
@@ -45,9 +45,9 @@ While a cell is being edited, the keys belong to its editor first. What each one
 
 Enter, Tab and ↑ / ↓ select the neighbouring cell without opening its editor, so a column of numbers is typed as in a spreadsheet: a value, ↓, a value, ↓. None of these keys scrolls the grid away from the cell you are in: Page Up, Page Down, Home and End act on the grid again once the editor is closed.
 
-A date or a date-time can be typed part by part (the order of the parts follows the browser's locale): the editor stays open until Enter, Tab or a click elsewhere commits what it holds, and Escape leaves the cell as it was. A date picked from the browser's calendar is committed at once. An incomplete date (one part cleared, a year not typed yet) leaves the cell as it was: clear every part, or press Delete on the selected cell, to empty it.
+A date or a date-time can be typed part by part (the order of the parts follows the browser's locale), after Enter or F2 or straight on the selected cell: the first digit opens the editor and goes into its first part, any other key just opens it. The editor stays open until Enter, Tab or a click elsewhere commits what it holds, and Escape leaves the cell as it was. A date picked from the browser's calendar is committed at once. An incomplete date (one part cleared, a year not typed yet) leaves the cell as it was: clear every part, or press Delete on the selected cell, to empty it.
 
-A select opened with Enter, F2 or a double-click lists every option, with the current label selected in the search field: ↑ / ↓ and Enter pick another option, a typed letter replaces the label and searches the list (then ↓ and Enter pick from what is left). Typing on the selected cell opens the list already searched by that letter.
+A select opened with Enter, F2 or a double-click lists every option, with the current label selected in the search field: ↑ / ↓ and Enter pick another option, a typed letter replaces the label and searches the list (then ↓ and Enter pick from what is left). Typing on the selected cell opens the list already searched by that letter. The list has no empty item: clearing the search field and confirming (Enter, Tab or a click elsewhere) empties the cell, as Delete on the selected cell does. Escape leaves the cell as it was, so clear the field to look at every option and press Escape if you only wanted to look.
 
 ## Paste from Excel, Google Sheets or Numbers
 

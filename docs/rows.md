@@ -8,7 +8,7 @@
 ->creatable()
 ```
 
-shows the **Add row** button (Ctrl+Enter) and lets a paste past the last row create rows. A new row appears at the bottom of the page with a `+` in place of its number and starts from the columns' `default()` values:
+shows the **Add row** button (Ctrl+Enter) and lets a paste past the last row create rows. A new row appears at the bottom of the page with a `+` in place of its number, scrolled into view with its first editable cell selected (so the next thing typed goes into it), and starts from the columns' `default()` values:
 
 ```php
 NumberColumn::make('stock')->default(0),

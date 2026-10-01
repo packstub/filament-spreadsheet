@@ -16,7 +16,10 @@
  * range over a re-read of the same rows, the keys inside an open editor (a date
  * typed digit by digit, a date with a part cleared, PageUp / PageDown / Home /
  * End, ArrowUp / ArrowDown per editor type, a select's list opened by F2 and
- * the keys that must not filter it, Enter on a cell without an editor), the
+ * the keys that must not filter it, Enter on a cell without an editor), digits
+ * typed on a selected date cell, Ctrl+Enter (on a text cell, a computed cell,
+ * the last row, in an open editor), the active cell after Add row and its undo
+ * and save, characters whose codes are key codes, a keyboard-only pass, the
  * leave guard, read-only mode.
  * Screenshots land in SCREENSHOT_DIR (default: tests/browser/screenshots,
  * ignored by git).
@@ -1801,6 +1804,219 @@ try {
     const onText = await inEditor()
     await press('Escape')
     check('Enter on a computed cell does nothing and throws nothing; on a boolean it still flips the cell, on a text cell it still opens the editor', clean() && ! onComputed.editing && onComputed.active === '5/margin' && onComputed.dirty === enterDirty && (await valueOf(5, 'margin')) === marginBefore && ! onBoolean.editing && activeAfter === ! activeBefore && onBoolean.dirty === enterDirty + 1 && onBoolean.active === '5/is_active' && onText.editing && onText.cell === '5/name' && onText.input === 'Product 5', JSON.stringify({ onComputed, onBoolean, activeBefore, activeAfter, onText, errors: errors.slice(errorsSeen) }))
+
+    /* ---------------------------------------------------------------- a date typed on the selected cell, Ctrl+Enter, the active cell after Add row, characters that are key codes, a keyboard-only pass */
+
+    // digits typed on a selected date / date-time cell (no F2): the first one opens the editor and lands in the field
+    // too. 11/11/2027 reads the same with the day or the month first; a lost first digit would leave the year short.
+    // Row 5's date is 2026-10-06: a 1 in its first part changes the field whichever part that is (the date-time's
+    // day is 01 already, so only the committed value tells there).
+    await fresh()
+    errorsSeen = errors.length
+    const fieldValue = () => page.evaluate(() => (document.activeElement?.tagName === 'INPUT' ? document.activeElement.value : null))
+    for (const [field, label, row] of [['available_on', 'date', 5], ['published_at', 'date-time', 5]]) {
+        await (await cellOf(row, field)).click()
+        const before = await valueOf(row, field)
+        const dirty0 = (await state()).dirty.total
+        await press('1', 60)
+        const first = { ...(await inEditor()), field: await fieldValue() }
+        const steps = [first]
+        for (const digit of '1112027') { await press(digit, 50); steps.push(await inEditor()) }
+        const stayed = steps.every((x) => x.editing && x.cell === `${row}/${field}` && x.active === `${row}/${field}` && x.dirty === dirty0)
+        await press('Enter')
+        let e = await inEditor()
+        const expected = field === 'available_on' ? '2027-11-11' : `2027-11-11 ${String(before).slice(11, 16)}:00`
+        check(`eight digits typed on a selected ${label} cell, without F2: the first one opens the editor and is in the field, the unsaved count waits for Enter, and Enter commits that ${label}${field === 'published_at' ? ' with its time kept' : ''}`, clean() && before !== null && first.editing && first.field !== null && (field !== 'available_on' || (first.field !== before && first.field !== '')) && stayed && (await valueOf(row, field)) === expected && ! e.editing && e.active === `${row + 1}/${field}` && e.dirty === dirty0 + 1, JSON.stringify({ before, first, steps: steps.map((x) => `${x.editing}:${x.input}:${x.dirty}`), value: await valueOf(row, field), expected, e, errors: errors.slice(errorsSeen) }))
+
+        await (await cellOf(10, field)).click()
+        const kept = await valueOf(10, field)
+        await press('1', 50)
+        await press('5', 50)
+        const digits = await inEditor()
+        await press('Escape')
+        e = await inEditor()
+        check(`digits typed on a selected ${label} cell and then Escape leave the cell unchanged`, clean() && digits.editing && digits.cell === `10/${field}` && ! e.editing && (await valueOf(10, field)) === kept && e.dirty === dirty0 + 1 && e.active === `10/${field}`, JSON.stringify({ digits, e, kept, value: await valueOf(10, field) }))
+
+        // any other first key opens the editor and types nothing
+        await press('a', 80)
+        const letter = { ...(await inEditor()), field: await fieldValue() }
+        await press('Escape')
+        e = await inEditor()
+        check(`a letter typed on a selected ${label} cell opens its editor with the cell's value, nothing typed`, clean() && letter.editing && letter.cell === `10/${field}` && letter.field === (kept === null ? '' : field === 'available_on' ? kept : String(kept).slice(0, 16).replace(' ', 'T')) && ! e.editing && (await valueOf(10, field)) === kept && e.dirty === dirty0 + 1, JSON.stringify({ letter, e, kept }))
+    }
+
+    // Ctrl+Enter adds a row and is not an Enter to the grid too: no editor opens on the cell it was pressed on
+    await fresh()
+    errorsSeen = errors.length
+    const sheetNow = () => page.evaluate(() => {
+        const sh = window.sheet(); const g = sh.grid; const a = g.activeCell(); const temps = sh.buffer.createdOrder; const el = temps.length ? g.table.getRow(temps.at(-1))?.getElement() : null
+        const h = g.table.rowManager.element.getBoundingClientRect(); const r = el?.isConnected ? el.getBoundingClientRect() : null
+
+        return { created: sh.dirty.created, cells: sh.dirty.cells, total: sh.dirty.total, editing: g.isEditing(), active: a && `${a.id}/${a.col}`, temps, last: temps.length ? { ...sh.buffer.created[temps.at(-1)] } : null, changes: JSON.stringify(sh.buffer.changes), inView: !! r && r.top >= h.top - 1 && r.bottom <= h.bottom + 1, holder: !! document.activeElement?.classList.contains('tabulator-tableholder'), undo: sh.buffer.undo.length }
+    })
+    const onNewRow = (n) => page.waitForFunction((n) => { const sh = window.sheet(); return sh.buffer.createdOrder.length === n && sh.grid.activeCell()?.id === sh.buffer.createdOrder.at(-1) }, n, { timeout: 3000 }).catch(() => {})
+    for (const [combo, n] of [['Control+Enter', 1], ['Meta+Enter', 2]]) {
+        await scrollToRow(5)
+        await (await cellOf(5, 'name')).click()
+        await page.keyboard.press(combo)
+        await onNewRow(n)
+        await page.waitForTimeout(300)
+        const added = await sheetNow()
+        await page.keyboard.type('K' + n)
+        await page.waitForTimeout(80)
+        const typing = await inEditor()
+        await press('Enter')
+        const typed = await sheetNow()
+        await press('ArrowUp')
+        const moved = await sheetNow()
+        check(`${combo} on a text cell adds one row and opens no editor; the keyboard still works: the active cell is the new row's first editable cell, in view, a typed text goes there and the arrows move`, clean() && added.created === n && ! added.editing && added.holder && added.active === `${added.temps.at(-1)}/sku` && added.inView && added.changes === '{}' && typing.editing && typing.cell === added.active && typing.input === 'K' + n && ! typed.editing && typed.last?.sku === 'K' + n && typed.changes === '{}' && (await valueOf(5, 'name')) === 'Product 5' && moved.active !== typed.active && ! moved.editing, JSON.stringify({ added, typing, typed, moved, errors: errors.slice(errorsSeen) }))
+    }
+    for (const [combo, n] of [['Control+Enter', 3], ['Meta+Enter', 4]]) {
+        await scrollToRow(5)
+        await (await cellOf(5, 'margin')).click()
+        await page.keyboard.press(combo)
+        await onNewRow(n)
+        await page.waitForTimeout(300)
+        const added = await sheetNow()
+        check(`${combo} on a computed cell adds one row and throws nothing`, clean() && added.created === n && ! added.editing && added.holder && added.active === `${added.temps.at(-1)}/sku` && added.changes === '{}', JSON.stringify({ added, errors: errors.slice(errorsSeen) }))
+    }
+    // from the last row, with the new row in view next to it: the text typed next is the new row's, not the old cell's
+    await fresh()
+    errorsSeen = errors.length
+    await scrollToRow(100, 'bottom')
+    await atRest()
+    await (await cellOf(100, 'name')).click()
+    await page.keyboard.press('Control+Enter')
+    await onNewRow(1)
+    await page.waitForTimeout(300)
+    const lastAdded = await sheetNow()
+    await page.keyboard.type('NEW ROW NAME')
+    await press('Enter')
+    const lastTyped = await sheetNow()
+    check('Ctrl+Enter on the last row, the new row in view under it: no editor opens on the old cell, and the text typed next is the new row\'s, the old cell as it was', clean() && lastAdded.created === 1 && ! lastAdded.editing && lastAdded.inView && lastTyped.changes === '{}' && (await valueOf(100, 'name')) === 'Product 100' && lastTyped.last?.sku === 'NEW ROW NAME' && lastTyped.cells === 0, JSON.stringify({ lastAdded, lastTyped, name: await valueOf(100, 'name'), errors: errors.slice(errorsSeen) }))
+    // inside an open editor Ctrl+Enter is the editor's Enter first: the text is committed, then the row is added
+    await scrollToRow(5)
+    await (await cellOf(5, 'name')).click()
+    await page.keyboard.type('In the editor')
+    await page.keyboard.press('Control+Enter')
+    await onNewRow(2)
+    await page.waitForTimeout(300)
+    const fromEditor = await sheetNow()
+    check('Ctrl+Enter in an open editor commits its text and adds a row, the active cell on the new row', clean() && fromEditor.created === 2 && ! fromEditor.editing && fromEditor.holder && fromEditor.changes === '{"5":{"name":"In the editor"}}' && fromEditor.active === `${fromEditor.temps.at(-1)}/sku`, JSON.stringify({ fromEditor, errors: errors.slice(errorsSeen) }))
+
+    // the Add row button: the active cell goes to the new row, so typing lands there; one Ctrl+Z takes the text back, the next the row
+    await fresh()
+    errorsSeen = errors.length
+    await (await cellOf(5, 'name')).click()
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await onNewRow(1)
+    await page.waitForTimeout(300)
+    const byButton = await sheetNow()
+    await page.keyboard.type('abc')
+    await press('Enter')
+    const buttonTyped = await sheetNow()
+    await press('Control+z')
+    const undoText = await sheetNow()
+    await press('Control+z')
+    const undoRow = await sheetNow()
+    await page.keyboard.type('Z')
+    await page.waitForTimeout(80)
+    const afterRowUndo = await inEditor()
+    await press('Escape')
+    check('after a click on Add row the active cell is the new row\'s first editable cell, in view, and the text typed next is in the new row, the old row untouched', clean() && byButton.created === 1 && ! byButton.editing && byButton.holder && byButton.inView && byButton.active === `${byButton.temps[0]}/sku` && buttonTyped.last?.sku === 'abc' && buttonTyped.changes === '{}' && buttonTyped.cells === 0 && (await valueOf(5, 'name')) === 'Product 5', JSON.stringify({ byButton, buttonTyped, errors: errors.slice(errorsSeen) }))
+    check('one Ctrl+Z takes the typed text back and the next one the row; the active cell is then the last row\'s, where typing opens an editor', clean() && undoText.created === 1 && ! undoText.last?.sku && undoText.undo === 1 && undoRow.created === 0 && undoRow.total === 0 && undoRow.undo === 0 && undoRow.active === '100/sku' && afterRowUndo.editing && afterRowUndo.cell === '100/sku' && afterRowUndo.input === 'Z', JSON.stringify({ undoText, undoRow, afterRowUndo, errors: errors.slice(errorsSeen) }))
+
+    // a new row filled and saved: the active cell stays on that row when it gets its real id
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await onNewRow(1)
+    await page.waitForTimeout(300)
+    await page.keyboard.type('SKU-R10')
+    await press('Tab')
+    await page.keyboard.type('Round ten')
+    await press('Tab')
+    await press('ArrowRight', 60)
+    const savesR10 = await page.evaluate(() => window.__server.calls.save.length)
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction((n) => ! window.sheet().saving && window.__server.calls.save.length === n + 1, savesR10)
+    await page.waitForTimeout(200)
+    const savedRow = await sheetNow()
+    const realId = await page.evaluate(() => window.__server.products.at(-1).id)
+    await page.keyboard.type('9')
+    await press('Enter')
+    check('after the save of a new row the active cell is still on that row, under its real id: the next typing edits it', clean() && savedRow.created === 0 && savedRow.total === 0 && savedRow.active === `${realId}/price` && savedRow.holder && (await page.evaluate(() => window.__server.products.at(-1).sku)) === 'SKU-R10' && (await sheetNow()).changes === JSON.stringify({ [realId]: { price: 9 } }), JSON.stringify({ savedRow, realId, now: await sheetNow(), errors: errors.slice(errorsSeen) }))
+
+    // Tabulator's keybindings read a character as its code: ( is 40, ArrowDown's; & 38, ArrowUp's; # 35, End's; ! 33, PageUp's.
+    // On a layout where they are keys of their own (no Shift) they are still text: on a selected cell, in an open editor, on a cell without one.
+    await fresh()
+    errorsSeen = errors.length
+    await scrollToRow(50)
+    await atRest()
+    const sendKey = (key) => page.evaluate((k) => { const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }); document.activeElement.dispatchEvent(e); return e.defaultPrevented }, key)
+    const stray = []
+    for (const key of ['(', '&', '#', '!', '$', '"', '\'', '%']) {
+        await (await cellOf(50, 'name')).click()
+        const x0 = await inEditor()
+        await sendKey(key)
+        await page.waitForTimeout(120)
+        const opened = await inEditor()
+        const prevented = await sendKey(key)
+        await page.waitForTimeout(120)
+        const again = await inEditor()
+        await press('Escape')
+        await (await cellOf(50, 'margin')).click()
+        await sendKey(key)
+        await page.waitForTimeout(120)
+        const computed = await inEditor()
+        if (! opened.editing || opened.cell !== '50/name' || opened.input !== key || opened.scrollTop !== x0.scrollTop || prevented || ! again.editing || again.cell !== '50/name' || again.input !== key || again.scrollTop !== x0.scrollTop || again.dirty !== 0 || computed.editing || computed.active !== '50/margin' || computed.scrollTop !== x0.scrollTop || computed.dirty !== 0) stray.push({ key, opened, prevented, again, computed })
+    }
+    check('the characters ( & # ! $ " \' % sent as keys of their own are text: on a selected cell they open its editor with the character, in an open editor they are left to the field, on a computed cell they do nothing; the grid neither moves, scrolls nor writes', clean() && stray.length === 0, JSON.stringify({ stray, errors: errors.slice(errorsSeen) }))
+
+    // the keyboard-only pass: no pointer from the load to the save
+    await fresh()
+    errorsSeen = errors.length
+    const here = async () => { const a = (await state()).active; return a && `${a.id}/${a.col}` }
+    const focusOnLoad = await page.evaluate(() => !! document.activeElement?.classList.contains('tabulator-tableholder'))
+    const startAt = await here()
+    await press('ArrowDown', 60)
+    await press('ArrowDown', 60)
+    await press('ArrowRight', 60)
+    const path = [await here()]
+    await page.keyboard.type('Keyboard only')
+    await press('Tab')
+    path.push(await here())
+    const categoryBefore = await valueOf(3, 'category_id')
+    await press('F2', 300)
+    await press('ArrowDown')
+    await press('Enter')
+    path.push(await here())
+    await press('ArrowUp', 60)
+    await press('ArrowRight', 60)
+    path.push(await here())
+    await page.keyboard.type('12.5')
+    await press('Tab')
+    await press('ArrowRight', 60)
+    await press('ArrowRight', 60)
+    path.push(await here())
+    const activeBefore3 = await valueOf(3, 'is_active')
+    await press(' ')
+    await press('ArrowRight', 60)
+    path.push(await here())
+    for (const digit of '11112027') await press(digit, 50)
+    await press('Enter')
+    path.push(await here())
+    const typedAll = await page.evaluate(() => JSON.stringify(window.sheet().buffer.changes))
+    await press('Control+z')
+    await press('Control+z')
+    const undone = await page.evaluate(() => JSON.stringify(window.sheet().buffer.changes))
+    await press('Control+y')
+    const savesPass = await page.evaluate(() => window.__server.calls.save.length)
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction((n) => ! window.sheet().saving && window.__server.calls.save.length === n + 1, savesPass, { timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(150)
+    const pass = await page.evaluate(() => { const c = window.__server.calls.save.at(-1); const p = window.__server.products.find((x) => x.id === '3'); return { changed: JSON.stringify(c?.changed), created: JSON.stringify(c?.created), deleted: JSON.stringify(c?.deleted), server: { name: p.name, category_id: p.category_id, price: p.price, is_active: p.is_active, available_on: p.available_on }, holder: !! document.activeElement?.classList.contains('tabulator-tableholder') } })
+    s = await state()
+    const want = { name: 'Keyboard only', category_id: '2', price: 12.5, is_active: ! activeBefore3 }
+    check('a keyboard-only pass (arrows to a text cell, text, Tab, a select by F2 / ArrowDown / Enter, a number, a boolean by Space, a date typed on the cell, Enter, Ctrl+Z twice, Ctrl+Y, Ctrl+S) saves exactly what was typed and kept, the focus on the grid throughout', clean() && focusOnLoad && startAt === '1/sku' && path.join() === '3/name,3/category_id,4/category_id,3/price,3/is_active,3/available_on,4/available_on' && categoryBefore === '1' && typedAll === JSON.stringify({ 3: { ...want, available_on: '2027-11-11' } }) && undone === JSON.stringify({ 3: { name: want.name, category_id: want.category_id, price: want.price } }) && pass.changed === JSON.stringify({ 3: want }) && pass.created === '{}' && pass.deleted === '[]' && pass.server.name === want.name && String(pass.server.category_id) === '2' && pass.server.price === 12.5 && pass.server.is_active === want.is_active && pass.holder && s.dirty.total === 0 && ! s.editing, JSON.stringify({ focusOnLoad, startAt, path, categoryBefore, typedAll, undone, pass, dirty: s.dirty, errors: errors.slice(errorsSeen) }))
 
     // the listeners go with the sheet
     const keyListener = await page.evaluate(() => {

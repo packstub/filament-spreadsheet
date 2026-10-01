@@ -14,7 +14,7 @@ composer test:js            # browser side's pure parts: node --test tests/js (p
 composer lint               # Pint
 npm run build               # resources/{js,css} → resources/dist (esbuild); commit the result
 npm run dev                 # rebuild on change
-node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list
+node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, a keyboard-only pass
 ```
 
 CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.0 / 4.* / 5.*, and checks that `npm run build`
@@ -38,7 +38,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~301 KB / 79 KB gzip, 42 KB / 7 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~302 KB / 80 KB gzip, 42 KB / 7 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
@@ -196,8 +196,39 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   text resolves the text (cancel when it is no option, null when it is empty, `allowEmpty`), it does not pick the one
   option left; ArrowDown + Enter pick it.
 - Enter on a cell without an editor (`spreadsheet.js` `onKeydown`): Tabulator's range module calls `editCell` on the
-  active cell and throws for a column with `editor: false`, so the component stops Enter on a computed cell and on a
-  boolean in a read-only sheet (an editable boolean is flipped by `toggleActive()` further down).
+  active cell and throws for a column with `editor: false`, so the component stops Enter, with any modifier, on a
+  computed cell and on a boolean in a read-only sheet (an editable boolean is flipped by `toggleActive()` further down).
+- A key the component acts on is the component's alone: every such branch of `onKeydown` calls `own()`
+  (`preventDefault` + `stopPropagation`, in the capture phase on the root, so neither the target nor Tabulator sees
+  the key). Tabulator has two keydown handlers of its own: the range module's on the holder (Enter, with any modifier,
+  calls `editCell` on the active cell; Delete / Backspace are switched off) and the Keybindings module's on the table
+  element (Tab, the arrows with Shift / Ctrl / Meta, PageUp / PageDown / Home / End, Ctrl+C; no History module, so no
+  Ctrl+Z / Ctrl+Y). Ctrl+Enter (add row) that still reached the first opened an editor on the old cell, which the
+  scroll to the new row took out of the window (keyboard dead), and threw on a computed cell. The shortcuts are
+  configurable, so all of them stop, not only the ones that collide with the defaults. Two keys are shared on
+  purpose: Enter in an open editor (the editor's own listener commits, the component moves down a tick later) and
+  the add-row key when it is an Enter pressed in an open editor (the editor commits, a select taking its highlighted
+  option, and `addRow()` runs a tick later; bound to another key, `addRow()` commits the editor by `grid.focus()`).
+  What the component does not handle is Tabulator's: Tab and the arrows outside an editor, Ctrl+C.
+- Characters that are key codes (`grid.js` `characterKeys`): Tabulator's Keybindings reads a one-character `e.key` as
+  its char code, and `! " # $ % & ' (` are 33–40, the codes of PageUp, PageDown, End, Home and the arrows. Unshifted
+  (AZERTY's `(` and `&`, QWERTZ's `#`) the key paged the grid, jumped to its end or opened the next row's editor, in
+  an open editor too (the character not typed: the actions `preventDefault`). A bubble-phase `keydown` listener on
+  the holder (removed in `destroy()`) stops those eight characters there, after the editor has had them; the harness
+  sends them as synthetic keydowns without Shift (Playwright's US layout cannot press them unshifted).
+- Typing on a selected cell (`grid.edit(initial)`): a text, number or select editor gets the character as its text
+  and the key is the component's. A date / date-time field has no text to set: `api.edit()` returns `'native'` for
+  a digit, and the component only stops the propagation, so the browser's default action puts the digit into the
+  field's first part (the field is focused by then; it never sees the keydown). `edit()` dispatches `ps-keyed` on
+  the input first, which sets `isoEditor`'s `keyed`: without it the `change` that digit fires would commit at once,
+  as a picked date. Any other first key on a date cell opens the editor and types nothing (`true`, prevented).
+- Add row (`addRow()`, button and shortcut): `grid.select(temp, first)` puts the one-cell range on the new row's
+  first editable column (`S.editable()`; the first column when none is) as soon as `addRows()` resolves, then
+  `scrollTo(temp, 'bottom')`; a range holds row and column positions, so the row needs no element yet. The harness
+  waits for the active cell to be the new row's before it types (`onNewRow()`). `grid.removeRows()` takes the
+  selection before and, when Tabulator is left without an active cell (the range was on the last rows: the undo of
+  a create, a new row deleted), `restoreRange()`s it onto the row now at that place; `performSave()` remembers a
+  created row holding the active cell and `select()`s the saved row under its real id once it is added.
 - In the Blade view, an element with `x-show` binds `:style` with the object syntax; nothing stored is interpolated
   into `wire:click` / `x-on:` expressions.
 - Render once: `$spreadsheetRendered` (`#[Locked]`) makes `getSpreadsheetConfig()` skip `rows()` after the render

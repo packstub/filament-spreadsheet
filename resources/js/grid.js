@@ -62,6 +62,9 @@ function isoEditor(withTime) {
         // that steps a segment): only Enter, Tab or a blur settle that one. The pointer going down on the
         // field (its calendar button) makes the next change a picked date again.
         let keyed = false
+        // A digit typed on the selected cell opened this editor (api.edit()): the field takes that digit as its
+        // default action and never sees the keydown, so the grid says the change that follows is a typed one.
+        input.addEventListener('ps-keyed', () => { keyed = true })
         input.addEventListener('pointerdown', () => { keyed = false })
         input.addEventListener('change', () => { if (! keyed) done() })
         input.addEventListener('blur', done)
@@ -464,6 +467,17 @@ export function createGrid(element, options) {
     }
     element.addEventListener('keydown', editorKeys, true)
 
+    // Tabulator's keybindings read a one-character key as that character's code, and the codes of ! " # $ % & ' (
+    // are 33 to 40: the key codes of PageUp, PageDown, End, Home and the four arrows. Where one of them is a key of
+    // its own (an unshifted `(`, `&`, `!` or `#` on many layouts) typing it in an open editor would page the grid,
+    // jump to its end or open the next row's editor instead of writing the character, and on a selected cell it
+    // would do both. A character is never a grid key: it stops at the holder, in the bubble phase, after the editor
+    // has had it.
+    const characterKeys = (e) => {
+        if (e.key.length === 1 && e.key >= '!' && e.key <= '(') e.stopPropagation()
+    }
+    holder?.addEventListener('keydown', characterKeys)
+
     // currentCell is false, not null, while nothing is edited.
     const listOpen = () => { const c = table.modules.edit.currentCell; return !! c && c.column.definition.editor === 'list' }
 
@@ -589,9 +603,14 @@ export function createGrid(element, options) {
             return table.addData(rows, top)
         },
 
-        /** Take rows away; many at once (the undo of a big paste) are removed under one redraw. */
+        /**
+         * Take rows away; many at once (the undo of a big paste) are removed under one redraw. A range that was on
+         * the last rows is left past the end by Tabulator (no active cell: typing goes nowhere until an arrow key):
+         * it is put on the row now at its place, the last one.
+         */
         async removeRows(ids) {
             await ready
+            const kept = api.selection()
             const many = ids.length > 1
             if (many) table.blockRedraw()
             try {
@@ -602,6 +621,7 @@ export function createGrid(element, options) {
             } finally {
                 if (many) table.restoreRedraw()
             }
+            if (kept && ! api.activeCell()) restoreRange(kept)
         },
 
         /**
@@ -689,7 +709,26 @@ export function createGrid(element, options) {
             return !! table.modules.edit.currentCell
         },
 
-        /** Start editing the active cell; `initial` replaces its content (typing on a selected cell). True when an editor opened. */
+        /**
+         * Put the active cell on a row's cell (a new row's first editable one), the one cell selected. The row need
+         * not be rendered: the range holds positions, the caller scrolls to it.
+         */
+        select(id, col) {
+            if (destroyed) return false
+            const cell = (table.getRow(id) || null)?.getCell(col)
+            const range = table.getRanges().at(-1)
+            if (! cell || ! range) return false
+            range.setBounds(cell, cell)
+
+            return true
+        },
+
+        /**
+         * Start editing the active cell; `initial` replaces its content (typing on a selected cell). True when an
+         * editor opened; 'native' when it is a date or date-time field and the key is a digit, which the field must
+         * take itself (the caller leaves the key's default action alone): a date field has no text to set, the digit
+         * goes into its first part as it would after F2.
+         */
         edit(initial = null) {
             const a = api.activeCell()
             if (! a) return false
@@ -706,6 +745,12 @@ export function createGrid(element, options) {
             const ok = api.isEditing()
             if (ok && initial !== null) {
                 const input = cell.getElement().querySelector('input, textarea')
+                if (input && (input.type === 'date' || input.type === 'datetime-local')) {
+                    // The field never sees this keydown: without the mark its first change would commit at once, as a picked date does.
+                    input.dispatchEvent(new Event('ps-keyed'))
+
+                    return /^\d$/.test(initial) ? 'native' : true
+                }
                 if (input && (input.type === 'text' || input.type === 'search' || input.tagName === 'TEXTAREA')) {
                     input.value = initial
                     input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -770,6 +815,7 @@ export function createGrid(element, options) {
             element.removeEventListener('keydown', jumped)
             element.removeEventListener('keydown', editorKeys, true)
             element.removeEventListener('keyup', listKeyup, true)
+            holder?.removeEventListener('keydown', characterKeys)
             document.removeEventListener('mousedown', pointerDown, true)
             table.destroy()
         },

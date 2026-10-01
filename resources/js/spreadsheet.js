@@ -414,9 +414,16 @@ export default function packstubSpreadsheet(config) {
 
         addRow() {
             if (this.readOnly || ! this.creatable || this.saving) return
+            // An editor still open (the shortcut bound to a key that is not the editor's Enter) is committed first: its blur settles it.
+            if (this.grid.isEditing()) this.grid.focus()
             const temp = S.addCreated(this.buffer, this.defaults())
-            // The new row is appended below the last one: out of the rendered window on a long page, so it is scrolled to.
-            this.grid.addRows([this.createdRow(temp)]).then(() => this.grid?.scrollTo(temp, 'bottom'))
+            // The new row is appended below the last one: out of the rendered window on a long page, so it is scrolled
+            // to. The active cell goes with it, to the row's first editable cell: what is typed next is the new row's.
+            const first = (this.columns.find((c) => S.editable(c, { created: true }, this.readOnly)) ?? this.columns[0])?.name
+            this.grid.addRows([this.createdRow(temp)]).then(() => {
+                if (first) this.grid?.select(temp, first)
+                this.grid?.scrollTo(temp, 'bottom')
+            })
             this.sync()
             this.refocus()
         },
@@ -510,11 +517,14 @@ export default function packstubSpreadsheet(config) {
             }
 
             if (out.created.length) {
+                // The active cell follows its row through the change of id (a new row is where Add row left it).
+                const active = this.grid.activeCell()
+                const follow = active && out.created.find((c) => c.temp === active.id)
                 this.grid.removeRows(out.created.map((c) => c.temp))
                 const fresh = out.created.map((c) => c.row)
                 this.rows.push(...fresh)
                 this.total += fresh.length
-                this.grid.addRows(fresh.map((r) => this.displayRow(r)))
+                this.grid.addRows(fresh.map((r) => this.displayRow(r))).then(() => { if (follow) this.grid?.select(follow.row.id, active.col) })
             }
 
             if (out.deleted.length) {
@@ -571,11 +581,18 @@ export default function packstubSpreadsheet(config) {
 
         /* ------------------------------------------------------------ keyboard */
 
+        /**
+         * The root's keydown listener, in the capture phase: every key is seen here before the grid's own handlers.
+         * A key the sheet acts on is the sheet's alone (`own()`): it stops here, so Tabulator's keydown handlers (Enter
+         * opens the active cell's editor, the keybindings module) never act on it too. The one key shared on purpose
+         * is Enter in an open editor: the editor's own listener commits, the sheet only moves down afterwards.
+         */
         onKeydown(e) {
             if (! this.grid) return
             const editing = this.grid.isEditing()
+            const own = () => { e.preventDefault(); e.stopPropagation() }
 
-            if (S.matchesKey(e, keys.save)) { e.preventDefault(); this.save(); return }
+            if (S.matchesKey(e, keys.save)) { own(); this.save(); return }
 
             // In a text field outside the grid (the search box, a filter) every other key keeps its
             // browser meaning: Ctrl+Z there undoes the typing, not the sheet. A toolbar button is
@@ -583,11 +600,20 @@ export default function packstubSpreadsheet(config) {
             const field = e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
             if (field && ! this.$refs.grid?.contains(field)) return
 
-            if (S.matchesKey(e, keys.undo) && ! editing) { e.preventDefault(); this.undo(); return }
-            if ((S.matchesKey(e, keys.redo) || S.matchesKey(e, S.parseKeybinding('mod+shift+z'))) && ! editing) { e.preventDefault(); this.redo(); return }
-            if (S.matchesKey(e, keys.fill_down) && ! editing) { e.preventDefault(); this.fillDown(); return }
-            if (S.matchesKey(e, keys.cut) && ! editing) { e.preventDefault(); this.cut(); return }
-            if (S.matchesKey(e, keys.add_row)) { e.preventDefault(); this.addRow(); return }
+            if (S.matchesKey(e, keys.undo) && ! editing) { own(); this.undo(); return }
+            if ((S.matchesKey(e, keys.redo) || S.matchesKey(e, S.parseKeybinding('mod+shift+z'))) && ! editing) { own(); this.redo(); return }
+            if (S.matchesKey(e, keys.fill_down) && ! editing) { own(); this.fillDown(); return }
+            if (S.matchesKey(e, keys.cut) && ! editing) { own(); this.cut(); return }
+            // Ctrl+Enter is still an Enter to Tabulator: it would open the editor of the cell the row was added from.
+            // In an open editor that Enter is the editor's (it commits, a select takes the highlighted option): the row
+            // is added once it has.
+            if (S.matchesKey(e, keys.add_row)) {
+                if (editing && e.key === 'Enter') { e.preventDefault(); setTimeout(() => this.addRow(), 0); return }
+                own()
+                this.addRow()
+
+                return
+            }
 
             if (editing) {
                 // Enter commits and moves down, Tab commits and moves sideways (without
@@ -595,8 +621,7 @@ export default function packstubSpreadsheet(config) {
                 if (e.key === 'Enter' && ! e.shiftKey && ! e.altKey && e.target?.tagName !== 'TEXTAREA') {
                     setTimeout(() => { if (! this.grid.isEditing()) this.grid.navigate('down') }, 0)
                 } else if (e.key === 'Tab') {
-                    e.preventDefault()
-                    e.stopPropagation()
+                    own()
                     const direction = e.shiftKey ? 'left' : 'right'
                     e.target?.blur?.()
                     // The editor commits on blur, synchronously: the selection can move at once.
@@ -608,23 +633,27 @@ export default function packstubSpreadsheet(config) {
             }
 
             // A column without an editor (computed; a boolean in a read-only sheet): Tabulator's Enter would call
-            // editCell on it and throw. An editable boolean is flipped below.
-            if (e.key === 'Enter' && ! e.ctrlKey && ! e.metaKey) {
+            // editCell on it and throw, with any modifier held. An editable boolean is flipped below.
+            if (e.key === 'Enter') {
                 const a = this.grid.activeCell()
                 const type = a && this.column(a.col)?.type
-                if (type === 'computed' || (type === 'boolean' && this.readOnly)) { e.preventDefault(); e.stopPropagation(); return }
+                if (type === 'computed' || (type === 'boolean' && this.readOnly)) { own(); return }
             }
 
             if (this.readOnly || e.target?.closest?.('input, select, textarea, button')) return
 
-            if ((e.key === 'Delete' || e.key === 'Backspace') && ! e.ctrlKey && ! e.metaKey && ! e.altKey) { e.preventDefault(); this.clearSelection(); return }
+            if ((e.key === 'Delete' || e.key === 'Backspace') && ! e.ctrlKey && ! e.metaKey && ! e.altKey) { own(); this.clearSelection(); return }
 
-            if ((e.key === 'Enter' || e.key === ' ') && ! e.ctrlKey && ! e.metaKey && this.grid.toggleActive()) { e.preventDefault(); e.stopPropagation(); return }
+            if ((e.key === 'Enter' || e.key === ' ') && ! e.ctrlKey && ! e.metaKey && this.grid.toggleActive()) { own(); return }
 
-            if (e.key === 'F2') { e.preventDefault(); this.grid.edit(); return }
+            if (e.key === 'F2') { own(); this.grid.edit(); return }
 
             if (e.key.length === 1 && ! e.ctrlKey && ! e.metaKey && ! e.altKey) {
-                if (this.grid.edit(e.key)) e.preventDefault()
+                const opened = this.grid.edit(e.key)
+                // A digit on a date or date-time cell is the field's to take (it has no text to set): the default
+                // action stays, and only that. Any other first key is in the editor already, or opened it and no more.
+                if (opened === 'native') e.stopPropagation()
+                else if (opened) own()
             }
         },
 
