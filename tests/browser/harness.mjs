@@ -194,9 +194,10 @@ export function viewHtml() {
     return html
 }
 
-export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false } = {}) {
+export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false, hidden = false } = {}) {
     // The server sends creatable/deletable false on a read-only sheet (Spreadsheet::canCreate()/isDeletable()).
     // autoHeight is what getSpreadsheetHeight() answers by default (null): the stylesheet's --ps-sheet-height applies.
+    // hidden builds the sheet inside a display:none wrapper (#harness-wrap), as in a tab that is not the open one.
     const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height }
     return `<!doctype html>
 <html lang="en"${rtl ? ' dir="rtl"' : ''} class="${dark ? 'dark' : ''}">
@@ -210,7 +211,9 @@ export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeig
 <h1 style="font-size:1.25rem;margin:0 0 .75rem">Products</h1>
 <script>window.__config = ${JSON.stringify(cfg)}; window.__ready = false;</script>
 <script>${serverSource}</script>
+<div id="harness-wrap"${hidden ? ' style="display:none"' : ''}>
 ${viewHtml()}
+</div>
 <script type="module">
 import packstubSpreadsheet from '/resources/dist/spreadsheet.js'
 import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/module.esm.js'
@@ -233,7 +236,7 @@ export function serve(port = 0) {
         const url = new URL(req.url, 'http://localhost')
         if (url.pathname === '/' || url.pathname === '/index.html') {
             res.writeHead(200, { 'content-type': 'text/html' })
-            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight') }))
+            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight'), hidden: url.searchParams.has('hidden') }))
 
             return
         }
@@ -249,5 +252,5 @@ export function serve(port = 0) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     writeFileSync(join(root, 'tests/browser/.harness.html'), pageHtml())
     const { port } = await serve(4177)
-    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight)`)
+    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight, ?hidden)`)
 }

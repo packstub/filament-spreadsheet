@@ -9,7 +9,11 @@
  * Livewire's commit failure reported), Ctrl+S with an open editor, the grid's
  * own height and its row window (rows scrolled out of view), a page answer
  * landing on an open editor, a click outside the grid with an editor open, a
- * failed page / sort / page-size request, the leave guard, read-only mode.
+ * failed page / sort / page-size request, a cell edited after its row was
+ * updated out of the window, a sheet built while hidden and a window resize,
+ * Ctrl+ArrowDown / Ctrl+ArrowUp, the editing state after an outside click,
+ * where a new page opens and what keeps the scroll, the leave guard,
+ * read-only mode.
  * Screenshots land in SCREENSHOT_DIR (default: tests/browser/screenshots,
  * ignored by git).
  *
@@ -771,9 +775,10 @@ try {
         const configured = probe.getBoundingClientRect().height
         probe.remove()
 
-        return { grid: g.getBoundingClientRect().height, configured, borders: style.boxSizing === 'border-box' ? 0 : parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth), variable: document.querySelector('.ps-sheet').style.getPropertyValue('--ps-sheet-height'), inline: g.style.height, window: innerHeight, loaded: window.sheet().rows.length, rowEls: h.querySelectorAll('.tabulator-row').length, client: h.clientHeight, scroll: h.scrollHeight, doc: document.documentElement.scrollHeight, headerTop: Math.round(g.querySelector('.tabulator-header').getBoundingClientRect().top) }
+        return { grid: g.getBoundingClientRect().height, configured, borders: style.boxSizing === 'border-box' ? 0 : parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth), variable: document.querySelector('.ps-sheet').style.getPropertyValue('--ps-sheet-height'), inline: g.style.height, window: innerHeight, loaded: window.sheet().rows.length, header: g.querySelector('.tabulator-header').getBoundingClientRect().height, rowEls: h.querySelectorAll('.tabulator-row').length, client: h.clientHeight, scroll: h.scrollHeight, doc: document.documentElement.scrollHeight, headerTop: Math.round(g.querySelector('.tabulator-header').getBoundingClientRect().top) }
     })
     let m = await measure()
+    const visibleHeader = m.header
     console.log(`     grid ${m.grid}px (configured ${m.configured}px + ${m.borders}px border), ${m.rowEls} row elements of ${m.loaded} rows, holder ${m.client}/${m.scroll}px, document ${m.doc}px`)
     check('the configured height reaches the grid: --ps-sheet-height is set from the config and Tabulator takes it', m.variable === '32rem' && m.inline === 'var(--ps-sheet-height)' && m.configured === 512 && Math.abs(m.grid - m.configured - m.borders) < 1, JSON.stringify(m))
     check('the grid is no taller than the window and the page does not scroll for it', m.grid <= m.window && m.doc <= m.window, JSON.stringify(m))
@@ -1069,6 +1074,279 @@ try {
     await page.waitForTimeout(80)
     p = await pager()
     check('and a sort and a page size that are answered stick', p.sort === 'name asc' && p.arrows === 'Name ▲' && p.perPage === 25 && p.select === '25' && p.page === 1 && p.text === 'Page 1 of 10', JSON.stringify(p))
+
+    /* ---------------------------------------------------------------- editing a cell whose row was updated while out of the window */
+
+    await fresh()
+    errorsSeen = errors.length
+    const holderToEnd = async () => { await page.evaluate(() => { const h = document.querySelector('.ps-sheet .tabulator-tableholder'); h.scrollTop = h.scrollHeight }); await page.waitForTimeout(150) }
+    const editorNow = async () => ({ editing: (await state()).editing, value: await page.locator('.tabulator-editing input').inputValue({ timeout: 500 }).catch(() => null), rendered: await rendered(3) })
+    // the editor commits as its row is wheeled out of the window; the next keystrokes open it again
+    await cell(2, 'name').click()
+    await page.keyboard.type('One')
+    await page.waitForTimeout(40)
+    await page.mouse.wheel(0, 2500)
+    await page.waitForTimeout(250)
+    const wheeled = await page.evaluate(() => ({ rendered: !! window.sheet().grid.table.getRow('3').getElement()?.isConnected, editing: window.sheet().grid.isEditing(), change: window.sheet().buffer.changes['3']?.name ?? null }))
+    await page.keyboard.type('More')
+    await page.waitForTimeout(60)
+    let ed = await editorNow()
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(60)
+    check('typing after the editor was wheeled out of the window (its row updated meanwhile) opens it again with the full text', clean() && ! wheeled.rendered && ! wheeled.editing && wheeled.change === 'One' && ed.editing && ed.value === 'More' && ed.rendered && (await page.evaluate(() => window.sheet().buffer.changes['3']?.name)) === 'More', JSON.stringify({ wheeled, ed, errors: errors.slice(errorsSeen) }))
+    // an undo while the active cell's row is out of the window, then typing
+    await page.keyboard.press('ArrowUp')
+    await page.waitForTimeout(40)
+    await holderToEnd()
+    const undoGone = ! (await rendered(3))
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(60)
+    await page.keyboard.type('Q')
+    await page.waitForTimeout(60)
+    ed = await editorNow()
+    const undoActive = (await state()).active
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(40)
+    check('typing after an undo that changed the active cell\'s row while it was scrolled away opens the editor with the typed text', clean() && undoGone && undoActive?.id === '3' && undoActive?.col === 'name' && ed.editing && ed.value === 'Q' && ed.rendered && (await page.evaluate(() => window.sheet().buffer.changes['3']?.name)) === 'One', JSON.stringify({ undoGone, undoActive, ed, errors: errors.slice(errorsSeen) }))
+    await holderToEnd()
+    const f2Gone = ! (await rendered(3))
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(60)
+    await page.keyboard.press('F2')
+    await page.waitForTimeout(60)
+    ed = await editorNow()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(40)
+    check('F2 after such an undo opens the editor on the value the undo put back', clean() && f2Gone && ed.editing && ed.value === 'Product 3' && ed.rendered && (await state()).dirty.total === 0, JSON.stringify({ f2Gone, ed, errors: errors.slice(errorsSeen) }))
+
+    /* ---------------------------------------------------------------- a sheet built while hidden, a window that changes size */
+
+    const renders = () => page.evaluate(() => window.__renders ?? 0)
+    const countRenders = () => page.evaluate(() => { window.__renders = 0; window.sheet().grid.table.on('renderComplete', () => { window.__renders++ }) })
+    await page.goto(`http://127.0.0.1:${port}/?hidden`)
+    await page.waitForFunction(() => window.sheet()?.rows?.length === 100)
+    await page.waitForTimeout(200)
+    errorsSeen = errors.length
+    await countRenders()
+    const whileHidden = await page.evaluate(() => ({ rowEls: document.querySelectorAll('.ps-sheet .tabulator-tableholder .tabulator-row').length, grid: document.querySelector('.ps-sheet-grid').getBoundingClientRect().height }))
+    await page.evaluate(() => { document.querySelector('#harness-wrap').style.display = '' })
+    await page.waitForTimeout(400)
+    m = await measure()
+    const rendersShown = await renders()
+    await page.waitForTimeout(600)
+    const rendersLater = await renders()
+    console.log(`     built hidden, then shown: grid ${m.grid}px, header ${m.header}px (visible case ${visibleHeader}px), ${m.rowEls} row elements of ${m.loaded} rows (${whileHidden.rowEls} while hidden), ${rendersShown} renders on show, ${rendersLater - rendersShown} in the 600 ms after`)
+    check('a sheet built inside a hidden wrapper draws itself when it is shown: the header at its normal height, the rows of the window rendered', clean() && whileHidden.grid === 0 && m.header === visibleHeader && m.rowEls > 0 && m.rowEls < m.loaded && Math.abs(m.grid - m.configured - m.borders) < 1 && m.scroll > m.client, JSON.stringify({ whileHidden, m, visibleHeader, errors: errors.slice(errorsSeen) }))
+    check('showing it redraws a few times and then stops: the fixed height does not make the grid redraw in a loop', rendersShown > 0 && rendersShown < 10 && rendersLater === rendersShown && (await measure()).rowEls === m.rowEls, JSON.stringify({ rendersShown, rendersLater }))
+    await cell(0, 'name').click()
+    await page.keyboard.type('Shown')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(50)
+    check('and it is edited as any other', clean() && (await page.evaluate(() => window.sheet().buffer.changes['1']?.name)) === 'Shown' && (await cellClasses(0, 'name')).includes('ps-sheet-cell-dirty'))
+
+    // a visible sheet at rest does not redraw; a window grown much taller is filled, and an open editor survives a resize
+    await page.setViewportSize({ width: 760, height: 420 })
+    await fresh('?autoheight')
+    errorsSeen = errors.length
+    await countRenders()
+    await page.waitForTimeout(600)
+    const idleRenders = await renders()
+    const small = await measure()
+    await cell(1, 'name').click()
+    const fillOf = () => page.evaluate(() => { const h = document.querySelector('.ps-sheet .tabulator-tableholder'); const rows = [...h.querySelectorAll('.tabulator-row')]; const box = h.getBoundingClientRect(); const last = rows.at(-1)?.getBoundingClientRect(); const lastCol = document.querySelector('.ps-sheet .tabulator-header .tabulator-col[tabulator-field="margin"]').getBoundingClientRect(); return { rowEls: rows.length, blank: last ? Math.max(0, Math.round(box.top + h.clientHeight - last.bottom)) : -1, holder: h.clientHeight, gap: Math.round(box.left + h.clientWidth - lastCol.right), active: window.sheet().grid.activeCell() } })
+    await page.setViewportSize({ width: 1600, height: 2600 })
+    await page.waitForTimeout(500)
+    const grown = await measure()
+    const grownFill = await fillOf()
+    const rendersGrown = await renders()
+    await page.waitForTimeout(600)
+    const rendersGrownLater = await renders()
+    console.log(`     window 760x420 -> 1600x2600: grid ${small.grid}px -> ${grown.grid}px, ${small.rowEls} -> ${grown.rowEls} row elements, ${grownFill.blank}px blank under the last row, ${rendersGrown - idleRenders} renders, ${rendersGrownLater - rendersGrown} in the 600 ms after`)
+    check('a sheet at rest does not redraw itself', idleRenders === 0, `renders ${idleRenders}`)
+    check('a window grown much taller leaves no blank area under the rows, the last column stretched to the edge, the selection kept', clean() && grown.grid > small.grid + 1500 && Math.abs(grown.grid - grown.configured - grown.borders) < 1 && grown.rowEls > small.rowEls && grownFill.blank === 0 && Math.abs(grownFill.gap) <= 1 && grownFill.active?.id === '2' && grownFill.active?.col === 'name' && rendersGrownLater === rendersGrown, JSON.stringify({ small, grown, grownFill, rendersGrown, rendersGrownLater, errors: errors.slice(errorsSeen) }))
+    await page.keyboard.type('Keep')
+    await page.waitForTimeout(40)
+    await page.setViewportSize({ width: 1400, height: 800 })
+    await page.waitForTimeout(500)
+    const resizedEditor = { editing: (await state()).editing, value: await page.locator('.tabulator-editing input').inputValue({ timeout: 500 }).catch(() => null) }
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(60)
+    const shrunk = await measure()
+    check('an open editor survives a window resize with its text, and commits afterwards', clean() && resizedEditor.editing && resizedEditor.value === 'Keep' && (await page.evaluate(() => window.sheet().buffer.changes['2']?.name)) === 'Keep' && Math.abs(shrunk.grid - shrunk.configured - shrunk.borders) < 1 && shrunk.doc <= shrunk.window, JSON.stringify({ resizedEditor, shrunk, errors: errors.slice(errorsSeen) }))
+
+    /* ---------------------------------------------------------------- Ctrl+ArrowDown / Ctrl+ArrowUp bring the cell they jump to into view */
+
+    await fresh()
+    errorsSeen = errors.length
+    const inView = (id, field = 'name') => page.evaluate(([i, f]) => {
+        const h = document.querySelector('.ps-sheet .tabulator-tableholder')
+        const row = window.sheet().grid.table.getRow(i)
+        const el = row && row.getElement()?.isConnected ? row.getCell(f).getElement() : null
+        if (! el) return { inside: false, cell: null }
+        const box = h.getBoundingClientRect()
+        const top = box.top + h.clientTop
+        const r = el.getBoundingClientRect()
+
+        return { inside: r.top >= top - 0.5 && r.bottom <= top + h.clientHeight + 0.5, cell: [Math.round(r.top), Math.round(r.bottom)], holder: [Math.round(top), Math.round(top + h.clientHeight)] }
+    }, [String(id), field])
+    await cell(0, 'name').click()
+    await page.keyboard.press('Control+ArrowDown')
+    await page.waitForTimeout(400)
+    s = await state()
+    let seen = await inView(100)
+    check('Ctrl+ArrowDown jumps to the last row and the active cell is inside the visible window', clean() && s.active?.id === '100' && s.active?.col === 'name' && seen.inside, JSON.stringify({ active: s.active, seen }))
+    await page.keyboard.type('End')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(60)
+    check('and it is edited there', (await page.evaluate(() => window.sheet().buffer.changes['100']?.name)) === 'End')
+    await page.keyboard.press('Control+ArrowUp')
+    await page.waitForTimeout(400)
+    s = await state()
+    seen = await inView(1)
+    check('Ctrl+ArrowUp jumps back to the first row, inside the visible window', clean() && s.active?.id === '1' && seen.inside, JSON.stringify({ active: s.active, seen }))
+    await cell(4, 'name').click()
+    await page.keyboard.press('Control+Shift+ArrowDown')
+    await page.waitForTimeout(400)
+    let sel = await page.evaluate(() => { const x = window.sheet().grid.selection(); return { rows: x.rows.length, first: x.rows[0], last: x.rows.at(-1) } })
+    seen = await inView(100)
+    check('Ctrl+Shift+ArrowDown extends the range to the last row and shows its end', clean() && sel.rows === 96 && sel.first === '5' && sel.last === '100' && seen.inside, JSON.stringify({ sel, seen }))
+    await page.keyboard.press('Control+Shift+ArrowUp')
+    await page.waitForTimeout(400)
+    sel = await page.evaluate(() => { const x = window.sheet().grid.selection(); return { rows: x.rows.length, first: x.rows[0], last: x.rows.at(-1) } })
+    seen = await inView(1)
+    check('Ctrl+Shift+ArrowUp extends it to the first row and shows that end', clean() && sel.rows === 5 && sel.first === '1' && sel.last === '5' && seen.inside, JSON.stringify({ sel, seen }))
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(60)
+
+    /* ---------------------------------------------------------------- the editing state after a click outside the grid */
+
+    await fresh()
+    const outsideState = () => page.evaluate(() => { const a = document.activeElement; const sh = window.sheet(); return { flag: sh.editing, editing: sh.grid.isEditing(), dirty: sh.dirty.total, inSearch: !! a?.closest?.('.ps-sheet-search'), saveDisabled: document.querySelector('.ps-sheet-btn-primary').disabled, popup: !! document.querySelector('.tabulator-popup-container') } })
+    await cell(0, 'available_on').dblclick()
+    await page.waitForTimeout(60)
+    const dateOpen = await outsideState()
+    await page.locator('.ps-sheet-search input').click()
+    await page.waitForTimeout(80)
+    let o = await outsideState()
+    check('an unchanged date editor closed by a click into the search box is reported closed: Save is disabled again, the focus in the search box', dateOpen.flag && dateOpen.editing && ! dateOpen.saveDisabled && ! o.flag && ! o.editing && o.dirty === 0 && o.saveDisabled && o.inSearch, JSON.stringify({ dateOpen, o }))
+    await cell(0, 'published_at').dblclick()
+    await page.waitForTimeout(60)
+    const dateTimeOpen = await outsideState()
+    await page.locator('h1').click()
+    await page.waitForTimeout(80)
+    o = await outsideState()
+    check('the same for a date-time editor and a click on the page', dateTimeOpen.flag && ! o.flag && ! o.editing && o.dirty === 0 && o.saveDisabled, JSON.stringify({ dateTimeOpen, o }))
+    await cell(0, 'name').click()
+    await page.keyboard.press('F2')
+    await page.waitForTimeout(60)
+    const textOpen = await outsideState()
+    await page.locator('.ps-sheet-search input').click()
+    await page.waitForTimeout(80)
+    o = await outsideState()
+    check('the same for an unchanged text editor', textOpen.flag && ! o.flag && ! o.editing && o.dirty === 0 && o.saveDisabled && o.inSearch, JSON.stringify({ textOpen, o }))
+    await cell(0, 'category_id').dblclick()
+    await page.waitForSelector('.tabulator-edit-list')
+    await page.waitForTimeout(60)
+    const selectOpen = await outsideState()
+    await page.locator('.ps-sheet-search input').click()
+    await page.waitForTimeout(80)
+    o = await outsideState()
+    check('and for a select editor with its list open: the list closed, the focus in the search box', selectOpen.flag && selectOpen.popup && ! o.flag && ! o.editing && ! o.popup && o.dirty === 0 && o.saveDisabled && o.inSearch, JSON.stringify({ selectOpen, o }))
+    await cell(0, 'name').click()
+    await page.keyboard.type('Changed')
+    await page.locator('.ps-sheet-search input').click()
+    await page.waitForTimeout(80)
+    o = await outsideState()
+    check('a changed editor closed the same way leaves its cell unsaved and Save enabled', ! o.flag && ! o.editing && o.dirty === 1 && ! o.saveDisabled && o.inSearch, JSON.stringify(o))
+
+    /* ---------------------------------------------------------------- where a page opens: other rows at the top, the same rows where they were */
+
+    await fresh()
+    // The scroll position is the row at the top of the window and how much of it is cut off: scrollTop itself moves with
+    // the heights Tabulator estimates for the rows it has not rendered.
+    const samePlace = (a, b) => a.scrollTop > 1000 && b.scrollTop > 1000 && a.number === b.number && a.sku === b.sku && Math.abs(a.offset - b.offset) <= 1
+    const firstVisible = () => page.evaluate(() => { const h = document.querySelector('.ps-sheet .tabulator-tableholder'); const top = h.getBoundingClientRect().top + h.clientTop; const row = [...h.querySelectorAll('.tabulator-row')].find((r) => r.getBoundingClientRect().bottom > top + 1); return { number: row?.querySelector('.ps-sheet-rownum')?.innerText ?? null, sku: row?.querySelector('[tabulator-field="sku"]')?.innerText ?? null, offset: row ? Math.round(row.getBoundingClientRect().top - top) : null, scrollTop: Math.round(h.scrollTop) } })
+    const settled = async () => { await page.waitForFunction(() => ! window.sheet().loading); await page.waitForTimeout(200) }
+    // Tabulator lays its range overlay out 200 ms after a scroll or a click that scrolled, and the holder can move a little then: a position is read once that is over.
+    const atRest = () => page.waitForTimeout(450)
+    await holderToEnd()
+    let before5 = await firstVisible()
+    await page.locator('.ps-sheet-pager button[aria-label="Next page"]').click()
+    await page.waitForFunction(() => window.sheet().page === 2)
+    await settled()
+    let v = await firstVisible()
+    check('Next from the end of a page opens the next one at its first row', before5.scrollTop > 1000 && v.number === '101' && v.sku === 'SKU-101' && v.scrollTop === 0, JSON.stringify({ before5, v }))
+    await holderToEnd()
+    await page.locator('.tabulator-header .tabulator-col[tabulator-field="name"]').click()
+    await page.waitForFunction(() => window.sheet().sort.column === 'name')
+    await settled()
+    v = await firstVisible()
+    check('a sort from a scrolled grid opens at the top', v.number === '1' && v.scrollTop === 0 && (await page.evaluate(() => window.sheet().page)) === 1, JSON.stringify(v))
+    await holderToEnd()
+    await page.locator('.ps-sheet-search input').fill('SKU-1')
+    await page.waitForFunction(() => window.sheet().total === 100)
+    await settled()
+    v = await firstVisible()
+    check('a search result opens at the top although page, page size and sort are the same', v.number === '1' && v.scrollTop === 0, JSON.stringify(v))
+    await holderToEnd()
+    await page.locator('.ps-sheet-filter select').first().selectOption('1')
+    await page.waitForFunction(() => window.sheet().total < 100)
+    await settled()
+    v = await firstVisible()
+    check('and so does a filter result', v.number === '1' && v.scrollTop === 0, JSON.stringify({ v, total: await page.evaluate(() => window.sheet().total) }))
+    await page.locator('.ps-sheet-filter select').first().selectOption('')
+    await page.locator('.ps-sheet-search input').fill('')
+    await page.waitForFunction(() => window.sheet().total === 250)
+    await settled()
+    await holderToEnd()
+    await page.locator('.ps-sheet-per-page select').selectOption('200')
+    await page.waitForFunction(() => window.sheet().rows.length === 200)
+    await settled()
+    v = await firstVisible()
+    check('and another page size', v.number === '1' && v.scrollTop === 0, JSON.stringify(v))
+
+    // the same rows read again stay where they are scrolled to (read in the middle of the page: at its very end the
+    // holder's own clamp moves the rows by a few pixels as the estimated heights settle)
+    await page.evaluate(() => { document.querySelector('.ps-sheet .tabulator-tableholder').scrollTop = 2500 })
+    await atRest()
+    before5 = await firstVisible()
+    const rowsCallsBefore = await page.evaluate(() => window.__server.calls.rows.length)
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('packstub-spreadsheet-refresh')))
+    await page.waitForFunction((n) => window.__server.calls.rows.length === n + 1, rowsCallsBefore)
+    await settled()
+    v = await firstVisible()
+    check('a packstub-spreadsheet-refresh keeps the scroll position', samePlace(before5, v), JSON.stringify({ before5, v }))
+    const midId = await page.evaluate((n) => window.sheet().rows.slice(n + 2, n + 8).find((r) => ! r.readOnly).id, Number(v.number))
+    await (await cellOf(midId, 'stock')).click()
+    await page.keyboard.type('77')
+    await page.keyboard.press('Enter')
+    await atRest()
+    before5 = await firstVisible()
+    const savesBefore5 = await page.evaluate(() => window.__server.calls.save.length)
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction((n) => ! window.sheet().saving && window.__server.calls.save.length === n + 1, savesBefore5)
+    await settled()
+    v = await firstVisible()
+    check('a save while scrolled down keeps the scroll position', (await state()).dirty.total === 0 && samePlace(before5, v), JSON.stringify({ before5, v }))
+    // the page asked for again after a save that found a request in flight: the same page, the scroll kept
+    await (await cellOf(midId, 'stock')).click()
+    await page.keyboard.type('78')
+    await page.keyboard.press('Enter')
+    await atRest()
+    before5 = await firstVisible()
+    await slowRows(300)
+    const reread = await page.evaluate(async () => { const sh = window.sheet(); const n = window.__server.calls.rows.length; sh.refresh(); await new Promise((r) => setTimeout(r, 20)); await sh.save(); await new Promise((r) => setTimeout(r, 900)); return { calls: window.__server.calls.rows.length - n, loading: sh.loading, dirty: sh.dirty.total } })
+    v = await firstVisible()
+    check('the re-read after a save that found a page request in flight keeps it too', reread.calls === 2 && ! reread.loading && reread.dirty === 0 && samePlace(before5, v), JSON.stringify({ reread, before5, v }))
+    await (await cellOf(midId, 'stock')).click()
+    await page.keyboard.type('5')
+    await page.keyboard.press('Enter')
+    await atRest()
+    before5 = await firstVisible()
+    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(200)
+    v = await firstVisible()
+    check('Discard keeps the scroll position', (await state()).dirty.total === 0 && samePlace(before5, v), JSON.stringify({ before5, v }))
 
     /* ---------------------------------------------------------------- leaving with text in an open editor; removing the sheet with one */
 

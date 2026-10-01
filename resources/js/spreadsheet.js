@@ -60,8 +60,9 @@ export default function packstubSpreadsheet(config) {
             for (const f of this.filters) this.active[f.name] = f.type === 'dateRange' ? { from: '', until: '' } : ''
 
             this._req = 0
-            // What the grid shows: the page, page size and sort of the last answer applied (see applyPage() and restoreApplied()).
-            this._applied = { page: this.page, perPage: this.perPage, sort: { ...this.sort } }
+            // What the grid shows: the page, page size and sort of the last answer applied, and the search and
+            // filters it was asked with (see applyPage() and restoreApplied()).
+            this._applied = { page: this.page, perPage: this.perPage, sort: { ...this.sort }, query: this.queryKey(this.request()) }
             this._keydown = (e) => this.onKeydown(e)
             this._beforeUnload = (e) => this.onBeforeUnload(e)
             this._navigate = (e) => this.onNavigate(e)
@@ -153,9 +154,10 @@ export default function packstubSpreadsheet(config) {
             return rows
         },
 
-        renderPage() {
+        /** Lay the rows on the grid; `top` scrolls it to the first row (other rows than before), false keeps the scroll (the same rows again). */
+        renderPage(top = false) {
             if (! this.grid) return
-            this.grid.setRows([...this.rows.map((r) => this.displayRow(r)), ...this.buffer.createdOrder.map((temp) => this.createdRow(temp))])
+            this.grid.setRows([...this.rows.map((r) => this.displayRow(r)), ...this.buffer.createdOrder.map((temp) => this.createdRow(temp))], top)
             this.sync()
         },
 
@@ -183,6 +185,11 @@ export default function packstubSpreadsheet(config) {
 
         request() {
             return { page: this.page, perPage: this.perPage, sort: this.sort, search: this.search, filters: JSON.parse(JSON.stringify(this.active)) }
+        },
+
+        /** The search and the filters of a request, as one comparable string. */
+        queryKey(request) {
+            return JSON.stringify([request?.search ?? '', request?.filters ?? {}])
         },
 
         /**
@@ -228,7 +235,8 @@ export default function packstubSpreadsheet(config) {
             const seq = ++this._req
             this.loading = true
             try {
-                const r = await this.call('spreadsheetRows', this.request())
+                const request = this.request()
+                const r = await this.call('spreadsheetRows', request)
                 if (seq !== this._req) return
                 if (! r || r.ok === false) {
                     this.restoreApplied()
@@ -243,7 +251,7 @@ export default function packstubSpreadsheet(config) {
                     await new Promise((resolve) => setTimeout(resolve, 0))
                     if (seq !== this._req) return
                 }
-                this.applyPage(r)
+                this.applyPage(r, request)
             } catch (e) {
                 if (seq === this._req) {
                     this.restoreApplied()
@@ -254,15 +262,23 @@ export default function packstubSpreadsheet(config) {
             }
         },
 
-        applyPage(r) {
+        /**
+         * Show an answer. `request` is what it was asked with (none for the rows the page was rendered with).
+         * Other rows than the ones on screen (another page, page size, sort, search or filters) open at the
+         * top; the same page read again (the refresh event, the re-read after a save) keeps the scroll.
+         */
+        applyPage(r, request = null) {
+            const was = this._applied
             this.rows = Array.isArray(r.rows) ? r.rows : []
             this.page = r.page ?? 1
             this.lastPage = Math.max(1, r.lastPage ?? 1)
             this.total = r.total ?? this.rows.length
             if (r.perPage) this.perPage = r.perPage
             if (r.sort) this.sort = { ...r.sort }
-            this._applied = { page: this.page, perPage: this.perPage, sort: { ...this.sort } }
-            this.renderPage()
+            this._applied = { page: this.page, perPage: this.perPage, sort: { ...this.sort }, query: request ? this.queryKey(request) : was.query }
+            const a = this._applied
+            const same = a.page === was.page && a.perPage === was.perPage && a.sort.column === was.sort.column && a.sort.direction === was.sort.direction && a.query === was.query
+            this.renderPage(! same)
         },
 
         /**

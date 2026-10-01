@@ -17,7 +17,7 @@ The default page is 100 rows; the toolbar goes up to `max_per_page` (1,000). The
 
 ## The bundle
 
-Tabulator and the sheet's own code are one minified ES module (about 294 KB, 76 KB gzipped) and one stylesheet (42 KB, 7 KB gzipped), loaded on request only on pages that show a sheet (`x-load`), cached like any Filament asset. Pages without a sheet pay nothing.
+Tabulator and the sheet's own code are one minified ES module (about 299 KB, 77 KB gzipped) and one stylesheet (42 KB, 7 KB gzipped), loaded on request only on pages that show a sheet (`x-load`), cached like any Filament asset. Pages without a sheet pay nothing.
 
 ## Locking
 

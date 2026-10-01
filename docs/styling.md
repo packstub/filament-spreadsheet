@@ -10,7 +10,7 @@ Restyle it by overriding the `--ps-sheet-*` variables on `.ps-sheet` in your the
 
 ```css
 .ps-sheet {
-    --ps-sheet-height: calc(100dvh - 14rem);   /* the grid's height; null from getSpreadsheetHeight() uses this */
+    --ps-sheet-height: calc(100dvh - var(--topbar-height, 4rem) - 11rem);   /* the grid's height; null from getSpreadsheetHeight() uses this */
     --ps-sheet-dirty: var(--warning-500);       /* the amber corner */
     --ps-sheet-dirty-bg: ...;
     --ps-sheet-error: var(--danger-500);

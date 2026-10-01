@@ -65,3 +65,7 @@ class OrderLines extends Component
 ```
 
 The component needs no Filament actions or schemas: the sheet is renderless on the server. `getSpreadsheetHeight()` returns a CSS height for the grid, which scrolls inside it (`null` fits it to the window below the top bar and the toolbar); `spreadsheetSaved(SaveResult $result)` is a hook after every save.
+
+## In a tab or a collapsed section
+
+The sheet can be rendered where it is not visible yet: a Filament tab that is not the open one, a collapsed section, anything under `display: none`. It loads its first page as usual and draws the grid when it becomes visible; it also redraws when its size changes (the window resized), an open editor kept as it is. Nothing to call from your side. Give the grid a height that does not depend on the hidden parent (the default, or a length from `getSpreadsheetHeight()`), as in [Styling](styling.md).

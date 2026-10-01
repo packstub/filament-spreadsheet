@@ -38,15 +38,18 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~294 KB / 76 KB gzip, 42 KB / 7 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~299 KB / 77 KB gzip, 42 KB / 7 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
-  (`harness.mjs` turns the real Blade view into a static page with a fake `$wire` and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `?autoheight` sends `height: null`, the real default; `run.mjs` drives it in Chromium
+  (`harness.mjs` turns the real Blade view into a static page with a fake `$wire` and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `?autoheight` sends `height: null`, the real default; `?hidden` builds the sheet inside `#harness-wrap` with `display:none`, shown by the case; `run.mjs` drives it in Chromium
   through a sibling project's `playwright-core`; screenshots in `tests/browser/screenshots`, ignored). The grid
   renders only the rows around its window: `cell(index, …)` counts the row elements in the DOM, so a case that
   addresses a row further down calls `scrollToRow(id)` and takes the cell with `cellOf(id, field)`; never work
-  around it by making the grid taller.
+  around it by making the grid taller. A scroll position is compared as the first visible row and its offset
+  (`firstVisible()` / `samePlace()`), read in the middle of a page and after `atRest()`: `scrollTop` moves with
+  Tabulator's estimated heights, and 200 ms after a scroll its range overlay is laid out again, which can move the
+  holder (most at the very end of a page).
 - `tests/Fixtures/ProductSheet.php` — a plain Livewire component holding a sheet, shaped by static flags;
   `Product` (decimal/int/bool/date/datetime/enum casts, an upper-casing SKU mutator), `Category`, `Status`,
   `ProductPolicy` (static flags), `AdminPanelProvider` + `ProductResource` (`$scope` narrows its query like a tenant)
@@ -122,10 +125,23 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   rows by id through the table (`getRow(id)`, which answers `false` for an unknown id), never by DOM position;
   `grid.scrollTo(id, position)` brings one into view (Tabulator's `scrollToRow` plus a few rounds of correction, its
   estimates stop short of the last row); `addRow()` scrolls to the new row; `grid.edit()` scrolls the active cell back
-  before opening its editor. Marks on a row out of the window need nothing: `updateRows()` updates the data and the
+  before opening its editor, and takes the cell *after* the scroll: a row updated while it had no element (an editor
+  committed as it scrolled out, an undo, a save answer) rebuilds its cells when it renders again, and a cell
+  component taken earlier is a deleted one. Ctrl+ArrowDown / Ctrl+ArrowUp (with Shift too) are Tabulator's jump,
+  followed by `grid.js`'s `jumped()`: it lays the range overlay out at once (`modules.selectRange.layoutRanges()`,
+  otherwise the overlay's old place holds the scroll height for 200 ms and the holder moves again when it lets go)
+  and then `scrollTo()`s the row the range moved to. `ResizeTableModule` is registered: a sheet built while hidden
+  (a tab, a collapsed section) redraws when it becomes visible, and on a size change; it leaves the inline
+  `height: var(--ps-sheet-height)` alone and does not redraw at rest (the harness counts `renderComplete`). Marks on a row out of the window need nothing: `updateRows()` updates the data and the
   formatters paint when the row renders. `rowOffset` and the page an edit is recorded under come from `_applied`
   (below), not from `page`: rows render lazily, also while another page is being asked for.
-- Page state: `applyPage()` keeps `_applied = { page, perPage, sort }`, what the rows on screen are. `setPage()`,
+- Page state: `applyPage(r, request)` keeps `_applied = { page, perPage, sort, query }`, what the rows on screen are
+  (`query` is `queryKey(request)`: the search and filters the answer was asked with, not the ones typed since). When
+  all four equal the previous `_applied` the rows are the same ones read again and the scroll is kept
+  (`grid.setRows(rows, false)`: `replaceData`, then the row that was at the top of the window is put back with its
+  offset, Tabulator's own re-render in position drifts by several rows); anything else opens at the top
+  (`setRows(rows, true)`: `setData`, which renders from the first row; setting `scrollTop = 0` after `replaceData`
+  leaves the old window's rows on screen). `discard()` re-renders with `renderPage()` (no `top`), the scroll kept. `setPage()`,
   `setPerPage()` and `sortBy()` set the asked-for state at once; when the latest request throws or answers
   `ok: false`, `refresh()` calls `restoreApplied()` (and `redrawHeader()` if the sort moved). The search text and the
   filters are not restored. Before `applyPage()`, `refresh()` commits an open editor (`grid.focus()`, one tick, `seq`
@@ -133,7 +149,9 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
 - Focus: Tabulator focuses the holder when an editor closes, before the browser has focused what was clicked. The
   wrapped `holder.focus` drops that call while a `mousedown` outside the grid is being handled (`outside`, a capture
   listener on `document`, reset on the next tick, removed in `destroy()`; a select editor's option list, which Tabulator
-  appends to the body as `.tabulator-popup-container`, counts as inside); `api.focus()` calls the original, so
+  appends to the body as `.tabulator-popup-container`, counts as inside; when that tick is over an outside
+  pointer-down reports `on.editing(isEditing())`, because with the holder not focused there is no `focusout` and an
+  unchanged date editor fires no edit event, so `editing` would stay true and Save enabled); `api.focus()` calls the original, so
   `refocus()` after a toolbar click still works. The leave guard is `unsaved()`: `dirty.total` or an open editor.
   `updateRows()` and `scrollTo()` do nothing after `destroy()` (an editor that commits while the sheet is removed).
 - In the Blade view, an element with `x-show` binds `:style` with the object syntax; nothing stored is interpolated

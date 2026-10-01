@@ -47,4 +47,4 @@ Records are saved with `$record->save()` and deleted with `$record->delete()`: o
 
 ## Browser events
 
-`$dispatch('packstub-spreadsheet-refresh')` anywhere on the page reloads the current page of rows (unsaved cells stay, and a cell being typed in is taken as a change first). The component's `spreadsheetSaved(SaveResult $result)` method is a hook after every save attempt for the page class.
+`$dispatch('packstub-spreadsheet-refresh')` anywhere on the page reloads the current page of rows (unsaved cells stay, a cell being typed in is taken as a change first, and the grid stays where it was scrolled to). The component's `spreadsheetSaved(SaveResult $result)` method is a hook after every save attempt for the page class.

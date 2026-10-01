@@ -8,6 +8,7 @@
 | --- | --- |
 | Click, arrows | Select a cell |
 | Shift + arrows, Shift + click, drag | Select a range |
+| Ctrl + ↓ / Ctrl + ↑ | Jump down / up the column to the edge of its filled cells (the last / first row of the page in a filled column), scrolled into view; with Shift the range extends there |
 | Click a row number | Select the row (for deletion) |
 | Enter, F2, double-click, or just typing | Edit the cell (typing replaces its content, Enter/F2 keep it) |
 | Enter while editing | Commit and move down |

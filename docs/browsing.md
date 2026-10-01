@@ -42,7 +42,7 @@ A select is a small native select in the toolbar (`Filter::select()`); `Filter::
 ->perPage(200)
 ```
 
-The page size runs from 25 to `max_per_page` (1,000) in the toolbar; `perPage()` sets the initial one. Row numbers continue across pages. The grid scrolls inside its own height, the header and the toolbar staying in place, however many rows the page holds. A sheet with 5,000 rows is five pages of 1,000 or fifty of 100; see [Performance](performance.md) for what fits.
+The page size runs from 25 to `max_per_page` (1,000) in the toolbar; `perPage()` sets the initial one. Row numbers continue across pages. The grid scrolls inside its own height, the header and the toolbar staying in place, however many rows the page holds. Another page, page size, sort, search or filter result opens at its first row; the same page read again (a `packstub-spreadsheet-refresh`, the re-read after a save) stays where it was scrolled to. A sheet with 5,000 rows is five pages of 1,000 or fifty of 100; see [Performance](performance.md) for what fits.
 
 ## When a request fails
 

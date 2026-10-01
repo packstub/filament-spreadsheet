@@ -23,6 +23,7 @@ import {
     InteractionModule,
     KeybindingsModule,
     ResizeColumnsModule,
+    ResizeTableModule,
     SelectRangeModule,
     Tabulator,
 } from 'tabulator-tables'
@@ -30,7 +31,7 @@ import { display, phpDate } from './sheet.js'
 
 Tabulator.registerModule([
     AccessorModule, ClipboardModule, EditModule, ExportModule, FormatModule,
-    FrozenColumnsModule, InteractionModule, KeybindingsModule, ResizeColumnsModule, SelectRangeModule,
+    FrozenColumnsModule, InteractionModule, KeybindingsModule, ResizeColumnsModule, ResizeTableModule, SelectRangeModule,
 ])
 
 const ROWNUM = '_rownum'
@@ -317,12 +318,20 @@ export function createGrid(element, options) {
     // dropped meanwhile. api.focus() (the component's refocus()) goes to the original directly. A select
     // editor's option list is the grid's own although Tabulator appends it to the body: picking an option
     // with the mouse hands the keyboard back to the grid as before.
+    //
+    // With the holder not focused there is no focusout from the grid either, and an editor closed
+    // without a change (a date editor left as it was) fires no edit event: the editing state is
+    // reported once the tick is over.
     const holder = table.rowManager?.element
     const focusHolder = holder ? holder.focus.bind(holder) : () => {}
     let outside = false
     const pointerDown = (e) => {
         outside = ! element.contains(e.target) && ! e.target?.closest?.('.tabulator-popup-container')
-        setTimeout(() => { outside = false }, 0)
+        const was = outside
+        setTimeout(() => {
+            outside = false
+            if (was && ! destroyed) on.editing?.(api.isEditing())
+        }, 0)
     }
     document.addEventListener('mousedown', pointerDown, true)
     if (holder) {
@@ -382,6 +391,26 @@ export function createGrid(element, options) {
     table.on('rangeChanged', selectionChanged)
     table.on('rangeRemoved', selectionChanged)
 
+    // Ctrl+ArrowDown / Ctrl+ArrowUp (with Shift too) jump to the end of the column: Tabulator scrolls there
+    // from estimated row heights and can leave the cell it jumped to outside the window. Once it has
+    // handled the key, the row the range moved to is brought into view by scrollTo(), which corrects.
+    // The range overlay is laid out first: Tabulator does that 200 ms after a scroll, the overlay still
+    // at its old place holds the holder's scroll height until then, and the holder would move again
+    // (the row out of view once more) when it lets go.
+    const jumped = (e) => {
+        if (! (e.ctrlKey || e.metaKey) || e.altKey || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || api.isEditing()) return
+        const down = e.key === 'ArrowDown'
+        setTimeout(() => {
+            if (destroyed || api.isEditing()) return
+            const rows = table.getRanges().at(-1)?.getRows() ?? []
+            const row = down ? rows.at(-1) : rows[0]
+            if (! row) return
+            table.modules.selectRange?.layoutRanges?.()
+            api.scrollTo(row.getIndex())
+        }, 0)
+    }
+    element.addEventListener('keydown', jumped)
+
     element.addEventListener('paste', (e) => {
         if (table.modules.edit.currentCell) return
         const text = e.clipboardData?.getData('text/plain') ?? ''
@@ -391,18 +420,54 @@ export function createGrid(element, options) {
         on.paste?.(text)
     })
 
+    /** The first row in the visible window: its id, its place in the list and how far its top is from the window's (negative when cut off). */
+    const topRow = () => {
+        if (destroyed || ! holder || holder.scrollTop <= 0) return null
+        const top = holder.getBoundingClientRect().top + holder.clientTop
+        const el = [...holder.querySelectorAll('.tabulator-row')].find((r) => r.getBoundingClientRect().bottom > top + 0.5)
+        if (! el) return null
+        const rows = table.getRows()
+        const position = rows.findIndex((r) => r.getElement() === el)
+
+        return position < 0 ? null : { id: rows[position].getIndex(), position, offset: el.getBoundingClientRect().top - top }
+    }
+
+    /** Put that row back where it was (the same id, or the row now at its place), correcting what Tabulator's estimates leave. */
+    const restoreTop = async (anchor) => {
+        const rows = table.getRows()
+        const row = rows.find((r) => String(r.getIndex()) === String(anchor.id)) ?? rows[Math.min(anchor.position, rows.length - 1)]
+        if (! row || destroyed) return
+        await table.scrollToRow(row, 'top', true).catch(() => {})
+        for (let round = 0, still = 0; round < 8 && still < 2; round++) {
+            const el = row.getElement()
+            if (destroyed || ! el?.isConnected) return
+            const before = holder.scrollTop
+            holder.scrollTop += el.getBoundingClientRect().top - (holder.getBoundingClientRect().top + holder.clientTop) - anchor.offset
+            still = Math.abs(holder.scrollTop - before) < 1 ? still + 1 : 0
+            await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+    }
+
     const api = {
         table,
 
         ready,
 
-        /** Replace every row (a new page). */
-        async setRows(rows) {
+        /**
+         * Replace every row. Other rows (a new page, a sort, a search or filter result) open at the top:
+         * setData renders from the first row. `top` false is for the same rows read again (a refresh, a
+         * discard), which stay where they are scrolled to: replaceData re-renders around the old position,
+         * from estimated heights, so the row that was at the top of the window is put back there.
+         */
+        async setRows(rows, top = true) {
             await ready
             current.clear()
             remember(rows)
+            if (top) return table.setData(rows)
 
-            return table.replaceData(rows)
+            const anchor = topRow()
+            await table.replaceData(rows)
+            if (anchor) await restoreTop(anchor)
         },
 
         /** Update rows in place (values and meta) and repaint them; a changed cell re-renders itself, the others are painted here. */
@@ -527,10 +592,13 @@ export function createGrid(element, options) {
             const a = api.activeCell()
             if (! a) return false
             const row = table.getRow(a.id) || null
-            const cell = row?.getCell(a.col)
-            if (! cell || ! editableCell(cell)) return false
+            if (! row) return false
             // The active cell may have been scrolled out of the rendered window: an editor needs its element.
             if (! row.getElement()?.isConnected) table.scrollToRow(row, 'center', false).catch(() => {})
+            // The cell is taken after the scroll: a row updated while it had no element (an editor committed
+            // as it scrolled out, an undo, a save answer) rebuilds its cells when it renders again.
+            const cell = row.getCell(a.col)
+            if (! cell || ! editableCell(cell)) return false
             cell.edit(true)
             const ok = api.isEditing()
             if (ok && initial !== null) {
@@ -596,6 +664,7 @@ export function createGrid(element, options) {
         destroy() {
             destroyed = true
             element.removeEventListener('focusout', editingChanged)
+            element.removeEventListener('keydown', jumped)
             document.removeEventListener('mousedown', pointerDown, true)
             table.destroy()
         },
