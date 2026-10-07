@@ -94,7 +94,9 @@ export default function packstubSpreadsheet(config) {
                         rangeEdit: (edits) => this.onRangeEdit(edits),
                         sort: (col) => this.sortBy(col),
                         paste: (text) => this.onPaste(text),
-                        select: (count) => { this.selected = this.readOnly || ! this.deletable ? 0 : count },
+                        // The rows Delete rows would delete: a row the policy keeps (a viewer's) is not counted, so the
+                        // button is not offered for a selection it would do nothing with.
+                        select: (count, ids = []) => { this.selected = this.readOnly || ! this.deletable ? 0 : this.deletableIds(ids).length },
                         editing: (open) => { this.editing = open },
                     },
                 })
@@ -430,11 +432,15 @@ export default function packstubSpreadsheet(config) {
             this.refocus()
         },
 
+        deletableIds(ids) {
+            return ids.filter((id) => S.isCreated(this.buffer, id) || this.rows.find((r) => r.id === id)?.deletable)
+        },
+
         deleteSelected() {
             if (this.readOnly || ! this.deletable || this.saving) return
             const sel = this.grid.selection()
             if (! sel || ! sel.rows.length) return
-            const ids = sel.rows.filter((id) => S.isCreated(this.buffer, id) || this.rows.find((r) => r.id === id)?.deletable)
+            const ids = this.deletableIds(sel.rows)
             if (! ids.length) return
             if (! window.confirm(choice(t.confirm_delete, ids.length))) return
             this.markDeleted(ids)

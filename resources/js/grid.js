@@ -202,7 +202,7 @@ function editorFor(column) {
  *   on.rangeEdit([{ id, col, from, to }])  cells written by the fill handle (the component re-checks each)
  *   on.sort(col)                        header clicked
  *   on.paste(text)                      text pasted into the grid
- *   on.select(count)                    rows in the active range
+ *   on.select(count, ids)               rows in the active range, and their ids
  *   on.editing(open)                    an editor opened or closed
  *
  * Delete/Backspace and Ctrl+X are the component's (clear() through its own
@@ -419,7 +419,7 @@ export function createGrid(element, options) {
         if (edits.length) on.rangeEdit?.(edits)
     })
 
-    const selectionChanged = () => on.select?.(api.selection()?.rows.length ?? 0)
+    const selectionChanged = () => { const rows = api.selection()?.rows ?? []; on.select?.(rows.length, rows) }
     table.on('rangeAdded', selectionChanged)
     table.on('rangeChanged', selectionChanged)
     table.on('rangeRemoved', selectionChanged)

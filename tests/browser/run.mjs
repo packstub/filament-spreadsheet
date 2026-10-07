@@ -395,6 +395,9 @@ try {
     await page.waitForTimeout(50)
     const readOnlyRow = await page.evaluate(() => ({ changes: window.sheet().buffer.changes['40'], text: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText }))
     check('Delete on a read-only row neither buffers nor blanks the cell', readOnlyRow.changes === undefined && readOnlyRow.text === 'Product 40', JSON.stringify(readOnlyRow))
+    const deleteButton = page.locator('.ps-sheet-btn-danger', { hasText: 'Delete' })
+    const offered = { selected: (await state()).selected, disabled: await deleteButton.isDisabled() }
+    check('a selection on a row the policy keeps from deleting counts no row: Delete rows is disabled', offered.selected === 0 && offered.disabled, JSON.stringify(offered))
 
     // Delete over a range holding a locked cell (cost on SKU-025) and the computed margin clears only what may be edited
     await page.locator('.ps-sheet-search input').fill('SKU-025')
