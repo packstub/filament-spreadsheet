@@ -17,7 +17,7 @@ npm run dev                 # rebuild on change
 node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, keys on a boolean cell, Alt+arrows, a keyboard-only pass
 ```
 
-CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.0 / 4.* / 5.*, and checks that `npm run build`
+CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.2 / 4.* / 5.*, and checks that `npm run build`
 leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so the built bundle is committed.
 
 ## Layout
@@ -27,7 +27,10 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   computed first; `prepare()` refuses an unknown name and a loop); `sheet.js` `evaluateFormula()` / `computeRow()` mirror
   it rule for rule and `displayRow()` / `createdRow()` recompute a row with unsaved cells. `tests/js/formulas.php`
   writes `tests/js/formulas.json` (tree + server value per case), checked by `FormulaTest` and `sheet.test.mjs` alike:
-  add a case there and re-run it.
+  add a case there and re-run it. Parity rules: rounding is `Formula::round()` / `formulaRound()` (the scaled value cut
+  to 15 significant digits with `%.14e` / `toExponential(14)` below 1e14, then half away from zero; `NumberColumn`
+  and the browser's `coerce()` use it too, never PHP's `round()`, which changed in 8.4), a number as text is
+  `numberText()` (ECMAScript Number::toString), text compares as UTF-16, numeric text allows ASCII blanks only.
 - `src/Spreadsheet.php` (definition; `rows()` reader; `save()` = authorise, conflict check, coerce, validate, write,
   answer; `delete()`), `SavePayload.php` (strict reader of what the browser sends), `SaveResult.php` (plain arrays,
   never a model), `Filter.php`, `Enums/SaveMode.php`, `Events/{RowsSaved,RowSaveFailed}.php`,
@@ -44,7 +47,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   planning, `choice()`, keybindings. `resources/js/grid.js` — the only file that knows Tabulator (columns → Tabulator
   defs, events → callbacks, the operations the component needs). `resources/js/spreadsheet.js` — the Alpine component.
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
-  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~302 KB / 80 KB gzip, 42 KB / 7 KB),
+  bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~312 KB / 81 KB gzip, 42 KB / 7 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`

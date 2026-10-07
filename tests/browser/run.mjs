@@ -259,11 +259,14 @@ try {
     await cell(1, 'name').click()
     await page.keyboard.type('Mine')
     await page.keyboard.press('Enter')
+    await page.evaluate(() => { const sh = window.sheet(); const flash = sh.flash; window.__flashes = []; sh.flash = (m) => { window.__flashes.push(m); flash.call(sh, m) } })
     await page.keyboard.press('Control+s')
     await page.waitForFunction(() => window.__server.calls.save.length === 3)
     await page.waitForTimeout(80)
     s = await state()
     check('a conflict keeps the cell, paints it purple and names their value', (await cellClasses(1, 'name')).includes('ps-sheet-cell-conflict') && (await cell(1, 'name').getAttribute('title')).includes('Their value: Renamed') && s.dirty.total === 1)
+    const flashes = await page.evaluate(() => window.__flashes)
+    check('a save refused by a conflict alone says so once, and that saving again keeps the value', flashes.length === 1 && flashes[0].includes('Save again to keep yours'), JSON.stringify(flashes))
     await page.screenshot({ path: join(shots, 'conflict.png') })
     await server_(() => { window.__server.state.conflictOn = null })
     await page.keyboard.press('Control+s')
@@ -2222,6 +2225,8 @@ try {
     server.close()
 }
 
+const tabulatorWarnings = [...new Set(logged.filter((m) => /^Invalid (column definition|table constructor) option/.test(m)))]
+check('Tabulator warns about no option it does not know (one its modules would read but is not registered)', ! tabulatorWarnings.length, tabulatorWarnings.join(' | '))
 if (errors.length) check('no console or page errors', false, errors.join(' | '))
 else check('no console or page errors', true)
 

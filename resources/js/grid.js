@@ -289,7 +289,6 @@ export function createGrid(element, options) {
         placeholder: placeholder(t.empty),
         rowHeader: {
             field: ROWNUM,
-            headerSort: false,
             resizable: false,
             frozen: true,
             width: 56,
@@ -320,7 +319,9 @@ export function createGrid(element, options) {
         clipboardCopyRowRange: 'range',
         clipboardCopyStyled: false,
         clipboardCopyConfig: { columnHeaders: false, rowHeaders: false, columnGroups: false, columnCalcs: false, formatCells: false },
-        columnDefaults: { headerSort: false, resizable: 'header', headerHozAlign: 'left' },
+        // No headerSort: the Sort module is not registered (a header click asks the server), and Tabulator warns
+        // about the option on every column without it.
+        columnDefaults: { resizable: 'header', headerHozAlign: 'left' },
         columns: defs,
     })
 

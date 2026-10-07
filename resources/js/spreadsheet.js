@@ -539,10 +539,14 @@ export default function packstubSpreadsheet(config) {
             this.sync()
 
             const written = out.saved.length + out.created.length + out.deleted.length
-            if (result.message) this.notify(result.message, result.rolledBack ? 'danger' : 'warning')
-            else if (out.failed.length) this.notify(choice(t.partly_saved, written, { saved: written, failed: out.failed.length }), 'warning')
+            const conflicts = Object.keys(this.buffer.conflicts).length > 0
+            // Only conflicts refused the batch: one message, the one that says what to do ("fix the marked
+            // cells" would ask to change values that are fine).
+            const onlyConflicts = conflicts && ! Object.keys(this.buffer.errors).length && ! Object.keys(this.buffer.rowErrors).length
+            if (result.message && ! (result.rolledBack && onlyConflicts)) this.notify(result.message, result.rolledBack ? 'danger' : 'warning')
+            else if (out.failed.length && (written || ! onlyConflicts)) this.notify(choice(t.partly_saved, written, { saved: written, failed: out.failed.length }), 'warning')
             else if (written) this.notify(choice(t.saved, written), 'success')
-            if (Object.keys(this.buffer.conflicts).length) this.notify(t.has_conflicts, 'warning')
+            if (conflicts) this.notify(t.has_conflicts, 'warning')
         },
 
         discard() {
