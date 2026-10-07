@@ -358,6 +358,21 @@ export function createGrid(element, options) {
         }
     }
 
+    // An editable cell has a tabindex (Tabulator's Edit module), so a click on one while an editor is open
+    // focuses that cell: the browser's focus follows Tabulator's holder.focus() in the editor's blur and
+    // wins. The keyboard then lives on a cell element, which goes away when its row leaves the window, and
+    // the focus with it (to the body: the sheet takes no keys until the next click). A cell that still
+    // holds the focus once the tick is over, without an editor in it, hands it to the holder.
+    const cellFocus = (e) => {
+        const target = e.target
+        if (! target?.classList?.contains('tabulator-cell')) return
+        setTimeout(() => {
+            if (destroyed || document.activeElement !== target || target.classList.contains('tabulator-editing')) return
+            focusHolder({ preventScroll: true })
+        }, 0)
+    }
+    element.addEventListener('focusin', cellFocus)
+
     let destroyed = false
 
     const current = new Map()
@@ -825,6 +840,7 @@ export function createGrid(element, options) {
         destroy() {
             destroyed = true
             element.removeEventListener('focusout', editingChanged)
+            element.removeEventListener('focusin', cellFocus)
             element.removeEventListener('keydown', jumped)
             element.removeEventListener('keydown', editorKeys, true)
             element.removeEventListener('keydown', altArrows, true)

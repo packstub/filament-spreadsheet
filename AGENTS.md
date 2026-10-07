@@ -171,6 +171,10 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   pointer-down reports `on.editing(isEditing())`, because with the holder not focused there is no `focusout` and an
   unchanged date editor fires no edit event, so `editing` would stay true and Save enabled); `api.focus()` calls the original, so
   `refocus()` after a toolbar click still works. The leave guard is `unsaved()`: `dirty.total` or an open editor.
+  An editable cell has a tabindex (Tabulator's Edit module): a click on one with an editor open ends with the focus on
+  the cell element (the browser's focus wins over Tabulator's `holder.focus()` in the editor's blur), which goes with
+  its row out of the window. `cellFocus`, a `focusin` listener on the grid (removed in `destroy()`), hands the focus to
+  the holder a tick later when a cell without an open editor still holds it.
   `updateRows()` and `scrollTo()` do nothing after `destroy()` (an editor that commits while the sheet is removed).
 - Editor keys (`grid.js`): `editorKeys` is a **capture-phase** `keydown` listener on the grid element (removed in
   `destroy()`), a no-op unless an editor is open. PageUp / PageDown / Home / End stop there: Tabulator's bindings page

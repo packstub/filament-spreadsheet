@@ -30,7 +30,8 @@
  */
 
 import { createRequire } from 'node:module'
-import { mkdirSync, existsSync } from 'node:fs'
+import { mkdirSync, existsSync, readdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { serve, root } from './harness.mjs'
 
@@ -47,7 +48,16 @@ const results = []
 const check = (name, ok, detail = '') => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail && ! ok ? ` — ${detail}` : ''}`) }
 
 const { server, port } = await serve()
-const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM })
+// PLAYWRIGHT_CHROMIUM, or the build this playwright-core expects, or the newest headless shell in the cache (a
+// sibling's playwright-core can be a version behind the browsers last downloaded).
+const cache = join(homedir(), 'Library/Caches/ms-playwright')
+const newestShell = () => {
+    const dirs = existsSync(cache) ? readdirSync(cache).filter((d) => d.startsWith('chromium_headless_shell-')).sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1])) : []
+    for (const d of dirs) for (const sub of readdirSync(join(cache, d))) { const exe = join(cache, d, sub, 'chrome-headless-shell'); if (existsSync(exe)) return exe }
+    return undefined
+}
+const executablePath = process.env.PLAYWRIGHT_CHROMIUM ?? (existsSync(chromium.executablePath()) ? undefined : newestShell())
+const browser = await chromium.launch({ headless: true, executablePath })
 const page = await browser.newPage({ viewport: { width: 1400, height: 800 } })
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
@@ -982,6 +992,18 @@ try {
     await page.waitForTimeout(60)
     const inside = await page.evaluate(() => ({ two: window.sheet().buffer.changes['2']?.name, price: window.sheet().buffer.changes['5']?.price, holder: !! document.activeElement?.classList?.contains('tabulator-tableholder') }))
     check('a click on another cell with an editor open still commits it and keeps the keyboard in the grid', f.holder && ! f.editing && inside.two === 'Two' && inside.price === 7 && inside.holder, JSON.stringify({ f, inside }))
+    await cell(1, 'name').click()
+    await page.keyboard.type('Two again')
+    await cell(3, 'name').click()
+    await page.waitForTimeout(60)
+    await scrollToRow(90)
+    await page.waitForTimeout(250)
+    const away = await page.evaluate(() => ({ holder: !! document.activeElement?.classList?.contains('tabulator-tableholder'), cell: !! document.activeElement?.classList?.contains('tabulator-cell') }))
+    await page.keyboard.press('F2')
+    await page.waitForTimeout(40)
+    const afterAway = (await state()).editing
+    await page.keyboard.press('Escape')
+    check('after a click on another cell with an editor open, the focus is not left on the cell element: its row scrolled out of the window, the keyboard still reaches the grid', away.holder && ! away.cell && afterAway, JSON.stringify({ away, afterAway }))
     await cell(2, 'name').click()
     await page.keyboard.type('Three')
     await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
