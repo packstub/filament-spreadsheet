@@ -18,7 +18,8 @@ jobs:
       matrix:
         php: ["8.3", "8.4", "8.5"]
         laravel: ["12.*", "13.*"]
-        filament: ["4.13.0", "4.*", "5.*"]
+        # The oldest 4.13 Composer installs: 4.13.0 and 4.13.1 are blocked by a security advisory (GHSA-7m6h-rg42-m449).
+        filament: ["4.13.2", "4.*", "5.*"]
         include:
           - laravel: "12.*"
             testbench: "10.*"
