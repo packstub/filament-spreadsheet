@@ -116,8 +116,8 @@ final class Formula
             return is_finite((float) $v) ? (float) $v : null;
         }
 
-        if (is_string($v) && preg_match('/^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/', $v) === 1) {
-            $n = (float) trim($v);
+        if (is_string($v) && preg_match('/^[ \t\n\r]*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?[ \t\n\r]*$/', $v) === 1) {
+            $n = (float) trim($v, " \t\n\r");
 
             return is_finite($n) ? $n : null;
         }
@@ -131,9 +131,23 @@ final class Formula
         $digits = max(-12, min(12, $digits));
         $f = (float) (10 ** abs($digits));
         $sign = $x < 0 ? -1.0 : 1.0;
-        $r = $digits >= 0 ? floor(abs($x) * $f + 0.5) / $f : floor(abs($x) / $f + 0.5) * $f;
+        $scaled = self::significant($digits >= 0 ? abs($x) * $f : abs($x) / $f);
+        // From 2^52 on every double is whole, and + 0.5 would round to even (2^53 - 1 becoming 2^53).
+        $whole = $scaled >= 4503599627370496.0 ? $scaled : floor($scaled + 0.5);
+        $r = $digits >= 0 ? $whole / $f : $whole * $f;
 
         return $r === 0.0 ? 0.0 : $sign * $r;
+    }
+
+    /**
+     * A scaled value cut to 15 significant digits, as a spreadsheet reads it: 1.005 * 100 is
+     * 100.49999999999999 in binary and 100.5 here, so round(1.005, 2) is 1.01. Below 1e14 only: there a
+     * tie at the 15th digit can no longer move the value across .5, and the browser's toExponential()
+     * (ties up) and PHP's %e (ties to even) give the same answer. `%e`, not `%g`: `%g` follows the locale.
+     */
+    private static function significant(float $scaled): float
+    {
+        return $scaled < 1e14 ? (float) sprintf('%.14e', $scaled) : $scaled;
     }
 
     private static function text(mixed $v): string
@@ -141,11 +155,47 @@ final class Formula
         return match (true) {
             $v === null => '',
             is_bool($v) => $v ? 'true' : 'false',
-            is_float($v) && floor($v) === $v && abs($v) < 1e15 => sprintf('%.0f', $v),
-            // The shortest text that reads back as the same float, as JavaScript's String() writes it.
-            is_float($v) => (string) json_encode($v),
+            is_float($v) => self::numberText($v),
             default => (string) $v,
         };
+    }
+
+    /**
+     * A number as JavaScript's String() writes it (ECMAScript Number::toString): the shortest digits that
+     * read back as the same float, plain from 1e-7 up to 1e21 ("0.000001", "123456789012345680000"),
+     * with an exponent outside ("1e-7", "1.5e+21"). `%e` gives the digits: it does not follow the locale.
+     */
+    private static function numberText(float $v): string
+    {
+        if ($v === 0.0) {
+            return '0';
+        }
+
+        $sign = $v < 0 ? '-' : '';
+        $a = abs($v);
+
+        for ($p = 0; $p < 16; $p++) {
+            if ((float) sprintf('%.'.$p.'e', $a) === $a) {
+                break;
+            }
+        }
+
+        [$mantissa, $exponent] = explode('e', sprintf('%.'.$p.'e', $a));
+        $digits = rtrim(str_replace('.', '', $mantissa), '0');
+        $k = strlen($digits);
+        $n = (int) $exponent + 1;
+
+        return $sign.match (true) {
+            $k <= $n && $n <= 21 => $digits.str_repeat('0', $n - $k),
+            $n > 0 && $n <= 21 => substr($digits, 0, $n).'.'.substr($digits, $n),
+            $n > -6 && $n <= 0 => '0.'.str_repeat('0', -$n).$digits,
+            default => ($k === 1 ? $digits : $digits[0].'.'.substr($digits, 1)).'e'.($n - 1 >= 0 ? '+' : '-').abs($n - 1),
+        };
+    }
+
+    private static function utf16(string $text): string
+    {
+        return (string) mb_convert_encoding($text, 'UTF-16BE', 'UTF-8');
     }
 
     private static function truthy(mixed $v): bool
@@ -188,7 +238,8 @@ final class Formula
 
         $na = self::number($a);
         $nb = self::number($b);
-        $c = ($na !== null && $nb !== null) ? $na <=> $nb : strcmp(self::text($a), self::text($b)) <=> 0;
+        // Text by UTF-16 code unit, as the browser's < does (UTF-8 bytes order U+FF5E after U+1F600, UTF-16 before).
+        $c = ($na !== null && $nb !== null) ? $na <=> $nb : strcmp(self::utf16(self::text($a)), self::utf16(self::text($b))) <=> 0;
 
         return match ($op) {
             '=' => $c === 0, '!=' => $c !== 0, '<' => $c < 0, '<=' => $c <= 0, '>' => $c > 0, '>=' => $c >= 0,
@@ -305,7 +356,7 @@ final class Formula
         }
 
         return match ($name) {
-            'round' => self::round($x, (int) (self::number(isset($args[1]) ? $arg(1) : 0.0) ?? 0.0)),
+            'round' => self::round($x, (int) max(-12.0, min(12.0, self::number(isset($args[1]) ? $arg(1) : 0.0) ?? 0.0))),
             'floor' => floor($x),
             'ceil' => ceil($x),
             'abs' => abs($x),
@@ -332,6 +383,11 @@ final class Formula
             }
 
             if (preg_match('/\G(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?/', $src, $m, 0, $i) === 1) {
+                // 1e400 reads as INF, which JSON cannot carry to the browser.
+                if (! is_finite((float) $m[0])) {
+                    $this->fail('a number too large', $i);
+                }
+
                 $tokens[] = ['num', (float) $m[0], $i];
                 $i += strlen($m[0]);
 

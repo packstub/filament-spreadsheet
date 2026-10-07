@@ -237,6 +237,7 @@ export function coerce(column, raw, t = {}) {
             const n = parseNumber(raw)
             if (n === null || Number.isNaN(n) || ! Number.isFinite(n)) return fail('not_a_number', 'Not a number.')
             if (column.integer && ! Number.isInteger(n)) return fail('not_an_integer', 'Not a whole number.')
+            if (column.integer && ! Number.isSafeInteger(n)) return fail('integer_too_large', 'Too large a whole number.')
 
             return { ok: true, value: column.decimals != null ? round(n, column.decimals) : n }
         }
@@ -265,11 +266,8 @@ export function coerce(column, raw, t = {}) {
     }
 }
 
-function round(n, decimals) {
-    const f = 10 ** decimals
-
-    return Math.round((n + Number.EPSILON) * f) / f
-}
+// A number column rounds as a formula does (half away from zero, NumberColumn::coerce() alike).
+const round = (n, decimals) => formulaRound(n, decimals)
 
 /** A value as text for the clipboard or a tooltip: labels for options, ISO dates, TRUE/FALSE. */
 export function display(column, value, locale = 'en') {
@@ -301,7 +299,8 @@ export function display(column, value, locale = 'en') {
  * for rule, so a row recomputed here shows what the server sends after the save.
  */
 
-const NUMERIC = /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/
+// ASCII blanks only around the number, as Formula::number(): `\s` and trim() would take a no-break space too.
+const NUMERIC = /^[ \t\n\r]*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?[ \t\n\r]*$/
 
 /** A value as a number: null for an empty cell and for text that is not a number. */
 export function formulaNumber(v) {
@@ -309,7 +308,7 @@ export function formulaNumber(v) {
     if (typeof v === 'boolean') return v ? 1 : 0
     if (typeof v === 'number') return Number.isFinite(v) ? v : null
     if (typeof v === 'string' && NUMERIC.test(v)) {
-        const n = Number(v.trim())
+        const n = Number(v)
 
         return Number.isFinite(n) ? n : null
     }
@@ -322,7 +321,12 @@ export function formulaRound(x, digits = 0) {
     digits = Math.max(-12, Math.min(12, digits))
     const f = 10 ** Math.abs(digits)
     const sign = x < 0 ? -1 : 1
-    const r = digits >= 0 ? Math.floor(Math.abs(x) * f + 0.5) / f : Math.floor(Math.abs(x) / f + 0.5) * f
+    // Cut to 15 significant digits first, as Formula::significant() does: round(1.005, 2) is 1.01.
+    const raw = digits >= 0 ? Math.abs(x) * f : Math.abs(x) / f
+    const scaled = raw < 1e14 ? Number(raw.toExponential(14)) : raw
+    // From 2^52 on every double is whole, and + 0.5 would round to even (2^53 - 1 becoming 2^53).
+    const whole = scaled >= 4503599627370496 ? scaled : Math.floor(scaled + 0.5)
+    const r = digits >= 0 ? whole / f : whole * f
 
     return r === 0 ? 0 : sign * r
 }

@@ -37,6 +37,9 @@ it('rounds to the column\'s decimals and refuses fractions on an integer column'
     $stock = NumberColumn::make('stock')->integer();
 
     expect($price->coerce('12.345'))->toBe(12.35)
+        ->and($price->coerce('1.005'))->toBe(1.01)
+        ->and($price->coerce('-0.125'))->toBe(-0.13)
+        ->and($price->coerce(-2.675))->toBe(-2.68)
         ->and($price->coerce(12))->toBe(12.0)
         ->and($price->coerce(true))->toBe(1.0)
         ->and($price->presentValue('12.50'))->toBe(12.5)
@@ -44,6 +47,11 @@ it('rounds to the column\'s decimals and refuses fractions on an integer column'
         ->and($stock->coerce(7.0))->toBe(7)
         ->and($stock->presentValue('7'))->toBe(7)
         ->and(fn () => $stock->coerce('7.5'))->toThrow(InvalidValue::class, 'Not a whole number.')
+        ->and($stock->coerce('9007199254740991'))->toBe(9007199254740991)
+        ->and(fn () => $stock->coerce('9007199254740992'))->toThrow(InvalidValue::class, 'Too large a whole number.')
+        ->and(fn () => $stock->coerce(1e20))->toThrow(InvalidValue::class, 'Too large a whole number.')
+        ->and(fn () => $stock->coerce('-1e19'))->toThrow(InvalidValue::class, 'Too large a whole number.')
+        ->and(fn () => $stock->coerce('99999999999999999999'))->toThrow(InvalidValue::class, 'Too large a whole number.')
         ->and(fn () => $price->coerce('INF'))->toThrow(InvalidValue::class)
         ->and(fn () => $price->coerce([1]))->toThrow(InvalidValue::class, 'This value cannot be read.')
         ->and($price->toArray())->toMatchArray(['type' => 'number', 'decimals' => 2, 'integer' => false, 'label' => 'Price']);

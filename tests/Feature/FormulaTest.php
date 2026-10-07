@@ -52,6 +52,7 @@ it('refuses a formula it cannot read, saying where', function (string $source, s
     ['price stock', 'unexpected "stock"'],
     ['1 < 2 < 3', 'unexpected "<"'],
     ['', 'unexpected the end at position 1'],
+    ['price * 1e400', 'a number too large at position 9'],
 ]);
 
 it('lists what a formula reads', function () {

@@ -11,7 +11,8 @@ require __DIR__.'/../../vendor/autoload.php';
 use Packstub\Spreadsheet\Formula;
 
 $row = ['price' => 12.5, 'cost' => 8.25, 'stock' => 4, 'empty' => null, 'blank' => '', 'name' => 'Desk lamp',
-    'sku' => 'LMP-1', 'qty' => '3', 'is_active' => true, 'available_on' => '2026-02-28', 'category.name' => 'Lighting', 'zero' => 0];
+    'sku' => 'LMP-1', 'qty' => '3', 'is_active' => true, 'available_on' => '2026-02-28', 'category.name' => 'Lighting', 'zero' => 0,
+    'spaced' => "\u{00A0}5\u{00A0}", 'big' => 1.2345678901234568e20];
 
 $cases = [
     'price * stock', 'price - cost', '(price - cost) / price * 100', 'round((price - cost) / price * 100, 1)',
@@ -28,6 +29,10 @@ $cases = [
     "name & ' (' & sku & ')'", "price & ''", "stock & 'x'", "0.1 + 0.2 & ''", "is_active & ''", "empty & 'x'", "1 / 4 & ''",
     'category.name', "category.name & '!'", "\"double\" & 'single'", 'TRUE', 'Null', 'IF(stock > 1, 1, 0)',
     "''", 'blank', 'stock', 'is_active',
+    'round(-1.005, 2)', 'round(2.675, 2)', 'round(1.45, 1)', 'round(-0.125, 2)', 'round(8.345, 2)', 'round(123456789.125, 2)',
+    'round(100000000000000.5)', 'round(price, 1e30)', 'round(price, -1e30)', 'round(-0.4)',
+    'spaced + 1', "spaced = '5'", "1e21 & ''", "1e-7 & ''", "big & ''", "0.000001 & ''", "-0 & ''", "100 & ''",
+    "'～' < '😀'", "'é' > 'z'", "'B' < 'a'",
 ];
 
 $out = [];

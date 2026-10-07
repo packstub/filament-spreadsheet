@@ -11,7 +11,9 @@
         "is_active": true,
         "available_on": "2026-02-28",
         "category.name": "Lighting",
-        "zero": 0
+        "zero": 0,
+        "spaced": " 5 ",
+        "big": 1.2345678901234568e+20
     },
     "cases": [
         {
@@ -625,7 +627,7 @@
                     ]
                 ]
             ],
-            "value": 1.0
+            "value": 1.01
         },
         {
             "source": "round(1234.5, -2)",
@@ -1470,6 +1472,369 @@
             "tree": [
                 "ref",
                 "is_active"
+            ],
+            "value": true
+        },
+        {
+            "source": "round(-1.005, 2)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "neg",
+                        [
+                            "num",
+                            1.005
+                        ]
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": -1.01
+        },
+        {
+            "source": "round(2.675, 2)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        2.675
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 2.68
+        },
+        {
+            "source": "round(1.45, 1)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        1.45
+                    ],
+                    [
+                        "num",
+                        1.0
+                    ]
+                ]
+            ],
+            "value": 1.5
+        },
+        {
+            "source": "round(-0.125, 2)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "neg",
+                        [
+                            "num",
+                            0.125
+                        ]
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": -0.13
+        },
+        {
+            "source": "round(8.345, 2)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        8.345
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 8.35
+        },
+        {
+            "source": "round(123456789.125, 2)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        123456789.125
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 123456789.13
+        },
+        {
+            "source": "round(100000000000000.5)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        100000000000000.5
+                    ]
+                ]
+            ],
+            "value": 100000000000001.0
+        },
+        {
+            "source": "round(price, 1e30)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "ref",
+                        "price"
+                    ],
+                    [
+                        "num",
+                        1.0e+30
+                    ]
+                ]
+            ],
+            "value": 12.5
+        },
+        {
+            "source": "round(price, -1e30)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "ref",
+                        "price"
+                    ],
+                    [
+                        "neg",
+                        [
+                            "num",
+                            1.0e+30
+                        ]
+                    ]
+                ]
+            ],
+            "value": 0.0
+        },
+        {
+            "source": "round(-0.4)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "neg",
+                        [
+                            "num",
+                            0.4
+                        ]
+                    ]
+                ]
+            ],
+            "value": 0.0
+        },
+        {
+            "source": "spaced + 1",
+            "tree": [
+                "op",
+                "+",
+                [
+                    "ref",
+                    "spaced"
+                ],
+                [
+                    "num",
+                    1.0
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "spaced = '5'",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "spaced"
+                ],
+                [
+                    "str",
+                    "5"
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "1e21 & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "num",
+                    1.0e+21
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "1e+21"
+        },
+        {
+            "source": "1e-7 & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "num",
+                    1.0e-7
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "1e-7"
+        },
+        {
+            "source": "big & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "ref",
+                    "big"
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "123456789012345680000"
+        },
+        {
+            "source": "0.000001 & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "num",
+                    1.0e-6
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "0.000001"
+        },
+        {
+            "source": "-0 & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "neg",
+                    [
+                        "num",
+                        0.0
+                    ]
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "0"
+        },
+        {
+            "source": "100 & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "num",
+                    100.0
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "100"
+        },
+        {
+            "source": "'～' < '😀'",
+            "tree": [
+                "op",
+                "<",
+                [
+                    "str",
+                    "～"
+                ],
+                [
+                    "str",
+                    "😀"
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "'é' > 'z'",
+            "tree": [
+                "op",
+                ">",
+                [
+                    "str",
+                    "é"
+                ],
+                [
+                    "str",
+                    "z"
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "'B' < 'a'",
+            "tree": [
+                "op",
+                "<",
+                [
+                    "str",
+                    "B"
+                ],
+                [
+                    "str",
+                    "a"
+                ]
             ],
             "value": true
         }
