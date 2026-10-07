@@ -36,7 +36,7 @@ A sheet lives on a page. `SpreadsheetResourcePage` sits next to a resource's lis
 | `per_page` | `100` | Rows per page a sheet opens with (`perPage()` on a definition wins) |
 | `max_per_page` | `1000` | The most rows the page-size control offers |
 | `max_rows_per_save` | `2000` | The most rows (updates + creates + deletes) one Save may carry; a paste past the last row stops creating rows there |
-| `save_mode` | `all_or_nothing` | `all_or_nothing` or `per_row` (see [Saving](saving.md)) |
+| `save_mode` | `all_or_nothing` | `all_or_nothing` or `per_row` (see [Saving](saving.md)); any other value throws |
 | `version_column` | `updated_at` | The attribute compared before a row is written; `null` turns the check off |
 | `confirm_leave` | `true` | Ask before leaving the page with unsaved changes |
 | `frozen_first_column` | `true` | Pin the first column while scrolling sideways |

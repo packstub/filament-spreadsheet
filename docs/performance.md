@@ -17,8 +17,8 @@ The default page is 100 rows; the toolbar goes up to `max_per_page` (1,000). The
 
 ## The bundle
 
-Tabulator and the sheet's own code are one minified ES module (about 299 KB, 77 KB gzipped) and one stylesheet (42 KB, 7 KB gzipped), loaded on request only on pages that show a sheet (`x-load`), cached like any Filament asset. Pages without a sheet pay nothing.
+Tabulator and the sheet's own code are one minified ES module (about 312 KB, 81 KB gzipped) and one stylesheet (42 KB, 7 KB gzipped), loaded on request only on pages that show a sheet (`x-load`), cached like any Filament asset. Pages without a sheet pay nothing.
 
 ## Locking
 
-A save holds row locks only for the duration of its transaction. Conflict detection is optimistic (the version compare), so two users can edit the same page at once and only the rows they both changed are refused, one at a time.
+Editing takes no lock: conflict detection is optimistic (the version compare), so two users can edit the same page at once and only the rows they both changed are refused. A save locks the rows it updates or deletes (`SELECT … FOR UPDATE`; SQLite has no row locks and serialises writes instead) until its transaction ends, so two saves of the same row run one after the other and the second is answered with a conflict instead of overwriting the first.
