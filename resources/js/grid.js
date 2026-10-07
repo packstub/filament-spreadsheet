@@ -116,9 +116,11 @@ function baseFormatter(column, locale) {
         case 'select':
             return (cell) => escapeHtml(display(column, cell.getValue()))
         case 'number':
+        case 'computed':
             return (cell) => {
                 const v = cell.getValue()
                 if (v === null || v === undefined || v === '') return ''
+                if (typeof v === 'boolean' && column.type === 'computed') return v ? 'true' : 'false'
                 if (typeof v !== 'number') return escapeHtml(String(v))
 
                 return new Intl.NumberFormat(locale, { minimumFractionDigits: column.decimals ?? 0, maximumFractionDigits: column.decimals ?? 20, useGrouping: false }).format(v)
@@ -230,7 +232,7 @@ export function createGrid(element, options) {
             width: column.width ?? undefined,
             minWidth: { number: 90, date: 120, datetime: 160, boolean: 70 }[column.type] ?? 80,
             frozen: column.frozen || (options.frozenFirstColumn && i === 0),
-            hozAlign: column.type === 'number' ? 'right' : column.type === 'boolean' ? 'center' : 'left',
+            hozAlign: column.type === 'number' || (column.type === 'computed' && column.decimals != null) ? 'right' : column.type === 'boolean' ? 'center' : 'left',
             cssClass: `ps-sheet-col-${column.type}`,
             formatter: (cell) => { paint(cell, column, t); return base(cell) },
             titleFormatter: (cell) => {

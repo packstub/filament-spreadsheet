@@ -525,3 +525,36 @@ test('keybindings read "mod+s" style specs and match events', () => {
     assert.deepEqual(Object.keys(S.DEFAULT_KEYS), ['save', 'fill_down', 'undo', 'redo', 'add_row', 'cut'])
     assert.equal(S.matchesKey({ key: 'x', ctrlKey: true }, S.parseKeybinding(S.DEFAULT_KEYS.cut)), true)
 })
+
+/* ------------------------------------------------------------------ formulas */
+
+test('formulas compute what the server computes, case by case (tests/js/formulas.json, written by formulas.php)', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const fixture = JSON.parse(await readFile(new URL('./formulas.json', import.meta.url), 'utf8'))
+
+    assert.ok(fixture.cases.length > 50)
+    for (const c of fixture.cases) {
+        assert.deepEqual(S.evaluateFormula(c.tree, (name) => fixture.row[name] ?? null), c.value, c.source)
+    }
+})
+
+test('computeRow fills every formula column from the row, a formula read by another first, rounded to its decimals', () => {
+    const cols = [
+        { name: 'price', type: 'number' },
+        { name: 'stock', type: 'number' },
+        { name: 'share', type: 'computed', formula: ['op', '/', ['ref', 'value'], ['num', 3]], decimals: 2 },
+        { name: 'value', type: 'computed', formula: ['op', '*', ['ref', 'price'], ['ref', 'stock']], decimals: null },
+        { name: 'margin', type: 'computed', formula: null },
+    ]
+    const values = { price: 12.5, stock: 4, share: 99, value: 99, margin: 7 }
+
+    assert.deepEqual(S.computeRow(cols, values), { price: 12.5, stock: 4, share: 16.67, value: 50, margin: 7 })
+    assert.deepEqual(values.value, 99, 'the row passed in is left alone')
+    assert.deepEqual(S.computeRow(cols, { price: 'abc', stock: 4 }), { price: 'abc', stock: 4, share: null, value: null })
+    assert.equal(S.computeRow([{ name: 'price', type: 'number' }], values), values, 'no formula, the same object')
+})
+
+test('a computed number is copied with its decimals', () => {
+    assert.equal(S.display({ type: 'computed', decimals: 2 }, 50), '50.00')
+    assert.equal(S.display({ type: 'computed', decimals: null }, 'low'), 'low')
+})

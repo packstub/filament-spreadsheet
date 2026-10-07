@@ -22,6 +22,12 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
 
 ## Layout
 
+- `src/Formula.php`: a `ComputedColumn::formula()` parsed once into a tree of plain arrays (sent to the browser in
+  `toArray()`) and evaluated on the server in `presentRow()` (formula columns after the others, one reading another
+  computed first; `prepare()` refuses an unknown name and a loop); `sheet.js` `evaluateFormula()` / `computeRow()` mirror
+  it rule for rule and `displayRow()` / `createdRow()` recompute a row with unsaved cells. `tests/js/formulas.php`
+  writes `tests/js/formulas.json` (tree + server value per case), checked by `FormulaTest` and `sheet.test.mjs` alike:
+  add a case there and re-run it.
 - `src/Spreadsheet.php` (definition; `rows()` reader; `save()` = authorise, conflict check, coerce, validate, write,
   answer; `delete()`), `SavePayload.php` (strict reader of what the browser sends), `SaveResult.php` (plain arrays,
   never a model), `Filter.php`, `Enums/SaveMode.php`, `Events/{RowsSaved,RowSaveFailed}.php`,

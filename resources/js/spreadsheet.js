@@ -130,8 +130,10 @@ export default function packstubSpreadsheet(config) {
         /** A server row as the grid shows it: the buffer laid over, the flags in _m. */
         displayRow(row) {
             const o = S.overlay(this.buffer, row)
+            // A row with unsaved cells shows its formulas over them; a clean row the server's values.
+            const values = Object.keys(o.dirty).length ? S.computeRow(this.columns, o.values) : o.values
 
-            return { id: row.id, ...o.values, _m: { dirty: o.dirty, errors: o.errors, conflicts: o.conflicts, rowError: o.rowError, locked: row.locked ?? [], readOnly: !! row.readOnly, deleted: o.deleted, created: false } }
+            return { id: row.id, ...values, _m: { dirty: o.dirty, errors: o.errors, conflicts: o.conflicts, rowError: o.rowError, locked: row.locked ?? [], readOnly: !! row.readOnly, deleted: o.deleted, created: false } }
         },
 
         createdRow(temp) {
@@ -139,7 +141,7 @@ export default function packstubSpreadsheet(config) {
             const dirty = {}
             for (const c of this.columns) if (c.editable) dirty[c.name] = true
 
-            return { id: temp, ...values, _m: { dirty, errors: this.buffer.errors[temp] ?? {}, conflicts: {}, rowError: this.buffer.rowErrors[temp] ?? null, locked: [], readOnly: false, deleted: false, created: true } }
+            return { id: temp, ...S.computeRow(this.columns, values), _m: { dirty, errors: this.buffer.errors[temp] ?? {}, conflicts: {}, rowError: this.buffer.rowErrors[temp] ?? null, locked: [], readOnly: false, deleted: false, created: true } }
         },
 
         /** Every row on the grid, in order, with the values shown now (for paste and fill-down). */

@@ -37,7 +37,7 @@ export const config = {
         { name: 'is_active', label: 'Active', type: 'boolean', width: null, frozen: false, editable: true, readOnly: false, sortable: true, placeholder: null, default: true },
         { name: 'available_on', label: 'Available', type: 'date', width: null, frozen: false, editable: true, readOnly: false, sortable: true, placeholder: null, default: null, format: 'd/m/Y' },
         { name: 'published_at', label: 'Published', type: 'datetime', width: null, frozen: false, editable: true, readOnly: false, sortable: true, placeholder: null, default: null, format: 'Y-m-d H:i' },
-        { name: 'margin', label: 'Margin', type: 'computed', width: null, frozen: false, editable: false, readOnly: true, sortable: false, placeholder: null, default: null },
+        { name: 'margin', label: 'Margin', type: 'computed', width: null, frozen: false, editable: false, readOnly: true, sortable: false, placeholder: null, default: null, formula: ['op', '-', ['ref', 'price'], ['ref', 'cost']], decimals: 2 },
     ],
     filters: [
         { name: 'category_id', label: 'Category', type: 'select', options: [{ value: '1', label: 'Tools' }, { value: '2', label: 'Paint' }, { value: '3', label: 'Garden' }] },

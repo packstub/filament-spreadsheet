@@ -281,6 +281,7 @@ export function display(column, value, locale = 'en') {
         case 'boolean':
             return value ? 'TRUE' : 'FALSE'
         case 'number':
+        case 'computed':
             return typeof value === 'number' && column.decimals != null ? value.toFixed(column.decimals) : String(value)
         case 'date':
             return column.format ? phpDate(value, column.format, locale) : String(value)
@@ -289,6 +290,177 @@ export function display(column, value, locale = 'en') {
         default:
             return String(value)
     }
+}
+
+/* ------------------------------------------------------------------ formulas */
+
+/*
+ * A ComputedColumn's formula arrives as the tree the server parsed (Formula::toArray()):
+ * ['num', 1.5], ['str', 'a'], ['lit', true|false|null], ['ref', 'price'], ['neg', x],
+ * ['op', '+', a, b], ['call', 'round', [args]]. This evaluator mirrors Formula.php rule
+ * for rule, so a row recomputed here shows what the server sends after the save.
+ */
+
+const NUMERIC = /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/
+
+/** A value as a number: null for an empty cell and for text that is not a number. */
+export function formulaNumber(v) {
+    if (v === null || v === undefined || v === '') return null
+    if (typeof v === 'boolean') return v ? 1 : 0
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null
+    if (typeof v === 'string' && NUMERIC.test(v)) {
+        const n = Number(v.trim())
+
+        return Number.isFinite(n) ? n : null
+    }
+
+    return null
+}
+
+/** Round half away from zero, the same arithmetic as Formula::round(). */
+export function formulaRound(x, digits = 0) {
+    digits = Math.max(-12, Math.min(12, digits))
+    const f = 10 ** Math.abs(digits)
+    const sign = x < 0 ? -1 : 1
+    const r = digits >= 0 ? Math.floor(Math.abs(x) * f + 0.5) / f : Math.floor(Math.abs(x) / f + 0.5) * f
+
+    return r === 0 ? 0 : sign * r
+}
+
+const formulaText = (v) => v === null || v === undefined ? '' : typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v)
+
+const truthy = (v) => v === null || v === undefined ? false : typeof v === 'boolean' ? v : typeof v === 'number' ? v !== 0 : String(v) !== ''
+
+function finish(v) {
+    if (v === undefined) return null
+    if (typeof v === 'number') return Number.isFinite(v) ? (v === 0 ? 0 : v) : null
+
+    return v === '' ? null : v
+}
+
+function compare(op, a, b) {
+    a = a === '' || a === undefined ? null : a
+    b = b === '' || b === undefined ? null : b
+    if (a === null || b === null) {
+        const same = a === b
+
+        return op === '=' ? same : op === '!=' ? ! same : false
+    }
+    const na = formulaNumber(a)
+    const nb = formulaNumber(b)
+    let c
+    if (na !== null && nb !== null) c = na < nb ? -1 : na > nb ? 1 : 0
+    else {
+        const ta = formulaText(a)
+        const tb = formulaText(b)
+        c = ta < tb ? -1 : ta > tb ? 1 : 0
+    }
+
+    return { '=': c === 0, '!=': c !== 0, '<': c < 0, '<=': c <= 0, '>': c > 0, '>=': c >= 0 }[op]
+}
+
+function evalNode(node, get) {
+    switch (node[0]) {
+        case 'num':
+        case 'str':
+        case 'lit':
+            return node[1]
+        case 'ref':
+            return get(node[1])
+        case 'neg': {
+            const x = formulaNumber(evalNode(node[1], get))
+
+            return x === null ? null : 0 - x
+        }
+        case 'op': {
+            const op = node[1]
+            const a = evalNode(node[2], get)
+            const b = evalNode(node[3], get)
+            if (op === '&') return formulaText(finish(a)) + formulaText(finish(b))
+            if (['=', '!=', '<', '<=', '>', '>='].includes(op)) return compare(op, a, b)
+            const x = formulaNumber(a)
+            const y = formulaNumber(b)
+            if (x === null || y === null || ((op === '/' || op === '%') && y === 0)) return null
+            const r = op === '+' ? x + y : op === '-' ? x - y : op === '*' ? x * y : op === '/' ? x / y : x % y
+
+            return Number.isFinite(r) ? r : null
+        }
+        case 'call':
+            return callFn(node[1], node[2], get)
+    }
+
+    return null
+}
+
+function callFn(name, args, get) {
+    const arg = (i) => args[i] ? evalNode(args[i], get) : null
+    const numbers = () => args.map((a) => formulaNumber(evalNode(a, get))).filter((n) => n !== null)
+
+    switch (name) {
+        case 'if': return truthy(arg(0)) ? arg(1) : arg(2)
+        case 'and': return args.every((_, i) => truthy(arg(i)))
+        case 'or': return args.some((_, i) => truthy(arg(i)))
+        case 'not': return ! truthy(arg(0))
+        case 'coalesce': {
+            for (let i = 0; i < args.length; i++) {
+                const v = arg(i)
+                if (v !== null && v !== undefined && v !== '') return v
+            }
+
+            return null
+        }
+        case 'sum': return numbers().reduce((carry, n) => carry + n, 0)
+        case 'min':
+        case 'max': {
+            const list = numbers()
+
+            return list.length ? list.reduce((carry, n) => (name === 'min' ? (n < carry ? n : carry) : (n > carry ? n : carry))) : null
+        }
+    }
+
+    const x = formulaNumber(arg(0))
+    if (x === null) return null
+
+    switch (name) {
+        case 'round': return formulaRound(x, Math.trunc(formulaNumber(args[1] ? arg(1) : 0) ?? 0))
+        case 'floor': return Math.floor(x)
+        case 'ceil': return Math.ceil(x)
+        case 'abs': return Math.abs(x)
+    }
+
+    return null
+}
+
+/** A formula tree's value; `get(name)` is a column's value in the row. */
+export function evaluateFormula(tree, get) {
+    return finish(evalNode(tree, get))
+}
+
+/**
+ * The row's values with every formula column computed from the others (a formula
+ * column read by another is computed first). What the server's presentRow() does.
+ */
+export function computeRow(columns, values) {
+    const formulas = {}
+    for (const c of columns) if (c.type === 'computed' && Array.isArray(c.formula)) formulas[c.name] = c
+    const names = Object.keys(formulas)
+    if (! names.length) return values
+
+    const out = { ...values }
+    const done = {}
+    const get = (name) => {
+        if (formulas[name] && ! done[name]) {
+            done[name] = true
+            let v = evaluateFormula(formulas[name].formula, get)
+            if (typeof v === 'number' && formulas[name].decimals != null) v = formulaRound(v, formulas[name].decimals)
+            out[name] = v
+        }
+
+        return out[name] ?? null
+    }
+    for (const name of names) get(name)
+
+    return out
 }
 
 /** Two cell values are the same for the buffer (null and '' both mean empty). */

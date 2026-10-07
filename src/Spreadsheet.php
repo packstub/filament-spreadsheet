@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Traits\Conditionable;
 use Packstub\Spreadsheet\Columns\Column;
+use Packstub\Spreadsheet\Columns\ComputedColumn;
 use Packstub\Spreadsheet\Columns\SelectColumn;
 use Packstub\Spreadsheet\Enums\SaveMode;
 use Packstub\Spreadsheet\Events\RowSaveFailed;
@@ -474,12 +475,36 @@ class Spreadsheet
         $values = [];
         $locked = [];
 
+        $formulas = [];
+
         foreach ($this->getColumns() as $column) {
+            if ($column instanceof ComputedColumn && $column->getFormula() !== null) {
+                $formulas[$column->getName()] = $column;
+                $values[$column->getName()] = null;
+
+                continue;
+            }
+
             $values[$column->getName()] = $column->present($record);
 
             if ($column->hasRecordReadOnly() && $column->isReadOnlyFor($record)) {
                 $locked[] = $column->getName();
             }
+        }
+
+        // Formulas read the row's other values (after casts), a formula column its value once computed.
+        $done = [];
+        $resolve = function (string $name) use (&$resolve, &$values, &$done, $formulas): mixed {
+            if (isset($formulas[$name]) && ! isset($done[$name])) {
+                $done[$name] = true;
+                $values[$name] = $formulas[$name]->compute($resolve);
+            }
+
+            return $values[$name] ?? null;
+        };
+
+        foreach (array_keys($formulas) as $name) {
+            $resolve($name);
         }
 
         return [
@@ -1082,6 +1107,47 @@ class Spreadsheet
             if ($column instanceof SelectColumn && $column->getRelationshipName() !== null) {
                 $column->prepare($this->newModel());
             }
+        }
+
+        $this->checkFormulas();
+    }
+
+    /** Every name a formula reads is a column of the sheet, and no formula reads itself through another. */
+    protected function checkFormulas(): void
+    {
+        $columns = [];
+        foreach ($this->getColumns() as $column) {
+            $columns[$column->getName()] = $column;
+        }
+
+        $state = [];
+        $visit = function (string $name, array $path) use (&$visit, &$state, $columns): void {
+            $column = $columns[$name];
+            $formula = $column instanceof ComputedColumn ? $column->getFormula() : null;
+
+            if ($formula === null || ($state[$name] ?? null) === 'done') {
+                return;
+            }
+
+            if (($state[$name] ?? null) === 'visiting') {
+                throw new \LogicException('ComputedColumn ['.$path[0].']: the formula reads itself ('.implode(' → ', [...$path, $name]).').');
+            }
+
+            $state[$name] = 'visiting';
+
+            foreach ($formula->references() as $ref) {
+                if (! isset($columns[$ref])) {
+                    throw new \LogicException("ComputedColumn [{$name}]: the formula reads [{$ref}], which is not a column of the sheet (a hidden column is not).");
+                }
+
+                $visit($ref, [...$path, $name]);
+            }
+
+            $state[$name] = 'done';
+        };
+
+        foreach (array_keys($columns) as $name) {
+            $visit($name, []);
         }
     }
 

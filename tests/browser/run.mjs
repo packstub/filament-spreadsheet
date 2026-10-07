@@ -2088,6 +2088,32 @@ try {
     })
     check('destroying the grid removes the editor-key listeners (keydown, and the keyup kept from the select list)', keyListener)
 
+    /* ---------------------------------------------------------------- a formula column follows the row's unsaved cells */
+
+    await fresh()
+    errorsSeen = errors.length
+    const marginOf = async () => ({ value: await page.evaluate(() => window.sheet().grid.value('1', 'margin')), text: (await cell(0, 'margin').innerText()).trim() })
+    const formulaBefore = await marginOf()
+    await cell(0, 'cost').click()
+    await page.keyboard.type('10')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(80)
+    const formulaEdited = await marginOf()
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(80)
+    const formulaUndone = await marginOf()
+    await page.keyboard.press('Control+y')
+    await page.waitForTimeout(80)
+    await page.locator('.ps-sheet-btn-primary').click()
+    await page.waitForFunction(() => ! window.sheet().saving && window.sheet().dirty.total === 0)
+    await page.waitForTimeout(80)
+    const formulaSaved = await marginOf()
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await page.waitForTimeout(150)
+    const temp = await page.evaluate(() => window.sheet().buffer.createdOrder[0])
+    const formulaNew = await page.evaluate((id) => window.sheet().grid.value(id, 'margin'), temp)
+    check('a formula cell follows an unsaved edit (13.70 − 10 = 3.70), the undo and the save; a new row\'s is empty', formulaBefore.value === 6.6 && formulaBefore.text === '6.60' && formulaEdited.value === 3.7 && formulaEdited.text === '3.70' && formulaUndone.value === 6.6 && formulaSaved.value === 3.7 && formulaSaved.text === '3.70' && formulaNew === null && errors.length === errorsSeen, JSON.stringify({ formulaBefore, formulaEdited, formulaUndone, formulaSaved, formulaNew, errors: errors.slice(errorsSeen) }))
+
     /* ---------------------------------------------------------------- leaving with text in an open editor; removing the sheet with one */
 
     await fresh()

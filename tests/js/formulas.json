@@ -1,0 +1,1477 @@
+{
+    "row": {
+        "price": 12.5,
+        "cost": 8.25,
+        "stock": 4,
+        "empty": null,
+        "blank": "",
+        "name": "Desk lamp",
+        "sku": "LMP-1",
+        "qty": "3",
+        "is_active": true,
+        "available_on": "2026-02-28",
+        "category.name": "Lighting",
+        "zero": 0
+    },
+    "cases": [
+        {
+            "source": "price * stock",
+            "tree": [
+                "op",
+                "*",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "stock"
+                ]
+            ],
+            "value": 50.0
+        },
+        {
+            "source": "price - cost",
+            "tree": [
+                "op",
+                "-",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "cost"
+                ]
+            ],
+            "value": 4.25
+        },
+        {
+            "source": "(price - cost) / price * 100",
+            "tree": [
+                "op",
+                "*",
+                [
+                    "op",
+                    "/",
+                    [
+                        "op",
+                        "-",
+                        [
+                            "ref",
+                            "price"
+                        ],
+                        [
+                            "ref",
+                            "cost"
+                        ]
+                    ],
+                    [
+                        "ref",
+                        "price"
+                    ]
+                ],
+                [
+                    "num",
+                    100.0
+                ]
+            ],
+            "value": 34.0
+        },
+        {
+            "source": "round((price - cost) / price * 100, 1)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "op",
+                        "*",
+                        [
+                            "op",
+                            "/",
+                            [
+                                "op",
+                                "-",
+                                [
+                                    "ref",
+                                    "price"
+                                ],
+                                [
+                                    "ref",
+                                    "cost"
+                                ]
+                            ],
+                            [
+                                "ref",
+                                "price"
+                            ]
+                        ],
+                        [
+                            "num",
+                            100.0
+                        ]
+                    ],
+                    [
+                        "num",
+                        1.0
+                    ]
+                ]
+            ],
+            "value": 34.0
+        },
+        {
+            "source": "-price + 1",
+            "tree": [
+                "op",
+                "+",
+                [
+                    "neg",
+                    [
+                        "ref",
+                        "price"
+                    ]
+                ],
+                [
+                    "num",
+                    1.0
+                ]
+            ],
+            "value": -11.5
+        },
+        {
+            "source": "--stock",
+            "tree": [
+                "neg",
+                [
+                    "neg",
+                    [
+                        "ref",
+                        "stock"
+                    ]
+                ]
+            ],
+            "value": 4.0
+        },
+        {
+            "source": "+stock",
+            "tree": [
+                "ref",
+                "stock"
+            ],
+            "value": 4.0
+        },
+        {
+            "source": "2 + 3 * 4",
+            "tree": [
+                "op",
+                "+",
+                [
+                    "num",
+                    2.0
+                ],
+                [
+                    "op",
+                    "*",
+                    [
+                        "num",
+                        3.0
+                    ],
+                    [
+                        "num",
+                        4.0
+                    ]
+                ]
+            ],
+            "value": 14.0
+        },
+        {
+            "source": "(2 + 3) * 4",
+            "tree": [
+                "op",
+                "*",
+                [
+                    "op",
+                    "+",
+                    [
+                        "num",
+                        2.0
+                    ],
+                    [
+                        "num",
+                        3.0
+                    ]
+                ],
+                [
+                    "num",
+                    4.0
+                ]
+            ],
+            "value": 20.0
+        },
+        {
+            "source": "10 % 3",
+            "tree": [
+                "op",
+                "%",
+                [
+                    "num",
+                    10.0
+                ],
+                [
+                    "num",
+                    3.0
+                ]
+            ],
+            "value": 1.0
+        },
+        {
+            "source": "-7 % 3",
+            "tree": [
+                "op",
+                "%",
+                [
+                    "neg",
+                    [
+                        "num",
+                        7.0
+                    ]
+                ],
+                [
+                    "num",
+                    3.0
+                ]
+            ],
+            "value": -1.0
+        },
+        {
+            "source": "1 / 3",
+            "tree": [
+                "op",
+                "/",
+                [
+                    "num",
+                    1.0
+                ],
+                [
+                    "num",
+                    3.0
+                ]
+            ],
+            "value": 0.3333333333333333
+        },
+        {
+            "source": "0.1 + 0.2",
+            "tree": [
+                "op",
+                "+",
+                [
+                    "num",
+                    0.1
+                ],
+                [
+                    "num",
+                    0.2
+                ]
+            ],
+            "value": 0.30000000000000004
+        },
+        {
+            "source": "1e3 + .5",
+            "tree": [
+                "op",
+                "+",
+                [
+                    "num",
+                    1000.0
+                ],
+                [
+                    "num",
+                    0.5
+                ]
+            ],
+            "value": 1000.5
+        },
+        {
+            "source": "price * empty",
+            "tree": [
+                "op",
+                "*",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "empty"
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "price + blank",
+            "tree": [
+                "op",
+                "+",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "blank"
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "name * 2",
+            "tree": [
+                "op",
+                "*",
+                [
+                    "ref",
+                    "name"
+                ],
+                [
+                    "num",
+                    2.0
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "qty * 2",
+            "tree": [
+                "op",
+                "*",
+                [
+                    "ref",
+                    "qty"
+                ],
+                [
+                    "num",
+                    2.0
+                ]
+            ],
+            "value": 6.0
+        },
+        {
+            "source": "price / zero",
+            "tree": [
+                "op",
+                "/",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "zero"
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "price % zero",
+            "tree": [
+                "op",
+                "%",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "zero"
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "-zero",
+            "tree": [
+                "neg",
+                [
+                    "ref",
+                    "zero"
+                ]
+            ],
+            "value": 0.0
+        },
+        {
+            "source": "zero * -1",
+            "tree": [
+                "op",
+                "*",
+                [
+                    "ref",
+                    "zero"
+                ],
+                [
+                    "neg",
+                    [
+                        "num",
+                        1.0
+                    ]
+                ]
+            ],
+            "value": 0.0
+        },
+        {
+            "source": "coalesce(empty, 0) + stock",
+            "tree": [
+                "op",
+                "+",
+                [
+                    "call",
+                    "coalesce",
+                    [
+                        [
+                            "ref",
+                            "empty"
+                        ],
+                        [
+                            "num",
+                            0.0
+                        ]
+                    ]
+                ],
+                [
+                    "ref",
+                    "stock"
+                ]
+            ],
+            "value": 4.0
+        },
+        {
+            "source": "coalesce(blank, empty, name)",
+            "tree": [
+                "call",
+                "coalesce",
+                [
+                    [
+                        "ref",
+                        "blank"
+                    ],
+                    [
+                        "ref",
+                        "empty"
+                    ],
+                    [
+                        "ref",
+                        "name"
+                    ]
+                ]
+            ],
+            "value": "Desk lamp"
+        },
+        {
+            "source": "coalesce(empty)",
+            "tree": [
+                "call",
+                "coalesce",
+                [
+                    [
+                        "ref",
+                        "empty"
+                    ]
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "sum(price, empty, stock, name)",
+            "tree": [
+                "call",
+                "sum",
+                [
+                    [
+                        "ref",
+                        "price"
+                    ],
+                    [
+                        "ref",
+                        "empty"
+                    ],
+                    [
+                        "ref",
+                        "stock"
+                    ],
+                    [
+                        "ref",
+                        "name"
+                    ]
+                ]
+            ],
+            "value": 16.5
+        },
+        {
+            "source": "sum(empty)",
+            "tree": [
+                "call",
+                "sum",
+                [
+                    [
+                        "ref",
+                        "empty"
+                    ]
+                ]
+            ],
+            "value": 0.0
+        },
+        {
+            "source": "min(price, cost, empty)",
+            "tree": [
+                "call",
+                "min",
+                [
+                    [
+                        "ref",
+                        "price"
+                    ],
+                    [
+                        "ref",
+                        "cost"
+                    ],
+                    [
+                        "ref",
+                        "empty"
+                    ]
+                ]
+            ],
+            "value": 8.25
+        },
+        {
+            "source": "max(empty, blank)",
+            "tree": [
+                "call",
+                "max",
+                [
+                    [
+                        "ref",
+                        "empty"
+                    ],
+                    [
+                        "ref",
+                        "blank"
+                    ]
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "max(stock, qty)",
+            "tree": [
+                "call",
+                "max",
+                [
+                    [
+                        "ref",
+                        "stock"
+                    ],
+                    [
+                        "ref",
+                        "qty"
+                    ]
+                ]
+            ],
+            "value": 4.0
+        },
+        {
+            "source": "round(2.5)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        2.5
+                    ]
+                ]
+            ],
+            "value": 3.0
+        },
+        {
+            "source": "round(-2.5)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "neg",
+                        [
+                            "num",
+                            2.5
+                        ]
+                    ]
+                ]
+            ],
+            "value": -3.0
+        },
+        {
+            "source": "round(1.005, 2)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        1.005
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 1.0
+        },
+        {
+            "source": "round(1234.5, -2)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "num",
+                        1234.5
+                    ],
+                    [
+                        "neg",
+                        [
+                            "num",
+                            2.0
+                        ]
+                    ]
+                ]
+            ],
+            "value": 1200.0
+        },
+        {
+            "source": "round(price, 1.9)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "ref",
+                        "price"
+                    ],
+                    [
+                        "num",
+                        1.9
+                    ]
+                ]
+            ],
+            "value": 12.5
+        },
+        {
+            "source": "round(empty)",
+            "tree": [
+                "call",
+                "round",
+                [
+                    [
+                        "ref",
+                        "empty"
+                    ]
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "floor(-1.5)",
+            "tree": [
+                "call",
+                "floor",
+                [
+                    [
+                        "neg",
+                        [
+                            "num",
+                            1.5
+                        ]
+                    ]
+                ]
+            ],
+            "value": -2.0
+        },
+        {
+            "source": "ceil(1.2)",
+            "tree": [
+                "call",
+                "ceil",
+                [
+                    [
+                        "num",
+                        1.2
+                    ]
+                ]
+            ],
+            "value": 2.0
+        },
+        {
+            "source": "abs(cost - price)",
+            "tree": [
+                "call",
+                "abs",
+                [
+                    [
+                        "op",
+                        "-",
+                        [
+                            "ref",
+                            "cost"
+                        ],
+                        [
+                            "ref",
+                            "price"
+                        ]
+                    ]
+                ]
+            ],
+            "value": 4.25
+        },
+        {
+            "source": "if(stock < 5, 'low', 'ok')",
+            "tree": [
+                "call",
+                "if",
+                [
+                    [
+                        "op",
+                        "<",
+                        [
+                            "ref",
+                            "stock"
+                        ],
+                        [
+                            "num",
+                            5.0
+                        ]
+                    ],
+                    [
+                        "str",
+                        "low"
+                    ],
+                    [
+                        "str",
+                        "ok"
+                    ]
+                ]
+            ],
+            "value": "low"
+        },
+        {
+            "source": "if(stock >= 5, 'ok')",
+            "tree": [
+                "call",
+                "if",
+                [
+                    [
+                        "op",
+                        ">=",
+                        [
+                            "ref",
+                            "stock"
+                        ],
+                        [
+                            "num",
+                            5.0
+                        ]
+                    ],
+                    [
+                        "str",
+                        "ok"
+                    ]
+                ]
+            ],
+            "value": null
+        },
+        {
+            "source": "if(empty, 1, 2)",
+            "tree": [
+                "call",
+                "if",
+                [
+                    [
+                        "ref",
+                        "empty"
+                    ],
+                    [
+                        "num",
+                        1.0
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 2.0
+        },
+        {
+            "source": "if(blank, 1, 2)",
+            "tree": [
+                "call",
+                "if",
+                [
+                    [
+                        "ref",
+                        "blank"
+                    ],
+                    [
+                        "num",
+                        1.0
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 2.0
+        },
+        {
+            "source": "if('0', 1, 2)",
+            "tree": [
+                "call",
+                "if",
+                [
+                    [
+                        "str",
+                        "0"
+                    ],
+                    [
+                        "num",
+                        1.0
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 1.0
+        },
+        {
+            "source": "if(zero, 1, 2)",
+            "tree": [
+                "call",
+                "if",
+                [
+                    [
+                        "ref",
+                        "zero"
+                    ],
+                    [
+                        "num",
+                        1.0
+                    ],
+                    [
+                        "num",
+                        2.0
+                    ]
+                ]
+            ],
+            "value": 2.0
+        },
+        {
+            "source": "and(is_active, stock > 0)",
+            "tree": [
+                "call",
+                "and",
+                [
+                    [
+                        "ref",
+                        "is_active"
+                    ],
+                    [
+                        "op",
+                        ">",
+                        [
+                            "ref",
+                            "stock"
+                        ],
+                        [
+                            "num",
+                            0.0
+                        ]
+                    ]
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "or(empty, zero, blank)",
+            "tree": [
+                "call",
+                "or",
+                [
+                    [
+                        "ref",
+                        "empty"
+                    ],
+                    [
+                        "ref",
+                        "zero"
+                    ],
+                    [
+                        "ref",
+                        "blank"
+                    ]
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "not(is_active)",
+            "tree": [
+                "call",
+                "not",
+                [
+                    [
+                        "ref",
+                        "is_active"
+                    ]
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "stock = 4",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "stock"
+                ],
+                [
+                    "num",
+                    4.0
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "stock == 4.0",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "stock"
+                ],
+                [
+                    "num",
+                    4.0
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "qty = '3.0'",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "qty"
+                ],
+                [
+                    "str",
+                    "3.0"
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "stock != 4",
+            "tree": [
+                "op",
+                "!=",
+                [
+                    "ref",
+                    "stock"
+                ],
+                [
+                    "num",
+                    4.0
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "stock <> 5",
+            "tree": [
+                "op",
+                "!=",
+                [
+                    "ref",
+                    "stock"
+                ],
+                [
+                    "num",
+                    5.0
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "price > cost",
+            "tree": [
+                "op",
+                ">",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "cost"
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "price <= cost",
+            "tree": [
+                "op",
+                "<=",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "ref",
+                    "cost"
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "name = 'Desk lamp'",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "name"
+                ],
+                [
+                    "str",
+                    "Desk lamp"
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "name < 'Fan'",
+            "tree": [
+                "op",
+                "<",
+                [
+                    "ref",
+                    "name"
+                ],
+                [
+                    "str",
+                    "Fan"
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "available_on < '2026-03-01'",
+            "tree": [
+                "op",
+                "<",
+                [
+                    "ref",
+                    "available_on"
+                ],
+                [
+                    "str",
+                    "2026-03-01"
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "is_active = true",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "is_active"
+                ],
+                [
+                    "lit",
+                    true
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "is_active = 1",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "is_active"
+                ],
+                [
+                    "num",
+                    1.0
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "empty = null",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "empty"
+                ],
+                [
+                    "lit",
+                    null
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "empty = blank",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "empty"
+                ],
+                [
+                    "ref",
+                    "blank"
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "empty != 0",
+            "tree": [
+                "op",
+                "!=",
+                [
+                    "ref",
+                    "empty"
+                ],
+                [
+                    "num",
+                    0.0
+                ]
+            ],
+            "value": true
+        },
+        {
+            "source": "empty < 1",
+            "tree": [
+                "op",
+                "<",
+                [
+                    "ref",
+                    "empty"
+                ],
+                [
+                    "num",
+                    1.0
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "zero = empty",
+            "tree": [
+                "op",
+                "=",
+                [
+                    "ref",
+                    "zero"
+                ],
+                [
+                    "ref",
+                    "empty"
+                ]
+            ],
+            "value": false
+        },
+        {
+            "source": "name & ' (' & sku & ')'",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "op",
+                    "&",
+                    [
+                        "op",
+                        "&",
+                        [
+                            "ref",
+                            "name"
+                        ],
+                        [
+                            "str",
+                            " ("
+                        ]
+                    ],
+                    [
+                        "ref",
+                        "sku"
+                    ]
+                ],
+                [
+                    "str",
+                    ")"
+                ]
+            ],
+            "value": "Desk lamp (LMP-1)"
+        },
+        {
+            "source": "price & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "ref",
+                    "price"
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "12.5"
+        },
+        {
+            "source": "stock & 'x'",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "ref",
+                    "stock"
+                ],
+                [
+                    "str",
+                    "x"
+                ]
+            ],
+            "value": "4x"
+        },
+        {
+            "source": "0.1 + 0.2 & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "op",
+                    "+",
+                    [
+                        "num",
+                        0.1
+                    ],
+                    [
+                        "num",
+                        0.2
+                    ]
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "0.30000000000000004"
+        },
+        {
+            "source": "is_active & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "ref",
+                    "is_active"
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "true"
+        },
+        {
+            "source": "empty & 'x'",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "ref",
+                    "empty"
+                ],
+                [
+                    "str",
+                    "x"
+                ]
+            ],
+            "value": "x"
+        },
+        {
+            "source": "1 / 4 & ''",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "op",
+                    "/",
+                    [
+                        "num",
+                        1.0
+                    ],
+                    [
+                        "num",
+                        4.0
+                    ]
+                ],
+                [
+                    "str",
+                    ""
+                ]
+            ],
+            "value": "0.25"
+        },
+        {
+            "source": "category.name",
+            "tree": [
+                "ref",
+                "category.name"
+            ],
+            "value": "Lighting"
+        },
+        {
+            "source": "category.name & '!'",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "ref",
+                    "category.name"
+                ],
+                [
+                    "str",
+                    "!"
+                ]
+            ],
+            "value": "Lighting!"
+        },
+        {
+            "source": "\"double\" & 'single'",
+            "tree": [
+                "op",
+                "&",
+                [
+                    "str",
+                    "double"
+                ],
+                [
+                    "str",
+                    "single"
+                ]
+            ],
+            "value": "doublesingle"
+        },
+        {
+            "source": "TRUE",
+            "tree": [
+                "lit",
+                true
+            ],
+            "value": true
+        },
+        {
+            "source": "Null",
+            "tree": [
+                "lit",
+                null
+            ],
+            "value": null
+        },
+        {
+            "source": "IF(stock > 1, 1, 0)",
+            "tree": [
+                "call",
+                "if",
+                [
+                    [
+                        "op",
+                        ">",
+                        [
+                            "ref",
+                            "stock"
+                        ],
+                        [
+                            "num",
+                            1.0
+                        ]
+                    ],
+                    [
+                        "num",
+                        1.0
+                    ],
+                    [
+                        "num",
+                        0.0
+                    ]
+                ]
+            ],
+            "value": 1.0
+        },
+        {
+            "source": "''",
+            "tree": [
+                "str",
+                ""
+            ],
+            "value": null
+        },
+        {
+            "source": "blank",
+            "tree": [
+                "ref",
+                "blank"
+            ],
+            "value": null
+        },
+        {
+            "source": "stock",
+            "tree": [
+                "ref",
+                "stock"
+            ],
+            "value": 4.0
+        },
+        {
+            "source": "is_active",
+            "tree": [
+                "ref",
+                "is_active"
+            ],
+            "value": true
+        }
+    ]
+}
