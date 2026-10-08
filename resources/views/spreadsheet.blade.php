@@ -9,16 +9,23 @@
     cells live in the browser until Save; Livewire only answers renderless calls.
     wire:ignore keeps a page re-render (an action's modal, say) from resetting it,
     and such a render carries no rows at all (see getSpreadsheetConfig()).
+    The stylesheet comes on request (x-load-css), after the markup is on screen:
+    the sheet is kept invisible (visibility, so the layout is already there to
+    measure) until the component sees the stylesheet (reveal()), the toolbar's
+    icons would otherwise fill the page for an instant. data-dispatch makes
+    x-load-css fire `packstub-spreadsheet-css` on the window once it is in.
 --}}
 <div
     wire:ignore
     x-load
     x-load-src="{{ FilamentAsset::getAlpineComponentSrc('spreadsheet', 'packstub/filament-spreadsheet') }}"
     x-load-css="[@js(FilamentAsset::getStyleHref('spreadsheet', 'packstub/filament-spreadsheet'))]"
+    data-dispatch="packstub-spreadsheet"
     x-data="packstubSpreadsheet(@js($config))"
     x-on:keydown.escape.window="onEscape()"
     x-on:packstub-spreadsheet-refresh.window="refresh()"
     class="ps-sheet"
+    style="visibility: hidden"
     :class="{ 'ps-sheet-is-readonly': readOnly, 'ps-sheet-is-saving': saving, 'ps-sheet-is-loading': loading, 'ps-sheet-is-dirty': dirty.total > 0 }"
     :style="height ? { '--ps-sheet-height': height } : {}"
 >

@@ -347,6 +347,9 @@ try {
     await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
     await page.waitForTimeout(80)
     const asked = await page.evaluate(() => { const d = document.querySelector('.ps-sheet-dialog'); return { open: d.open, text: d.querySelector('.ps-sheet-dialog-text').textContent, focus: document.activeElement?.value, native: 0 } })
+    // centred in the window: the browser centres a modal dialog by margin: auto, which a panel's preflight reset (margin: 0 on every element, in the harness too) takes away
+    const box = await page.evaluate(() => { const r = document.querySelector('.ps-sheet-dialog-box').getBoundingClientRect(); return { x: r.left + r.width / 2 - window.innerWidth / 2, y: r.top + r.height / 2 - window.innerHeight / 2 } })
+    check('the dialog is centred in the window under a preflight margin reset', Math.abs(box.x) < 4 && Math.abs(box.y) < 4, JSON.stringify(box))
     await page.keyboard.press('Escape')
     await page.waitForTimeout(80)
     const kept = { open: await page.evaluate(() => document.querySelector('.ps-sheet-dialog').open), dirty: (await state()).dirty.total, focus: await page.evaluate(() => !! document.activeElement?.closest('.ps-sheet-grid')) }
@@ -962,9 +965,13 @@ try {
     check('without a configured height the grid is measured: the window below its top edge less a line for the status, and it still windows its rows', /px$/.test(m.variable) && Math.abs(m.grid - m.configured - m.borders) < 1 && fitsWindow(m) && m.rowEls < m.loaded && m.scroll > m.client && m.doc <= m.window, JSON.stringify(m))
     // the stylesheet arriving after the component started (x-load-css in a panel): the variable reads '' at first, then auto
     await page.goto(`http://127.0.0.1:${port}/?autoheight&latecss`)
+    await page.waitForTimeout(120)
+    const hiddenBefore = await page.evaluate(() => getComputedStyle(document.querySelector('.ps-sheet')).visibility)
     await page.waitForFunction(() => window.sheet()?.rows?.length === 100)
     await page.waitForTimeout(700)
     const lateCss = await measure()
+    const shownAfter = await page.evaluate(() => ({ visibility: getComputedStyle(document.querySelector('.ps-sheet')).visibility, inline: document.querySelector('.ps-sheet').style.visibility }))
+    check('the sheet is invisible until its stylesheet is in, and shown once it is (no unstyled toolbar for an instant)', hiddenBefore === 'hidden' && shownAfter.visibility === 'visible' && shownAfter.inline === '', JSON.stringify({ hiddenBefore, shownAfter }))
     check('a stylesheet loaded after the component started still gets the measured height', /px$/.test(lateCss.variable) && fitsWindow(lateCss) && lateCss.rowEls < lateCss.loaded && lateCss.doc <= lateCss.window, JSON.stringify(lateCss))
     await fresh('?autoheight')
     await page.setViewportSize({ width: 1400, height: 1200 })

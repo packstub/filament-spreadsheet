@@ -195,7 +195,8 @@ button.ps-sheet-pill:focus-visible { outline: 2px solid var(--primary-500, #6366
 
 /* ------------------------------------------------------------------ dialog */
 
-.ps-sheet-dialog { border: 0; padding: 0; background: transparent; color: var(--ps-sheet-text); }
+/* margin: auto centres a modal dialog (the browser default); Tailwind's preflight resets every margin to 0 */
+.ps-sheet-dialog { margin: auto; border: 0; padding: 0; background: transparent; color: var(--ps-sheet-text); }
 .ps-sheet-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 .ps-sheet-dialog-box {
     min-width: 20rem;

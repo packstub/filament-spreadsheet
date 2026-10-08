@@ -83,6 +83,15 @@ export default function packstubSpreadsheet(config) {
             this._observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.fit()) : null
             this._observer?.observe(this.$root)
 
+            // The view renders the root with visibility: hidden: its stylesheet comes on request (x-load-css),
+            // and until it is in the toolbar's icons, sized by nothing, fill the page. Shown as soon as the
+            // stylesheet is seen (now, when it was cached; on the event x-load-css dispatches once it is loaded,
+            // `data-dispatch` on the root; or after a while regardless, a sheet is never left invisible).
+            this._onCss = () => this.reveal()
+            window.addEventListener('packstub-spreadsheet-css', this._onCss)
+            this._revealTimer = setTimeout(() => this.reveal(true), 3000)
+            this.reveal()
+
             // Livewire 3 never settles an action's promise when its request fails (Livewire 4 rejects it):
             // the commit hook's `fail` is the one signal both have. See call().
             this._unhook = window.Livewire?.hook?.('commit', ({ component, commit, fail } = {}) => {
@@ -130,10 +139,25 @@ export default function packstubSpreadsheet(config) {
             document.removeEventListener('livewire:navigate', this._navigate)
             if (typeof this._unhook === 'function') this._unhook()
             window.removeEventListener('resize', this._onResize)
+            window.removeEventListener('packstub-spreadsheet-css', this._onCss)
+            clearTimeout(this._revealTimer)
             this._observer?.disconnect()
             cancelAnimationFrame(this._fitFrame)
             clearTimeout(this._hint)
             this.grid?.destroy()
+        },
+
+        /**
+         * Show the sheet once its stylesheet applies (the `--ps-sheet-bg` variable it sets reads '' before
+         * that; not `--ps-sheet-height`, which a configured height binds on the root before any stylesheet), or regardless when `force`: the inline visibility the view renders is cleared, once.
+         */
+        reveal(force = false) {
+            if (this._revealed) return
+            if (! force && getComputedStyle(this.$root).getPropertyValue('--ps-sheet-bg').trim() === '') return
+            this._revealed = true
+            this.$root.style.visibility = ''
+            window.removeEventListener('packstub-spreadsheet-css', this._onCss)
+            clearTimeout(this._revealTimer)
         },
 
         /* ------------------------------------------------------------ rows */
