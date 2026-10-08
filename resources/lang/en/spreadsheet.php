@@ -72,4 +72,5 @@ return [
     'error_count' => '{1} :count cell needs attention|[2,*] :count cells need attention',
     'next_error' => 'Go to the next marked cell',
     'errors_elsewhere' => 'The marked cells are on other pages.',
+    'cancel' => 'Cancel',
 ];

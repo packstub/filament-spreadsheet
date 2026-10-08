@@ -1,6 +1,6 @@
 # Search, sort, filters, pagination
 
-<!-- TODO screenshot: the toolbar with a search term, a filter set, "12 changes on 3 pages" -->
+![The toolbar with a search term, a filter set and the unsaved changes counted](images/browsing.png)
 
 Everything the toolbar does happens on the server, one renderless call per change (`spreadsheetRows`), and none of it touches the unsaved cells.
 

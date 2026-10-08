@@ -52,6 +52,8 @@ export default function packstubSpreadsheet(config) {
         hint: null,
         // The active cell's error or conflict, shown under the grid for the keyboard and touch (the title needs a pointer).
         status: null,
+        // The question the <dialog> asks (Discard, Delete rows): { text, confirm, danger, resolve }.
+        dialog: null,
         height: config.height ?? null,
 
         rows: [],
@@ -108,7 +110,9 @@ export default function packstubSpreadsheet(config) {
                         paste: (text) => this.onPaste(text),
                         // The rows Delete rows would delete: a row the policy keeps (a viewer's) is not counted, so the
                         // button is not offered for a selection it would do nothing with.
-                        select: (count, ids = []) => { this.selected = this.readOnly || ! this.deletable ? 0 : this.deletableIds(ids).length; this.updateStatus() },
+                        // A single cell is the active cell, not a selection of rows: Delete rows is offered for a range of
+                        // cells or a whole row (a click on its number), counting the rows the user may delete.
+                        select: (count, ids = [], cols = 0) => { this.selected = this.readOnly || ! this.deletable || (count === 1 && cols === 1) ? 0 : this.deletableIds(ids).length; this.updateStatus() },
                         editing: (open) => { this.editing = open },
                         // The first page is applied before tableBuilt: the rows land later than sync(), and the height follows them.
                         rows: () => this.fit(),
@@ -150,7 +154,7 @@ export default function packstubSpreadsheet(config) {
         displayRow(row) {
             const o = S.overlay(this.buffer, row)
             // A row with unsaved cells shows its formulas over them; a clean row the server's values.
-            const values = Object.keys(o.dirty).length ? S.computeRow(this.columns, o.values) : o.values
+            const values = Object.keys(o.dirty).length ? S.computeRow(this.columns, o.values, o.errors) : o.values
 
             return { id: row.id, ...values, _m: { dirty: o.dirty, errors: o.errors, conflicts: o.conflicts, rowError: o.rowError, locked: row.locked ?? [], readOnly: !! row.readOnly, deleted: o.deleted, created: false } }
         },
@@ -160,7 +164,7 @@ export default function packstubSpreadsheet(config) {
             const dirty = {}
             for (const c of this.columns) if (c.editable) dirty[c.name] = true
 
-            return { id: temp, ...S.computeRow(this.columns, values), _m: { dirty, errors: this.buffer.errors[temp] ?? {}, conflicts: {}, rowError: this.buffer.rowErrors[temp] ?? null, locked: [], readOnly: false, deleted: false, created: true } }
+            return { id: temp, ...S.computeRow(this.columns, values, this.buffer.errors[temp] ?? {}), _m: { dirty, errors: this.buffer.errors[temp] ?? {}, conflicts: {}, rowError: this.buffer.rowErrors[temp] ?? null, locked: [], readOnly: false, deleted: false, created: true } }
         },
 
         /** Every row on the grid, in order, with the values shown now (for paste and fill-down). */
@@ -597,15 +601,39 @@ export default function packstubSpreadsheet(config) {
             return ids.filter((id) => S.isCreated(this.buffer, id) || this.rows.find((r) => r.id === id)?.deletable)
         },
 
-        deleteSelected() {
+        async deleteSelected() {
             if (this.readOnly || ! this.deletable || this.saving) return
             const sel = this.grid.selection()
-            if (! sel || ! sel.rows.length) return
+            if (! sel || ! sel.rows.length || (sel.rows.length === 1 && sel.cols.length === 1)) return
             const ids = this.deletableIds(sel.rows)
             if (! ids.length) return
-            if (! window.confirm(choice(t.confirm_delete, ids.length))) return
+            if (! await this.confirm({ text: choice(t.confirm_delete, ids.length), confirm: t.delete_rows, danger: true })) { this.refocus(); return }
+            if (this.saving) return
             this.markDeleted(ids)
             this.refocus()
+        },
+
+        /**
+         * Ask in the sheet's own <dialog> (styled on the panel's tokens, the focus kept inside, Escape and the
+         * backdrop cancel, the confirm button focused), resolved with the answer; a page without <dialog>
+         * support falls back to the browser's confirm().
+         */
+        confirm({ text, confirm, danger = false }) {
+            const el = this.$refs.dialog
+            if (! el || typeof el.showModal !== 'function') return Promise.resolve(window.confirm(text))
+
+            return new Promise((resolve) => {
+                this.dialog = { text, confirm, danger, resolve }
+                el.returnValue = ''
+                el.showModal()
+                this.$nextTick(() => this.$refs.dialogOk?.focus())
+            })
+        },
+
+        dialogClosed() {
+            const asked = this.dialog
+            this.dialog = null
+            asked?.resolve(this.$refs.dialog?.returnValue === 'ok')
         },
 
         /**
@@ -716,9 +744,10 @@ export default function packstubSpreadsheet(config) {
             if (conflicts) this.notify(t.has_conflicts, 'warning')
         },
 
-        discard() {
+        async discard() {
             if (! this.dirty.total || this.saving) return
-            if (! window.confirm(t.confirm_discard)) return
+            if (! await this.confirm({ text: t.confirm_discard, confirm: t.discard })) { this.refocus(); return }
+            if (! this.dirty.total || this.saving) return
             S.discard(this.buffer)
             this.renderPage()
             this.refocus()
@@ -762,6 +791,8 @@ export default function packstubSpreadsheet(config) {
          */
         onKeydown(e) {
             if (! this.grid) return
+            // The dialog's keys are its own: Enter answers, Escape cancels, Tab moves between its buttons.
+            if (e.target?.closest?.('.ps-sheet-dialog')) return
             const editing = this.grid.isEditing()
             const own = () => { e.preventDefault(); e.stopPropagation() }
 

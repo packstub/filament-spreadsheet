@@ -71,6 +71,9 @@ const state = () => page.evaluate(() => { const s = window.sheet(); return { dir
 const cell = (rowIndex, field) => page.locator(`.tabulator-tableholder .tabulator-row`).nth(rowIndex).locator(`.tabulator-cell[tabulator-field="${field}"]`)
 const cellClasses = async (rowIndex, field) => (await cell(rowIndex, field).getAttribute('class')) ?? ''
 const server_ = (fn) => page.evaluate(fn)
+// Discard and Delete rows ask in the sheet's <dialog>: the OK button answers.
+const accept = async () => { await page.locator('.ps-sheet-dialog button[value="ok"]').click(); await page.waitForTimeout(150) }
+const discardAll = async () => { await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click(); await accept() }
 const fresh = async (query = '') => {
     await page.goto(`http://127.0.0.1:${port}/${query}`)
     await page.waitForSelector('.tabulator-tableholder .tabulator-row')
@@ -339,7 +342,16 @@ try {
     await page.waitForTimeout(50)
     s = await state()
     check('editing the refused cell of a new row clears its error', s.errorCount === 0 && ! ((await refusedRow.locator('.tabulator-cell[tabulator-field="sku"]').getAttribute('class')) ?? '').includes('ps-sheet-cell-error') && (await page.evaluate((temp) => JSON.stringify(window.sheet().buffer.errors[temp]), refusedTemp)) === '{}', JSON.stringify({ errors: s.errorCount, buffer: await page.evaluate((temp) => window.sheet().buffer.errors[temp], refusedTemp) }))
+    // the question is the sheet's own dialog: Escape keeps everything, OK discards
+    const dirtyBeforeDiscard = (await state()).dirty.total
     await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await page.waitForTimeout(80)
+    const asked = await page.evaluate(() => { const d = document.querySelector('.ps-sheet-dialog'); return { open: d.open, text: d.querySelector('.ps-sheet-dialog-text').textContent, focus: document.activeElement?.value, native: 0 } })
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(80)
+    const kept = { open: await page.evaluate(() => document.querySelector('.ps-sheet-dialog').open), dirty: (await state()).dirty.total, focus: await page.evaluate(() => !! document.activeElement?.closest('.ps-sheet-grid')) }
+    check('Discard asks in the sheet\'s own dialog, the confirm button focused; Escape keeps every change and hands the keyboard back to the grid', asked.open && asked.text === 'Discard all unsaved changes?' && asked.focus === 'ok' && ! kept.open && kept.dirty === dirtyBeforeDiscard && dirtyBeforeDiscard > 0 && kept.focus, JSON.stringify({ asked, kept }))
+    await discardAll()
     await page.waitForTimeout(50)
 
     // paste past the last row creates rows, in one undo step, with unreadable cells of the new rows painted red
@@ -373,10 +385,22 @@ try {
     await page.waitForTimeout(50)
     s = await state()
     check('clicking a row number selects the row for deletion', s.selected === 1, `selected ${s.selected}`)
+    // rows by id (the DOM holds only the window's rows): a cell, a range of two, then the row's number again
+    await scrollToRow('1', 'top')
+    await (await cellOf('3', 'name')).click()
+    await page.waitForTimeout(60)
+    const oneCell = (await state()).selected
+    await page.keyboard.press('Shift+ArrowDown')
+    await page.waitForTimeout(60)
+    const twoCells = (await state()).selected
+    await (await page.evaluateHandle(() => window.sheet().grid.table.getRow('3').getCells()[0].getElement())).asElement().click()
+    await page.waitForTimeout(60)
+    check('a single active cell counts no row for deletion, a range of cells counts its rows', oneCell === 0 && twoCells === 2 && (await state()).selected === 1, JSON.stringify({ oneCell, twoCells, selected: (await state()).selected }))
     await page.locator('.ps-sheet-btn', { hasText: 'Delete rows' }).click()
+    await accept()
     await page.waitForTimeout(50)
     s = await state()
-    check('Delete rows marks the row (struck through) until Save', s.dirty.deleted === 1 && (await page.locator('.tabulator-row.ps-sheet-row-deleted').count()) === 1)
+    check('Delete rows marks the row (struck through) until Save', s.dirty.deleted === 1 && (await page.locator('.tabulator-row.ps-sheet-row-deleted').count()) === 1, JSON.stringify({ dirty: s.dirty, selected: s.selected, deletedRows: await page.locator('.tabulator-row.ps-sheet-row-deleted').count(), probe: await page.evaluate(() => { const sh = window.sheet(); const ids = Object.keys(sh.buffer.deleted); return ids.map((id) => { const row = sh.grid.table.getRow(id); return { id, inTable: !! row, connected: !! row?.getElement()?.isConnected, cls: row?.getElement()?.className, m: row?.getData()?._m?.deleted, inRows: sh.rows.some((r) => r.id === id), created: sh.buffer.createdOrder?.includes(id) } }) }) }))
     await page.keyboard.press('Control+s')
     await page.waitForFunction(() => window.__server.calls.save.length === 7)
     await page.waitForTimeout(80)
@@ -392,7 +416,7 @@ try {
     await page.waitForTimeout(50)
     s = await state()
     check('the menu marks the row for deletion', s.dirty.deleted === 1)
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(50)
     s = await state()
     check('Discard drops everything unsaved', s.dirty.total === 0 && (await page.locator('.tabulator-row.ps-sheet-row-deleted').count()) === 0)
@@ -548,7 +572,7 @@ try {
     await page.waitForTimeout(50)
     const versionCarried = await page.evaluate(() => ({ buffer: window.sheet().buffer.versions['1'], server: window.__server.products.find((p) => p.id === '1').version }))
     check('the next edit on that row carries the current version, not a stale one', versionCarried.buffer === versionCarried.server, JSON.stringify(versionCarried))
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(50)
 
     // overlapping page requests: the answer of the latest request wins, whatever order they land in
@@ -622,7 +646,7 @@ try {
     await page.waitForTimeout(50)
     s = await state()
     check('editing works again once the save is answered', s.dirty.total === 1 && s.dirty.cells === 1 && (await page.evaluate(() => window.sheet().buffer.changes['1']?.price)) === 5, JSON.stringify(s.dirty))
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(50)
 
     // a new row being saved takes no edit during the save, no row can be added meanwhile, and it is created as sent
@@ -649,7 +673,7 @@ try {
     await page.waitForTimeout(50)
     s = await state()
     check('Add row works again once the save is answered', s.dirty.created === 1, JSON.stringify(s.dirty))
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(50)
 
     // a paste past the last row stops creating rows at the server's cap on rows per save (300 in the harness), and says so
@@ -677,7 +701,7 @@ try {
     await page.goto(`http://127.0.0.1:${port}/`)
     await page.waitForSelector('.tabulator-tableholder .tabulator-row')
     await page.waitForFunction(() => window.sheet()?.rows?.length === 100)
-    const saveButton = page.locator('.ps-sheet-btn-primary')
+    const saveButton = page.locator('.ps-sheet-toolbar .ps-sheet-btn-primary')
     const hintText = () => page.evaluate(() => window.sheet().hint ?? '')
     check('Save is disabled on a clean sheet', await saveButton.isDisabled())
     await cell(0, 'name').click()
@@ -812,6 +836,7 @@ try {
     /* ---------------------------------------------------------------- the grid's own height, the row window */
 
     await fresh()
+    check('on load nothing counts as selected for deletion (the active cell is not a selection)', (await state()).selected === 0, `selected ${(await state()).selected}`)
     const measure = () => page.evaluate(() => {
         const g = document.querySelector('.ps-sheet-grid')
         const h = g.querySelector('.tabulator-tableholder')
@@ -864,7 +889,7 @@ try {
     await scrollToRow(100, 'bottom')
     const errorCell = await page.evaluate(() => { const el = window.sheet().grid.table.getRow('100').getCell('sku').getElement(); return { error: el.classList.contains('ps-sheet-cell-error'), title: el.getAttribute('title'), dirty: el.classList.contains('ps-sheet-cell-dirty') } })
     check('an error the save answers for a row out of the window is on its cell when the row scrolls in', errorOutOfView && s.errorCount === 1 && errorCell.error && errorCell.dirty && errorCell.title === 'The SKU has already been taken.', JSON.stringify({ errorOutOfView, errors: s.errorCount, errorCell }))
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(80)
     const afterDiscard = await page.evaluate(() => { const el = window.sheet().grid.table.getRow('100').getCell('sku').getElement(); return { dirty: window.sheet().dirty.total, text: el.innerText, cls: el.className } })
     check('Discard clears the marks of a row at the far end too', afterDiscard.dirty === 0 && afterDiscard.text === 'SKU-100' && ! /ps-sheet-cell-(dirty|error)/.test(afterDiscard.cls), JSON.stringify(afterDiscard))
@@ -1304,7 +1329,7 @@ try {
     sel = await page.evaluate(() => { const x = window.sheet().grid.selection(); return { rows: x.rows.length, first: x.rows[0], last: x.rows.at(-1) } })
     seen = await inView(1)
     check('Ctrl+Shift+ArrowUp extends it to the first row and shows that end', clean() && sel.rows === 5 && sel.first === '1' && sel.last === '5' && seen.inside, JSON.stringify({ sel, seen }))
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(60)
     // Alt held as well: Tabulator's keybinding does not look at it and jumps, so the cell is brought into view all the same
     await fresh()
@@ -1463,7 +1488,7 @@ try {
     await page.keyboard.press('Enter')
     await atRest()
     before5 = await firstVisible()
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(200)
     v = await firstVisible()
     check('Discard keeps the scroll position', (await state()).dirty.total === 0 && samePlace(before5, v), JSON.stringify({ before5, v }))
@@ -1495,14 +1520,14 @@ try {
     await page.keyboard.press('Enter')
     await atRest()
     before5 = await firstVisible()
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(20)
     let a = (await state()).active
     v = await typeInto('Soon')
     check('Discard keeps the active cell: a key typed 20 ms later goes into that row, the first visible row unchanged', clean() && a?.id === '70' && a?.col === 'name' && (await changesOf()) === '{"70":{"name":"Soon"}}' && samePlace(before5, v), JSON.stringify({ a, changes: await changesOf(), before5, v, errors: errors.slice(errorsSeen) }))
     await atRest()
     before5 = await firstVisible()
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(700)
     a = (await state()).active
     v = await typeInto('Later')
@@ -1540,7 +1565,7 @@ try {
     await (await cellOf(70, 'name')).click()
     await page.keyboard.press('Shift+ArrowDown')
     await page.keyboard.press('Shift+ArrowRight')
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(300)
     rangeAfter = await selectionOf()
     check('and over Discard', clean() && (await state()).dirty.total === 0 && rangeAfter?.rows === '70,71' && rangeAfter?.cols === 'name,category_id', JSON.stringify({ rangeAfter }))
@@ -1675,7 +1700,7 @@ try {
         e = await inEditor()
         check(`Tab commits a typed ${label} and moves right`, clean() && ! e.editing && (await valueOf(20, field)) === typed && e.active !== `20/${field}` && e.active?.startsWith('20/'), JSON.stringify({ e, value: await valueOf(20, field) }))
     }
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(100)
 
     // PageUp / PageDown / Home / End: the editor keeps them, in the middle of the page where the grid could scroll both ways
@@ -1741,7 +1766,7 @@ try {
     const alt = await inEditor()
     await press('Escape')
     check('ArrowLeft and ArrowRight stay caret movement, and Alt+ArrowDown leaves the editor open on its cell', clean() && left.editing && left.input === 'abXc' && right.editing && right.input === 'abXcY' && alt.editing && alt.cell === '50/price' && alt.active === '50/price' && alt.input === 'abXcY' && alt.dirty === 4, JSON.stringify({ left, right, alt }))
-    await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+    await discardAll()
     await page.waitForTimeout(100)
     await fresh()
     errorsSeen = errors.length
@@ -1817,7 +1842,7 @@ try {
         await press('Enter')
         const e = await inEditor()
         check(`every part of a ${label} cleared and Enter empties the cell`, clean() && parts.value === '' && parts.bad === false && ! e.editing && (await valueOf(15, field)) === null && e.dirty === 1 && e.active === `16/${field}`, JSON.stringify({ parts, e, value: await valueOf(15, field) }))
-        await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
+        await discardAll()
         await page.waitForTimeout(100)
     }
 
@@ -2184,7 +2209,7 @@ try {
     const formulaUndone = await marginOf()
     await page.keyboard.press('Control+y')
     await page.waitForTimeout(80)
-    await page.locator('.ps-sheet-btn-primary').click()
+    await page.locator('.ps-sheet-toolbar .ps-sheet-btn-primary').click()
     await page.waitForFunction(() => ! window.sheet().saving && window.sheet().dirty.total === 0)
     await page.waitForTimeout(80)
     const formulaSaved = await marginOf()
@@ -2258,7 +2283,7 @@ try {
     })
     await page.waitForTimeout(80)
     s = await state()
-    check('a read-only sheet takes no typing, no paste, and disables Save and Add row', s.dirty.total === 0 && ! s.editing && (await page.locator('.ps-sheet-btn-primary').isDisabled()) && (await page.locator('.ps-sheet-pill-readonly').isVisible()) && ! (await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).isVisible()), JSON.stringify(s.dirty))
+    check('a read-only sheet takes no typing, no paste, and disables Save and Add row', s.dirty.total === 0 && ! s.editing && (await page.locator('.ps-sheet-toolbar .ps-sheet-btn-primary').isDisabled()) && (await page.locator('.ps-sheet-pill-readonly').isVisible()) && ! (await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).isVisible()), JSON.stringify(s.dirty))
 
     // Enter on a boolean or a computed cell of a read-only sheet: no editor to open, nothing thrown, nothing changed
     errorsSeen = errors.length

@@ -1,6 +1,6 @@
 # Adding and deleting rows
 
-<!-- TODO screenshot: a new row at the bottom marked with a plus, a row struck through for deletion -->
+![A new row at the bottom marked with a plus, a row struck through for deletion](images/rows.png)
 
 ## New rows
 
