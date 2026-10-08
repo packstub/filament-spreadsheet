@@ -552,7 +552,8 @@ try {
     check('the sheet is clean again', s.dirty.total === 0, JSON.stringify(s.dirty))
 
     // a save while a page request is in flight: the stale page is dropped, the page asked for again after the save
-    // (row 1 by id: the grid may be scrolled and sorted by what came before, so the first row element is not row 1)
+    // (a fresh page, row 1 by id: what came before may have left the grid scrolled, sorted or on another page)
+    await fresh()
     await scrollToRow(1, 'top')
     await (await cellOf(1, 'name')).click()
     await page.keyboard.type('Zed2')
