@@ -35,7 +35,7 @@ class PriceList extends SpreadsheetPage
 
 ## The trait in any Livewire component
 
-The pages are thin: the sheet lives in `InteractsWithSpreadsheet`. Put it on any Livewire component and include the view:
+The pages are thin: the sheet lives in `InteractsWithSpreadsheet`. Put it on any Livewire component and include the view: the view renders Filament's Blade components (buttons, inputs, badges, the modal), so the page needs Filament's styles and scripts the way a panel page has them (outside a panel, the ones Filament documents for its components).
 
 ```php
 use Livewire\Component;

@@ -66,6 +66,11 @@
 
 /* ------------------------------------------------------------------ toolbar */
 
+/*
+ * The buttons, the fields, the badges and the dialog are Filament's own components (fi-btn, fi-icon-btn,
+ * fi-input-wrp, fi-select-input, fi-badge, fi-modal), styled by the panel's stylesheet: only the layout
+ * and what Filament has no word for is here.
+ */
 .ps-sheet-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -75,110 +80,28 @@
 
 .ps-sheet-spacer { flex: 1; }
 
-.ps-sheet-btn,
-.ps-sheet-seg-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    height: 2.25rem;
-    padding-inline: 0.75rem;
-    border: 1px solid var(--ps-sheet-border);
-    border-radius: var(--ps-sheet-radius);
-    background: var(--ps-sheet-bg);
-    color: var(--ps-sheet-soft);
-    font-size: 0.875rem;
-    font-weight: 600;
-    line-height: 1;
-    cursor: pointer;
-    white-space: nowrap;
-}
+.ps-sheet-group { display: inline-flex; align-items: center; gap: 0.5rem; }
+.ps-sheet-seg { display: inline-flex; gap: 0.25rem; }
 
-.ps-sheet-btn:hover:not(:disabled),
-.ps-sheet-seg-btn:hover:not(:disabled) { background: var(--ps-sheet-hover); color: var(--ps-sheet-text); }
-.ps-sheet-btn:disabled,
-.ps-sheet-seg-btn:disabled { opacity: 0.5; cursor: default; }
-.ps-sheet-btn:focus-visible,
-.ps-sheet-seg-btn:focus-visible,
-.ps-sheet-field input:focus-visible,
-.ps-sheet-field select:focus-visible { outline: 2px solid var(--ps-sheet-ring); outline-offset: 1px; }
-
-.ps-sheet-btn-primary { background: var(--primary-600); border-color: var(--primary-600); color: #fff; }
-.ps-sheet-btn-primary:hover:not(:disabled) { background: var(--primary-500); color: #fff; }
-.ps-sheet-btn-danger { color: var(--danger-600); }
-.dark .ps-sheet-btn-danger { color: var(--danger-400); }
-
-.ps-sheet-badge {
-    display: inline-flex;
-    align-items: center;
-    min-width: 1.25rem;
-    height: 1.25rem;
-    padding-inline: 0.375rem;
-    border-radius: 999px;
-    background: rgb(255 255 255 / 0.25);
-    font-size: 0.75rem;
-    font-weight: 700;
-    justify-content: center;
-}
-.ps-sheet-btn:not(.ps-sheet-btn-primary) .ps-sheet-badge { background: var(--ps-sheet-hover); color: var(--ps-sheet-text); }
-
-.ps-sheet-seg { display: inline-flex; }
-.ps-sheet-seg .ps-sheet-seg-btn { padding-inline: 0.5rem; border-radius: 0; }
-.ps-sheet-seg .ps-sheet-seg-btn:first-child { border-start-start-radius: var(--ps-sheet-radius); border-end-start-radius: var(--ps-sheet-radius); }
-.ps-sheet-seg .ps-sheet-seg-btn:last-child { border-start-end-radius: var(--ps-sheet-radius); border-end-end-radius: var(--ps-sheet-radius); }
-.ps-sheet-seg .ps-sheet-seg-btn + .ps-sheet-seg-btn { margin-inline-start: -1px; }
-
-.ps-sheet-field {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    height: 2.25rem;
-    padding-inline: 0.625rem;
-    border: 1px solid var(--ps-sheet-border);
-    border-radius: var(--ps-sheet-radius);
-    background: var(--ps-sheet-bg);
-    color: var(--ps-sheet-muted);
-    font-size: 0.8125rem;
-}
-.ps-sheet-field input,
-.ps-sheet-field select {
-    border: 0;
-    background: transparent;
-    color: var(--ps-sheet-text);
-    font-size: 0.875rem;
-    padding: 0;
-    min-width: 0;
-    outline: none;
-}
-.ps-sheet-field select { padding-inline-end: 1.25rem; }
-.ps-sheet-field input[type="date"] { width: 8.5rem; }
-.ps-sheet-search input { width: 12rem; }
-.ps-sheet-search svg { color: var(--ps-sheet-muted); }
+.ps-sheet-field { width: auto; }
+.ps-sheet-search .fi-input { width: 12rem; }
+.ps-sheet-field .fi-input[type="date"] { width: 9rem; }
 
 .ps-sheet-range { display: inline-flex; align-items: center; gap: 0.25rem; }
-.ps-sheet-filter-label { font-size: 0.8125rem; color: var(--ps-sheet-muted); }
-.ps-sheet-filter-on { border-color: var(--ps-sheet-ring); }
+/* A filter that narrows the rows: its ring in the primary colour. */
+.ps-sheet-filter-on.fi-input-wrp,
+.ps-sheet-filter-on .fi-input-wrp { --tw-ring-color: var(--ps-sheet-ring); box-shadow: 0 0 0 1px var(--ps-sheet-ring); }
 .ps-sheet-dash { color: var(--ps-sheet-muted); }
 
-.ps-sheet-pill {
-    display: inline-flex;
-    align-items: center;
-    height: 1.5rem;
-    padding-inline: 0.625rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    white-space: nowrap;
-}
-.ps-sheet-pill-dirty { background: var(--ps-sheet-dirty-bg); color: var(--warning-700); }
-.dark .ps-sheet-pill-dirty { color: var(--warning-300); }
-.ps-sheet-pill-errors { background: var(--ps-sheet-error-bg); color: var(--danger-700); }
-.dark .ps-sheet-pill-errors { color: var(--danger-300); }
-.ps-sheet-pill-readonly { background: var(--ps-sheet-hover); color: var(--ps-sheet-muted); }
+.ps-sheet-pill { white-space: nowrap; }
+button.ps-sheet-pill { cursor: pointer; }
 
-.ps-sheet-pager { display: inline-flex; align-items: center; gap: 0.375rem; }
+/* Under the grid: the status line left, the pager right. */
+.ps-sheet-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 0.5rem; }
+.ps-sheet-footer .ps-sheet-hint { flex: 1 1 12rem; }
+.ps-sheet-pager { display: inline-flex; align-items: center; gap: 0.5rem; margin-inline-start: auto; }
 .ps-sheet-pager-text,
 .ps-sheet-count { font-size: 0.8125rem; color: var(--ps-sheet-muted); white-space: nowrap; }
-.ps-sheet-per-page { height: 2rem; }
 
 /* One line under the grid, always there (a live region must exist before its text changes): a passing hint, else the active cell's error or conflict. */
 .ps-sheet-hint {
@@ -190,28 +113,6 @@
 .dark .ps-sheet-hint-error { color: var(--danger-300); }
 .ps-sheet-hint-conflict { color: #7e22ce; }
 .dark .ps-sheet-hint-conflict { color: #d8b4fe; }
-button.ps-sheet-pill { cursor: pointer; border: 0; font: inherit; font-size: 0.75rem; font-weight: 600; }
-button.ps-sheet-pill:focus-visible { outline: 2px solid var(--primary-500, #6366f1); outline-offset: 1px; }
-
-/* ------------------------------------------------------------------ dialog */
-
-/* margin: auto centres a modal dialog (the browser default); Tailwind's preflight resets every margin to 0 */
-.ps-sheet-dialog { margin: auto; border: 0; padding: 0; background: transparent; color: var(--ps-sheet-text); }
-.ps-sheet-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
-.ps-sheet-dialog-box {
-    min-width: 20rem;
-    max-width: 28rem;
-    padding: 1.25rem;
-    border: 1px solid var(--ps-sheet-border);
-    border-radius: 0.75rem;
-    background: var(--ps-sheet-bg);
-    box-shadow: 0 20px 50px rgb(0 0 0 / 0.2);
-    font-family: var(--ps-sheet-font);
-}
-.ps-sheet-dialog-text { margin: 0 0 1rem; font-size: 0.9375rem; line-height: 1.5; }
-.ps-sheet-dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
-.ps-sheet-dialog .ps-sheet-btn-danger { background: var(--danger-600); border-color: var(--danger-600); color: #fff; }
-.ps-sheet-dialog .ps-sheet-btn-danger:hover { background: var(--danger-500); color: #fff; }
 
 /* ------------------------------------------------------------------ grid */
 
@@ -367,34 +268,10 @@ button.ps-sheet-pill:focus-visible { outline: 2px solid var(--primary-500, #6366
 
 /* ------------------------------------------------------------------ context menu */
 
-.ps-sheet-menu {
-    position: absolute;
-    z-index: 40;
-    min-width: 11rem;
-    padding: 0.25rem;
-    border: 1px solid var(--ps-sheet-border);
-    border-radius: var(--ps-sheet-radius);
-    background: var(--ps-sheet-bg);
-    box-shadow: 0 10px 30px rgb(0 0 0 / 0.14);
-}
-.ps-sheet-menu-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.5rem 0.625rem;
-    border: 0;
-    border-radius: 0.375rem;
-    background: transparent;
-    color: var(--ps-sheet-text);
-    font-size: 0.875rem;
-    text-align: start;
-    cursor: pointer;
-}
-.ps-sheet-menu-item:hover,
-.ps-sheet-menu-item:focus-visible { background: var(--ps-sheet-hover); outline: none; }
-.ps-sheet-menu-item-danger { color: var(--danger-600); }
-.dark .ps-sheet-menu-item-danger { color: var(--danger-400); }
+/* Filament's dropdown panel and list items, placed at the pointer (the view binds left and top, relative to the root). */
+.ps-sheet { position: relative; }
+.ps-sheet-menu { position: absolute; z-index: 40; width: max-content; min-width: 11rem; }
+.ps-sheet-menu-item { width: 100%; text-align: start; cursor: pointer; }
 
 /* ------------------------------------------------------------------ states */
 
@@ -407,7 +284,6 @@ button.ps-sheet-pill:focus-visible { outline: 2px solid var(--primary-500, #6366
 
 @media (max-width: 40rem) {
     .ps-sheet-search input { width: 8rem; }
-    .ps-sheet-btn span:not(.ps-sheet-badge) { display: none; }
-    .ps-sheet-btn { padding-inline: 0.5rem; }
+    .ps-sheet-btn > span { display: none; }
     .ps-sheet-count { display: none; }
 }

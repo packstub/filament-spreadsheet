@@ -2,6 +2,8 @@
 
 ![The toolbar with a search term, a filter set and the unsaved changes counted](images/browsing.png)
 
+The toolbar is built from Filament's own components (its buttons, the search field a table has, selects and date inputs in Filament's input wrapper), so it looks like the rest of the panel; what does not apply is not shown: Save, Discard, Undo and Redo appear once something was changed, Delete rows once rows are selected, the errors badge once a save refused cells.
+
 Everything the toolbar does happens on the server, one renderless call per change (`spreadsheetRows`), and none of it touches the unsaved cells.
 
 ## Search
@@ -42,7 +44,7 @@ A select is a small native select in the toolbar (`Filter::select()`); `Filter::
 ->perPage(200)
 ```
 
-The page size runs from 25 to `max_per_page` (1,000) in the toolbar; `perPage()` sets the initial one. Row numbers continue across pages. The grid scrolls inside its own height, the header and the toolbar staying in place, however many rows the page holds. Another page, page size, sort, search or filter result opens at its first row; the same page read again (a `packstub-spreadsheet-refresh`, the re-read after a save, Discard) stays where it was scrolled to, with the active cell and the selected range where they were (when that row is gone, on the row now at its place), so what you type next goes into the cell you were on. A sheet with 5,000 rows is five pages of 1,000 or fifty of 100; see [Performance](performance.md) for what fits.
+The page size runs from 25 to `max_per_page` (1,000) in the footer under the grid, where the pager is, as in a Filament table; `perPage()` sets the initial one. Row numbers continue across pages. The grid scrolls inside its own height, the header and the toolbar staying in place, however many rows the page holds. Another page, page size, sort, search or filter result opens at its first row; the same page read again (a `packstub-spreadsheet-refresh`, the re-read after a save, Discard) stays where it was scrolled to, with the active cell and the selected range where they were (when that row is gone, on the row now at its place), so what you type next goes into the cell you were on. A sheet with 5,000 rows is five pages of 1,000 or fifty of 100; see [Performance](performance.md) for what fits.
 
 ## When a request fails
 

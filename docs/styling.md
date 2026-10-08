@@ -2,7 +2,7 @@
 
 ![The sheet in dark mode](images/dark.png)
 
-The stylesheet bundles Tabulator's base CSS and lays Filament's colour variables (`--gray-*`, `--primary-*`, `--danger-*`, `--warning-*`, `--success-*`) over every coloured surface, so the sheet follows your panel's theme and dark mode without compiling the plugin's views. The toolbar uses logical properties: it reads right-to-left with the panel.
+The stylesheet bundles Tabulator's base CSS and lays Filament's colour variables (`--gray-*`, `--primary-*`, `--danger-*`, `--warning-*`, `--success-*`) over every coloured surface, so the sheet follows your panel's theme and dark mode without compiling the plugin's views. The toolbar, the filters, the badges, the row menu and the Discard / Delete rows dialog are Filament's own Blade components (`x-filament::button`, `x-filament::input.wrapper`, `x-filament::badge`, `x-filament::modal`, the dropdown's classes), styled by the panel's stylesheet like any Filament page, so a theme that restyles Filament's buttons or inputs restyles the sheet's. The toolbar uses logical properties: it reads right-to-left with the panel.
 
 ## Variables
 

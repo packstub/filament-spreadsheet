@@ -1,7 +1,15 @@
 @php
     use Filament\Support\Facades\FilamentAsset;
+    use Filament\Support\Icons\Heroicon;
+    use Illuminate\Support\HtmlString;
 
     $config = $this->getSpreadsheetConfig();
+    $dialogId = $this->getId() . '-ps-sheet-dialog';
+    // A filter's label is Alpine's (the filters come with the config): the wrapper's prefix carries the span.
+    $filterLabel = new HtmlString('<span x-text="filter.label"></span>');
+    // The dialog's heading and text are the component's (dialog.heading, dialog.text): spans for the modal's slots.
+    $dialogHeading = new HtmlString('<span x-text="dialog ? dialog.heading : \'\'"></span>');
+    $dialogText = new HtmlString('<span class="ps-sheet-dialog-text" x-text="dialog ? dialog.text : \'\'"></span>');
 @endphp
 
 {{--
@@ -9,6 +17,9 @@
     cells live in the browser until Save; Livewire only answers renderless calls.
     wire:ignore keeps a page re-render (an action's modal, say) from resetting it,
     and such a render carries no rows at all (see getSpreadsheetConfig()).
+    The toolbar, the filters and the dialog are Filament's own Blade components
+    (button, icon-button, input wrapper, select, badge, modal), rendered once and
+    driven by Alpine; the ps-sheet-* classes beside theirs are the sheet's hooks.
     The stylesheet comes on request (x-load-css), after the markup is on screen:
     the sheet is kept invisible (visibility, so the layout is already there to
     measure) until the component sees the stylesheet (reveal()), the toolbar's
@@ -24,113 +35,177 @@
     x-data="packstubSpreadsheet(@js($config))"
     x-on:keydown.escape.window="onEscape()"
     x-on:packstub-spreadsheet-refresh.window="refresh()"
+    x-on:modal-closed="dialogClosed($event)"
     class="ps-sheet"
     style="visibility: hidden"
     :class="{ 'ps-sheet-is-readonly': readOnly, 'ps-sheet-is-saving': saving, 'ps-sheet-is-loading': loading, 'ps-sheet-is-dirty': dirty.total > 0 }"
     :style="height ? { '--ps-sheet-height': height } : {}"
 >
+    {{--
+        The toolbar shows what applies: the Save group (Save, Discard, Undo, Redo) once something was changed or
+        undone, Delete rows for a selection of rows, the errors badge for marked cells; Add row, the search and
+        the filters are always there. The pager sits in the footer under the grid, as a table's does.
+    --}}
     <div class="ps-sheet-toolbar">
-        <button type="button" class="ps-sheet-btn ps-sheet-btn-primary" x-on:click="save()" :disabled="readOnly || saving || ! (dirty.total || editing)" :title="t.save + ' (' + keyLabel('save') + ')'">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 4.5h9l3 3V16H4z"/><path d="M7 4.5v4h5v-4M7 16v-4h6v4"/></svg>
-            <span x-text="t.save"></span>
-            <span class="ps-sheet-badge" x-show="dirty.total" x-text="dirty.total"></span>
-        </button>
+        <x-filament::button
+            color="gray"
+            :icon="Heroicon::OutlinedPlus"
+            class="ps-sheet-btn ps-sheet-add-row"
+            x-show="creatable"
+            x-on:click="addRow()"
+            x-bind:disabled="readOnly || saving"
+            x-bind:title="t.add_row + ' (' + keyLabel('add_row') + ')'"
+        >
+            <span x-text="t.add_row"></span>
+        </x-filament::button>
 
-        <button type="button" class="ps-sheet-btn" x-on:click="discard()" :disabled="saving || ! dirty.total" x-text="t.discard"></button>
+        <div class="ps-sheet-group" x-show="! readOnly && (dirty.total || editing || canUndo || canRedo)">
+            <x-filament::button
+                color="primary"
+                class="ps-sheet-btn ps-sheet-btn-primary"
+                x-on:click="save()"
+                x-bind:disabled="readOnly || saving || ! (dirty.total || editing)"
+                x-bind:title="t.save + ' (' + keyLabel('save') + ')'"
+            >
+                <span x-text="t.save"></span>
+                <div class="fi-btn-badge-ctn" x-show="dirty.total">
+                    <x-filament::badge size="xs" color="primary" class="ps-sheet-badge"><span x-text="dirty.total"></span></x-filament::badge>
+                </div>
+            </x-filament::button>
 
-        <div class="ps-sheet-seg" role="group">
-            <button type="button" class="ps-sheet-seg-btn" x-on:click="undo()" :disabled="saving || ! canUndo" :title="t.undo + ' (' + keyLabel('undo') + ')'" :aria-label="t.undo">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 5 3.5 8.5 7 12"/><path d="M4 8.5h8a4 4 0 0 1 0 8H9"/></svg>
-            </button>
-            <button type="button" class="ps-sheet-seg-btn" x-on:click="redo()" :disabled="saving || ! canRedo" :title="t.redo + ' (' + keyLabel('redo') + ')'" :aria-label="t.redo">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m13 5 3.5 3.5L13 12"/><path d="M16 8.5H8a4 4 0 0 0 0 8h3"/></svg>
-            </button>
+            <x-filament::button color="gray" class="ps-sheet-btn" x-on:click="discard()" x-bind:disabled="saving || ! dirty.total">
+                <span x-text="t.discard"></span>
+            </x-filament::button>
+
+            <div class="ps-sheet-seg" role="group">
+                <x-filament::icon-button
+                    color="gray"
+                    :icon="Heroicon::OutlinedArrowUturnLeft"
+                    :label="__('packstub-spreadsheet::spreadsheet.undo')"
+                    class="ps-sheet-seg-btn"
+                    x-on:click="undo()"
+                    x-bind:disabled="saving || ! canUndo"
+                    x-bind:title="t.undo + ' (' + keyLabel('undo') + ')'"
+                />
+                <x-filament::icon-button
+                    color="gray"
+                    :icon="Heroicon::OutlinedArrowUturnRight"
+                    :label="__('packstub-spreadsheet::spreadsheet.redo')"
+                    class="ps-sheet-seg-btn"
+                    x-on:click="redo()"
+                    x-bind:disabled="saving || ! canRedo"
+                    x-bind:title="t.redo + ' (' + keyLabel('redo') + ')'"
+                />
+            </div>
         </div>
 
-        <button type="button" class="ps-sheet-btn" x-show="creatable" x-on:click="addRow()" :disabled="readOnly || saving" :title="t.add_row + ' (' + keyLabel('add_row') + ')'">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
-            <span x-text="t.add_row"></span>
-        </button>
-
-        <button type="button" class="ps-sheet-btn ps-sheet-btn-danger" x-show="deletable" x-on:click="deleteSelected()" :disabled="readOnly || saving || ! selected" :title="t.delete_rows">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10"/></svg>
+        <x-filament::button
+            color="danger"
+            outlined
+            :icon="Heroicon::OutlinedTrash"
+            class="ps-sheet-btn ps-sheet-btn-danger"
+            x-show="deletable && selected"
+            x-on:click="deleteSelected()"
+            x-bind:disabled="readOnly || saving || ! selected"
+            x-bind:title="t.delete_rows"
+        >
             <span x-text="t.delete_rows"></span>
-            <span class="ps-sheet-badge" x-show="selected" x-text="selected"></span>
-        </button>
+            <div class="fi-btn-badge-ctn" x-show="selected">
+                <x-filament::badge size="xs" color="danger" class="ps-sheet-badge"><span x-text="selected"></span></x-filament::badge>
+            </div>
+        </x-filament::button>
 
-        <label class="ps-sheet-field ps-sheet-search" x-show="searchable">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="9" cy="9" r="5"/><path d="m13 13 3.5 3.5"/></svg>
-            <input type="search" x-model="search" x-on:input.debounce.400ms="refresh()" :placeholder="t.search" :aria-label="t.search">
-        </label>
+        <div class="ps-sheet-spacer"></div>
+
+        <x-filament::badge color="gray" class="ps-sheet-pill ps-sheet-pill-readonly" x-show="readOnly"><span x-text="t.read_only_badge"></span></x-filament::badge>
+        <x-filament::badge tag="button" color="danger" class="ps-sheet-pill ps-sheet-pill-errors" x-show="errorCount" x-on:click="nextError()" x-bind:title="t.next_error"><span x-text="errorsLabel()"></span></x-filament::badge>
+        {{-- what the Save badge's count does not say: changes on other pages, new rows, rows to delete --}}
+        <x-filament::badge color="warning" class="ps-sheet-pill ps-sheet-pill-dirty" x-show="dirty.total && (dirty.pages > 1 || dirty.created || dirty.deleted)"><span x-text="changesLabel()"></span></x-filament::badge>
+
+        <x-filament::input.wrapper inline-prefix :prefix-icon="Heroicon::MagnifyingGlass" class="ps-sheet-field ps-sheet-search" x-show="searchable">
+            <x-filament::input type="search" inline-prefix autocomplete="off" x-model="search" x-on:input.debounce.400ms="refresh()" x-bind:placeholder="t.search" x-bind:aria-label="t.search" />
+        </x-filament::input.wrapper>
 
         <template x-for="filter in filters" :key="filter.name">
             <div class="ps-sheet-filter-wrap">
                 <template x-if="filter.type === 'dateRange'">
                     <div class="ps-sheet-range ps-sheet-filter" :class="{ 'ps-sheet-filter-on': active[filter.name].from || active[filter.name].until }">
-                        <span class="ps-sheet-filter-label" x-text="filter.label"></span>
-                        <label class="ps-sheet-field"><input type="date" x-model="active[filter.name].from" x-on:change="refresh()" :aria-label="filter.label + ' ' + t.from"></label>
+                        <x-filament::input.wrapper :prefix="$filterLabel" class="ps-sheet-field">
+                            <x-filament::input type="date" x-model="active[filter.name].from" x-on:change="refresh()" x-bind:aria-label="filter.label + ' ' + t.from" />
+                        </x-filament::input.wrapper>
                         <span class="ps-sheet-dash">–</span>
-                        <label class="ps-sheet-field"><input type="date" x-model="active[filter.name].until" x-on:change="refresh()" :aria-label="filter.label + ' ' + t.until"></label>
+                        <x-filament::input.wrapper class="ps-sheet-field">
+                            <x-filament::input type="date" x-model="active[filter.name].until" x-on:change="refresh()" x-bind:aria-label="filter.label + ' ' + t.until" />
+                        </x-filament::input.wrapper>
                     </div>
                 </template>
                 <template x-if="filter.type !== 'dateRange'">
-                    <label class="ps-sheet-field ps-sheet-filter" :class="{ 'ps-sheet-filter-on': active[filter.name] }">
-                        <span x-text="filter.label"></span>
-                        <select x-model="active[filter.name]" x-on:change="refresh()">
+                    <x-filament::input.wrapper :prefix="$filterLabel" class="ps-sheet-field ps-sheet-filter" x-bind:class="{ 'ps-sheet-filter-on': active[filter.name] }">
+                        <x-filament::input.select x-model="active[filter.name]" x-on:change="refresh()" x-bind:aria-label="filter.label">
                             <option value="" x-text="t.all"></option>
                             <template x-for="option in filter.options" :key="option.value">
                                 <option :value="option.value" x-text="option.label"></option>
                             </template>
-                        </select>
-                    </label>
+                        </x-filament::input.select>
+                    </x-filament::input.wrapper>
                 </template>
             </div>
         </template>
-
-        <div class="ps-sheet-spacer"></div>
-
-        <span class="ps-sheet-pill ps-sheet-pill-readonly" x-show="readOnly" x-text="t.read_only_badge"></span>
-        <button type="button" class="ps-sheet-pill ps-sheet-pill-errors" x-show="errorCount" x-on:click="nextError()" x-text="errorsLabel()" :title="t.next_error"></button>
-        <span class="ps-sheet-pill ps-sheet-pill-dirty" x-show="dirty.total" x-text="changesLabel()"></span>
-
-        <nav class="ps-sheet-pager" :aria-label="t.page_of.replace(':page', page).replace(':pages', lastPage)">
-            <button type="button" class="ps-sheet-seg-btn" x-on:click="prev()" :disabled="loading || page <= 1" :aria-label="t.previous">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m12 5-5 5 5 5"/></svg>
-            </button>
-            <span class="ps-sheet-pager-text" x-text="t.page_of.replace(':page', page).replace(':pages', lastPage)"></span>
-            <button type="button" class="ps-sheet-seg-btn" x-on:click="next()" :disabled="loading || page >= lastPage" :aria-label="t.next">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-            </button>
-            <label class="ps-sheet-field ps-sheet-per-page">
-                <select x-model.number="perPage" x-on:change="setPerPage(perPage)" :aria-label="t.per_page">
-                    <template x-for="n in pageSizes" :key="n">
-                        <option :value="n" :selected="n === perPage" x-text="n"></option>
-                    </template>
-                </select>
-            </label>
-            <span class="ps-sheet-count" x-text="rowsLabel()"></span>
-        </nav>
     </div>
 
     <div class="ps-sheet-grid" x-ref="grid" x-on:contextmenu.prevent="openMenu($event)"></div>
 
-    {{-- Discard and Delete rows ask here (showModal: focus kept inside, Escape cancels); a click on the backdrop cancels too --}}
-    <dialog class="ps-sheet-dialog" x-ref="dialog" x-on:close="dialogClosed()" x-on:click="if ($event.target === $refs.dialog) $refs.dialog.close('cancel')" :aria-label="dialog ? dialog.text : ''">
-        <form method="dialog" class="ps-sheet-dialog-box">
-            <p class="ps-sheet-dialog-text" x-text="dialog ? dialog.text : ''"></p>
-            <div class="ps-sheet-dialog-actions">
-                <button type="submit" value="cancel" class="ps-sheet-btn" x-text="t.cancel"></button>
-                <button type="submit" value="ok" class="ps-sheet-btn" :class="dialog && dialog.danger ? 'ps-sheet-btn-danger' : 'ps-sheet-btn-primary'" x-ref="dialogOk" x-text="dialog ? dialog.confirm : ''"></button>
-            </div>
-        </form>
-    </dialog>
+    {{-- Discard and Delete rows ask in Filament's modal (opened by its id; Escape, the overlay and the modal-closed event are its); the OK button carries the answer --}}
+    <x-filament::modal
+        :id="$dialogId"
+        width="md"
+        alignment="center"
+        footer-actions-alignment="center"
+        :icon="Heroicon::OutlinedExclamationTriangle"
+        icon-color="danger"
+        :heading="$dialogHeading"
+        :description="$dialogText"
+        :restores-focus="false"
+        class="ps-sheet-dialog"
+        x-bind:aria-label="dialog ? dialog.text : ''"
+    >
 
-    {{-- always rendered: a live region announces a change only when it existed before it --}}
-    <div class="ps-sheet-hint" role="status" aria-live="polite" :class="hint ? '' : (status && 'ps-sheet-hint-' + status.kind)" x-text="hint ?? (status ? status.text : '')"></div>
+        <x-slot name="footerActions">
+            {{-- one OK button per colour (a colour is a set of classes), the one the question asks for shown --}}
+            <x-filament::button color="danger" value="ok" class="ps-sheet-dialog-ok" x-show="dialog && dialog.danger" x-on:click="answerDialog(true, $root.id)">
+                <span x-text="dialog ? dialog.confirm : ''"></span>
+            </x-filament::button>
+            <x-filament::button color="primary" value="ok" class="ps-sheet-dialog-ok" x-show="! (dialog && dialog.danger)" x-on:click="answerDialog(true, $root.id)">
+                <span x-text="dialog ? dialog.confirm : ''"></span>
+            </x-filament::button>
+            <x-filament::button color="gray" value="cancel" x-on:click="answerDialog(false, $root.id)">
+                <span x-text="t.cancel"></span>
+            </x-filament::button>
+        </x-slot>
+    </x-filament::modal>
 
-    {{-- x-show and :style share the style attribute: object syntax keeps the display x-show sets --}}
+    {{-- under the grid: the status line (always rendered: a live region announces a change only when it existed before it) and the pager --}}
+    <div class="ps-sheet-footer">
+        <div class="ps-sheet-hint" role="status" aria-live="polite" :class="hint ? '' : (status && 'ps-sheet-hint-' + status.kind)" x-text="hint ?? (status ? status.text : '')"></div>
+
+        <nav class="ps-sheet-pager" :aria-label="t.page_of.replace(':page', page).replace(':pages', lastPage)">
+            <span class="ps-sheet-count" x-text="rowsLabel()"></span>
+            <x-filament::input.wrapper class="ps-sheet-field ps-sheet-per-page">
+                <x-filament::input.select x-model.number="perPage" x-on:change="setPerPage(perPage)" x-bind:aria-label="t.per_page">
+                    <template x-for="n in pageSizes" :key="n">
+                        <option :value="n" :selected="n === perPage" x-text="n"></option>
+                    </template>
+                </x-filament::input.select>
+            </x-filament::input.wrapper>
+            <x-filament::icon-button color="gray" size="sm" :icon="Heroicon::ChevronLeft" :label="__('packstub-spreadsheet::spreadsheet.previous')" class="ps-sheet-seg-btn" x-on:click="prev()" x-bind:disabled="loading || page <= 1" />
+            <span class="ps-sheet-pager-text" x-text="t.page_of.replace(':page', page).replace(':pages', lastPage)"></span>
+            <x-filament::icon-button color="gray" size="sm" :icon="Heroicon::ChevronRight" :label="__('packstub-spreadsheet::spreadsheet.next')" class="ps-sheet-seg-btn" x-on:click="next()" x-bind:disabled="loading || page >= lastPage" />
+        </nav>
+    </div>
+
+    {{-- The row menu at the pointer, in the dropdown's clothes. x-show and :style share the style attribute: object syntax keeps the display x-show sets --}}
     <div
-        class="ps-sheet-menu"
+        class="ps-sheet-menu fi-dropdown-panel"
         x-ref="menu"
         x-show="menu"
         x-cloak
@@ -142,8 +217,12 @@
         role="menu"
         :aria-label="t.row_menu"
     >
-        <template x-for="item in (menu ? menu.items : [])" :key="item.name">
-            <button type="button" class="ps-sheet-menu-item" :class="item.color && 'ps-sheet-menu-item-' + item.color" role="menuitem" x-on:click="runMenu(item.name)" x-text="item.label"></button>
-        </template>
+        <div class="fi-dropdown-list">
+            <template x-for="item in (menu ? menu.items : [])" :key="item.name">
+                <button type="button" class="ps-sheet-menu-item fi-dropdown-list-item" :class="item.color ? 'ps-sheet-menu-item-' + item.color + ' fi-color-' + item.color : 'fi-color-gray'" role="menuitem" x-on:click="runMenu(item.name)">
+                    <span class="fi-dropdown-list-item-label" x-text="item.label"></span>
+                </button>
+            </template>
+        </div>
     </div>
 </div>

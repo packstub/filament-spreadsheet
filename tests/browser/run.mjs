@@ -72,7 +72,7 @@ const cell = (rowIndex, field) => page.locator(`.tabulator-tableholder .tabulato
 const cellClasses = async (rowIndex, field) => (await cell(rowIndex, field).getAttribute('class')) ?? ''
 const server_ = (fn) => page.evaluate(fn)
 // Discard and Delete rows ask in the sheet's <dialog>: the OK button answers.
-const accept = async () => { await page.locator('.ps-sheet-dialog button[value="ok"]').click(); await page.waitForTimeout(150) }
+const accept = async () => { await page.locator('.ps-sheet-dialog button[value="ok"]:visible').click(); await page.waitForTimeout(150) }
 const discardAll = async () => { await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click(); await accept() }
 const fresh = async (query = '') => {
     await page.goto(`http://127.0.0.1:${port}/${query}`)
@@ -346,13 +346,14 @@ try {
     const dirtyBeforeDiscard = (await state()).dirty.total
     await page.locator('.ps-sheet-btn', { hasText: 'Discard' }).click()
     await page.waitForTimeout(80)
-    const asked = await page.evaluate(() => { const d = document.querySelector('.ps-sheet-dialog'); return { open: d.open, text: d.querySelector('.ps-sheet-dialog-text').textContent, focus: document.activeElement?.value, native: 0 } })
-    // centred in the window: the browser centres a modal dialog by margin: auto, which a panel's preflight reset (margin: 0 on every element, in the harness too) takes away
-    const box = await page.evaluate(() => { const r = document.querySelector('.ps-sheet-dialog-box').getBoundingClientRect(); return { x: r.left + r.width / 2 - window.innerWidth / 2, y: r.top + r.height / 2 - window.innerHeight / 2 } })
-    check('the dialog is centred in the window under a preflight margin reset', Math.abs(box.x) < 4 && Math.abs(box.y) < 4, JSON.stringify(box))
+    const asked = await page.evaluate(() => { const d = document.querySelector('.ps-sheet-dialog'); return { open: d.classList.contains('fi-modal-open'), text: d.querySelector('.ps-sheet-dialog-text').textContent, focus: document.activeElement?.value, native: 0 } })
+    // where Filament puts a modal on a wide screen: centred, a quarter of the free height above it (grid rows 1fr auto 3fr); measured once its enter transition is over
+    await page.waitForTimeout(400)
+    const box = await page.evaluate(() => { const r = document.querySelector('.ps-sheet-dialog .fi-modal-window').getBoundingClientRect(); return { x: r.left + r.width / 2 - window.innerWidth / 2, y: r.top - (window.innerHeight - r.height) / 4, height: r.height } })
+    check('the dialog sits where Filament puts a modal: centred, a quarter of the free height above it', Math.abs(box.x) < 4 && Math.abs(box.y) < 12 && box.height > 80, JSON.stringify(box))
     await page.keyboard.press('Escape')
     await page.waitForTimeout(80)
-    const kept = { open: await page.evaluate(() => document.querySelector('.ps-sheet-dialog').open), dirty: (await state()).dirty.total, focus: await page.evaluate(() => !! document.activeElement?.closest('.ps-sheet-grid')) }
+    const kept = { open: await page.evaluate(() => document.querySelector('.ps-sheet-dialog').classList.contains('fi-modal-open')), dirty: (await state()).dirty.total, focus: await page.evaluate(() => !! document.activeElement?.closest('.ps-sheet-grid')) }
     check('Discard asks in the sheet\'s own dialog, the confirm button focused; Escape keeps every change and hands the keyboard back to the grid', asked.open && asked.text === 'Discard all unsaved changes?' && asked.focus === 'ok' && ! kept.open && kept.dirty === dirtyBeforeDiscard && dirtyBeforeDiscard > 0 && kept.focus, JSON.stringify({ asked, kept }))
     await discardAll()
     await page.waitForTimeout(50)
@@ -960,7 +961,7 @@ try {
     // getSpreadsheetHeight() null (the default): the stylesheet's height, the window minus the top bar and the toolbar
     await fresh('?autoheight')
     m = await measure()
-    const fitsWindow = (x) => x.headerTop + x.grid <= x.window - 30 && x.headerTop + x.grid >= x.window - 60
+    const fitsWindow = (x) => x.headerTop + x.grid <= x.window - 30 && x.headerTop + x.grid >= x.window - 100 // the footer under the grid: the status line and the pager
     console.log(`     measured height: grid ${m.grid}px (variable ${m.variable}), top ${m.headerTop}px in a ${m.window}px window, ${m.rowEls} row elements of ${m.loaded} rows, holder ${m.client}/${m.scroll}px, document ${m.doc}px`)
     check('without a configured height the grid is measured: the window below its top edge less a line for the status, and it still windows its rows', /px$/.test(m.variable) && Math.abs(m.grid - m.configured - m.borders) < 1 && fitsWindow(m) && m.rowEls < m.loaded && m.scroll > m.client && m.doc <= m.window, JSON.stringify(m))
     // the stylesheet arriving after the component started (x-load-css in a panel): the variable reads '' at first, then auto

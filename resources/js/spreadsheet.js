@@ -52,7 +52,7 @@ export default function packstubSpreadsheet(config) {
         hint: null,
         // The active cell's error or conflict, shown under the grid for the keyboard and touch (the title needs a pointer).
         status: null,
-        // The question the <dialog> asks (Discard, Delete rows): { text, confirm, danger, resolve }.
+        // The question the dialog asks (Discard, Delete rows): { text, confirm, danger, resolve, answer }.
         dialog: null,
         height: config.height ?? null,
 
@@ -631,33 +631,51 @@ export default function packstubSpreadsheet(config) {
             if (! sel || ! sel.rows.length || (sel.rows.length === 1 && sel.cols.length === 1)) return
             const ids = this.deletableIds(sel.rows)
             if (! ids.length) return
-            if (! await this.confirm({ text: choice(t.confirm_delete, ids.length), confirm: t.delete_rows, danger: true })) { this.refocus(); return }
+            if (! await this.confirm({ heading: t.delete_rows, text: choice(t.confirm_delete, ids.length), confirm: t.delete_rows, danger: true })) { this.refocus(); return }
             if (this.saving) return
             this.markDeleted(ids)
             this.refocus()
         },
 
         /**
-         * Ask in the sheet's own <dialog> (styled on the panel's tokens, the focus kept inside, Escape and the
-         * backdrop cancel, the confirm button focused), resolved with the answer; a page without <dialog>
-         * support falls back to the browser's confirm().
+         * Ask in Filament's modal (the one the view renders with the sheet, opened and closed by its id through
+         * the `open-modal` / `close-modal` window events; Escape, the overlay and the focus trap are its),
+         * resolved with the answer when it reports `modal-closed`; a page without the modal falls back to
+         * the browser's confirm().
          */
-        confirm({ text, confirm, danger = false }) {
-            const el = this.$refs.dialog
-            if (! el || typeof el.showModal !== 'function') return Promise.resolve(window.confirm(text))
+        confirm({ heading, text, confirm, danger = false }) {
+            const el = this.$root.querySelector('.ps-sheet-dialog')
+            if (! el || ! el.id) return Promise.resolve(window.confirm(text))
 
             return new Promise((resolve) => {
-                this.dialog = { text, confirm, danger, resolve }
-                el.returnValue = ''
-                el.showModal()
-                this.$nextTick(() => this.$refs.dialogOk?.focus())
+                this.dialog = { heading, text, confirm, danger, resolve, answer: false }
+                // The confirm button takes the focus once the modal is open (its focus trap has put it on the first
+                // button by then): the shown OK button, the danger or the primary one.
+                const opened = (e) => {
+                    if (e.detail?.id !== el.id) return
+                    document.removeEventListener('x-modal-opened', opened)
+                    setTimeout(() => [...el.querySelectorAll('.ps-sheet-dialog-ok')].find((b) => b.getClientRects().length)?.focus(), 30)
+                }
+                document.addEventListener('x-modal-opened', opened)
+                window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: el.id } }))
             })
         },
 
-        dialogClosed() {
+        /**
+         * A dialog button: remember the answer and close; `modal-closed` then resolves (see dialogClosed()). The
+         * button sits inside the modal's own Alpine component, where `$root` is the modal: it passes the id.
+         */
+        answerDialog(answer, id) {
+            if (this.dialog) this.dialog.answer = answer
+            if (id) window.dispatchEvent(new CustomEvent('close-modal', { detail: { id } }))
+        },
+
+        dialogClosed(e) {
+            const el = this.$root.querySelector('.ps-sheet-dialog')
+            if (e?.detail?.id && el?.id && e.detail.id !== el.id) return
             const asked = this.dialog
             this.dialog = null
-            asked?.resolve(this.$refs.dialog?.returnValue === 'ok')
+            asked?.resolve(asked.answer === true)
         },
 
         /**
@@ -770,7 +788,7 @@ export default function packstubSpreadsheet(config) {
 
         async discard() {
             if (! this.dirty.total || this.saving) return
-            if (! await this.confirm({ text: t.confirm_discard, confirm: t.discard })) { this.refocus(); return }
+            if (! await this.confirm({ heading: t.discard, text: t.confirm_discard, confirm: t.discard })) { this.refocus(); return }
             if (! this.dirty.total || this.saving) return
             S.discard(this.buffer)
             this.renderPage()

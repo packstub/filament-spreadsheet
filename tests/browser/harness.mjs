@@ -10,7 +10,9 @@
  */
 
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import { extname, join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -178,19 +180,30 @@ const tokens = `
 :root{--gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;--gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;--gray-800:#1f2937;--gray-900:#111827;--gray-950:#030712;
 --primary-300:#fcd34d;--primary-400:#fbbf24;--primary-500:#f59e0b;--primary-600:#d97706;--danger-300:#fca5a5;--danger-400:#f87171;--danger-500:#ef4444;--danger-600:#dc2626;--danger-700:#b91c1c;
 --warning-300:#fcd34d;--warning-400:#fbbf24;--warning-500:#f59e0b;--warning-700:#b45309;--success-500:#22c55e;--success-600:#16a34a;--info-500:#3b82f6;--topbar-height:4rem}
-*,:after,:before,::backdrop{box-sizing:border-box;border:0 solid;margin:0;padding:0}
 body{font-family:ui-sans-serif,system-ui,sans-serif;margin:1rem;background:#fff;color:#111}
 .dark body{background:#0b1220}
 `
 
-/** The Blade view as static HTML: the PHP block, the Blade comment and the x-load attributes stripped. */
+/**
+ * The Blade view rendered through the test app (tests/Feature/HarnessRenderTest.php: Blade components and all, the
+ * panel's colour variables beside it), the x-load attributes stripped and the config replaced by the harness's.
+ */
+let rendered = null
+export function render() {
+    if (rendered) return rendered
+    const target = join(tmpdir(), `ps-sheet-harness-${process.pid}.json`)
+    const r = spawnSync(join(root, 'vendor/bin/pest'), ['tests/Feature/HarnessRenderTest.php'], { cwd: root, env: { ...process.env, HARNESS_RENDER: target }, encoding: 'utf8' })
+    if (r.status !== 0 || ! existsSync(target)) throw new Error('The view could not be rendered:\n' + r.stdout + r.stderr)
+    rendered = JSON.parse(readFileSync(target, 'utf8'))
+    unlinkSync(target)
+    return rendered
+}
+
 export function viewHtml() {
-    let html = readFileSync(join(root, 'resources/views/spreadsheet.blade.php'), 'utf8')
-    html = html.replace(/@php[\s\S]*?@endphp\s*/m, '')
-    html = html.replace(/\{\{--[\s\S]*?--\}\}\s*/gm, '')
+    let html = render().view
     html = html.replace(/\s*x-load-src="[^"]*"/, '').replace(/\s*x-load-css="[^"]*"/, '').replace(/\s*x-load\b/, '')
-    html = html.replace('x-data="packstubSpreadsheet(@js($config))"', 'x-data="packstubSpreadsheet(window.__config)"')
-    if (/@js\(|\{\{|@foreach/.test(html)) throw new Error('The view has Blade the harness does not translate:\n' + html.match(/.*(@js\(|\{\{|@foreach).*/)[0])
+    html = html.replace(/x-data="packstubSpreadsheet\([^"]*\)"/, 'x-data="packstubSpreadsheet(window.__config)"')
+    if (! html.includes('packstubSpreadsheet(window.__config)')) throw new Error('The rendered view has no packstubSpreadsheet(...) x-data to replace')
 
     return html
 }
@@ -207,8 +220,12 @@ export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeig
 <head>
 <meta charset="utf-8">
 <title>filament-spreadsheet harness</title>
+<link rel="stylesheet" href="/vendor/filament/filament/dist/theme.css">
+<link rel="stylesheet" href="/vendor/filament/support/dist/index.css">
+${render().styles}
 <style>${tokens}</style>
 ${lateCss ? '' : '<link rel="stylesheet" href="/resources/dist/spreadsheet.css">'}
+<script src="/vendor/filament/support/dist/index.js"></script>
 </head>
 <body>
 <h1 style="font-size:1.25rem;margin:0 0 .75rem">Products</h1>
@@ -220,6 +237,8 @@ ${viewHtml()}
 <script type="module">
 import packstubSpreadsheet from '/resources/dist/spreadsheet.js'
 import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/module.esm.js'
+import focus from 'https://cdn.jsdelivr.net/npm/@alpinejs/focus@3.14.8/dist/module.esm.js'
+Alpine.plugin(focus)
 Alpine.magic('wire', () => window.__wire)
 Alpine.data('packstubSpreadsheet', packstubSpreadsheet)
 window.Alpine = Alpine
