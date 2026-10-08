@@ -1056,12 +1056,13 @@ export const DEFAULT_KEYS = { save: 'mod+s', fill_down: 'mod+d', undo: 'mod+z', 
 export function shortcutLabel(spec, mac = false) {
     const b = parseKeybinding(spec)
     const names = { enter: mac ? '↩' : 'Enter', return: mac ? '↩' : 'Enter', escape: 'Esc', esc: 'Esc', space: 'Space', backspace: mac ? '⌫' : 'Backspace', delete: mac ? '⌦' : 'Delete', tab: mac ? '⇥' : 'Tab', arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→', up: '↑', down: '↓', left: '←', right: '→' }
+    // mod is Ctrl off a Mac, written first as Ctrl is ("Ctrl+Shift+A"); on a Mac it is ⌘, written last as Apple does ("⇧⌘A").
     const parts = []
-    if (b.ctrl) parts.push(mac ? '⌃' : 'Ctrl')
+    if (b.ctrl || (b.mod && ! mac)) parts.push(mac ? '⌃' : 'Ctrl')
     if (b.alt) parts.push(mac ? '⌥' : 'Alt')
     if (b.shift) parts.push(mac ? '⇧' : 'Shift')
     if (b.meta) parts.push(mac ? '⌘' : 'Win')
-    if (b.mod) parts.push(mac ? '⌘' : 'Ctrl')
+    if (b.mod && mac) parts.push('⌘')
     parts.push(names[b.key] ?? (b.key.length === 1 ? b.key.toUpperCase() : b.key.charAt(0).toUpperCase() + b.key.slice(1)))
 
     return parts.join(mac ? '' : '+')

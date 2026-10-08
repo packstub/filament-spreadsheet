@@ -587,6 +587,7 @@ test('shortcutLabel reads a binding the way a tooltip shows it, per platform', (
     assert.equal(S.shortcutLabel('ctrl+shift+d'), 'Ctrl+Shift+D')
     assert.equal(S.shortcutLabel('ctrl+shift+d', true), '⌃⇧D')
     assert.equal(S.shortcutLabel('mod+shift+a', true), '⇧⌘A')
+    assert.equal(S.shortcutLabel('mod+shift+a'), 'Ctrl+Shift+A')
     assert.equal(S.shortcutLabel('alt+f2'), 'Alt+F2')
     assert.equal(S.shortcutLabel('f2', true), 'F2')
 })

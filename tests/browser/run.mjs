@@ -552,7 +552,9 @@ try {
     check('the sheet is clean again', s.dirty.total === 0, JSON.stringify(s.dirty))
 
     // a save while a page request is in flight: the stale page is dropped, the page asked for again after the save
-    await cell(0, 'name').click()
+    // (row 1 by id: the grid may be scrolled and sorted by what came before, so the first row element is not row 1)
+    await scrollToRow(1, 'top')
+    await (await cellOf(1, 'name')).click()
     await page.keyboard.type('Zed2')
     await page.keyboard.press('Enter')
     await page.waitForTimeout(50)
@@ -564,13 +566,14 @@ try {
         sh.refresh()
         await new Promise((res) => setTimeout(res, 20))
         await sh.save()
-        const afterSave = { name: sh.rows[0].values.name, version: sh.rows[0].version, dirty: sh.dirty.total, loading: sh.loading }
+        const row = () => sh.rows.find((r) => r.id === '1')
+        const afterSave = { name: row().values.name, version: row().version, dirty: sh.dirty.total, loading: sh.loading }
         await new Promise((res) => setTimeout(res, 1000))
         window.__wire.spreadsheetRows = orig
-        return { afterSave, afterRefresh: { name: sh.rows[0].values.name, version: sh.rows[0].version, loading: sh.loading, text: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText, rowsCalls: window.__server.calls.rows.length - rowsCalls, server: window.__server.products.find((p) => p.id === '1').version } }
+        return { afterSave, afterRefresh: { name: row().values.name, version: row().version, loading: sh.loading, text: sh.grid.table.getRow('1').getCell('name').getElement().innerText, rowsCalls: window.__server.calls.rows.length - rowsCalls, server: window.__server.products.find((p) => p.id === '1').version } }
     })
     check('a save while a page request is in flight keeps the saved values and version', raceSave.afterSave.name === 'Zed2' && raceSave.afterSave.dirty === 0 && raceSave.afterRefresh.name === 'Zed2' && raceSave.afterRefresh.text === 'Zed2' && raceSave.afterRefresh.version === raceSave.afterRefresh.server && ! raceSave.afterRefresh.loading && raceSave.afterRefresh.rowsCalls === 2, JSON.stringify(raceSave))
-    await cell(0, 'price').click()
+    await (await cellOf(1, 'price')).click()
     await page.keyboard.type('9')
     await page.keyboard.press('Enter')
     await page.waitForTimeout(50)
