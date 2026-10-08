@@ -194,11 +194,12 @@ export function viewHtml() {
     return html
 }
 
-export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false, hidden = false, addRowKey = null } = {}) {
+export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false, hidden = false, addRowKey = null, lateCss = false } = {}) {
     // The server sends creatable/deletable false on a read-only sheet (Spreadsheet::canCreate()/isDeletable()).
     // autoHeight is what getSpreadsheetHeight() answers by default (null): the stylesheet's --ps-sheet-height applies.
     // hidden builds the sheet inside a display:none wrapper (#harness-wrap), as in a tab that is not the open one.
     // addRowKey rebinds the add-row shortcut (?addrow=mod+shift+a), which leaves Ctrl+Enter to nobody.
+    // lateCss adds the stylesheet 300 ms after the component started, as Filament's x-load-css does in a panel.
     const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height, keybindings: addRowKey ? { add_row: addRowKey } : config.keybindings }
     return `<!doctype html>
 <html lang="en"${rtl ? ' dir="rtl"' : ''} class="${dark ? 'dark' : ''}">
@@ -206,7 +207,7 @@ export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeig
 <meta charset="utf-8">
 <title>filament-spreadsheet harness</title>
 <style>${tokens}</style>
-<link rel="stylesheet" href="/resources/dist/spreadsheet.css">
+${lateCss ? '' : '<link rel="stylesheet" href="/resources/dist/spreadsheet.css">'}
 </head>
 <body>
 <h1 style="font-size:1.25rem;margin:0 0 .75rem">Products</h1>
@@ -224,6 +225,7 @@ window.Alpine = Alpine
 window.sheet = () => Alpine.$data(document.querySelector('.ps-sheet'))
 Alpine.start()
 window.__ready = true
+${lateCss ? "setTimeout(() => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/resources/dist/spreadsheet.css'; document.head.append(l) }, 300)" : ''}
 </script>
 </body>
 </html>`
@@ -237,7 +239,7 @@ export function serve(port = 0) {
         const url = new URL(req.url, 'http://localhost')
         if (url.pathname === '/' || url.pathname === '/index.html') {
             res.writeHead(200, { 'content-type': 'text/html' })
-            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight'), hidden: url.searchParams.has('hidden'), addRowKey: url.searchParams.get('addrow') }))
+            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight'), hidden: url.searchParams.has('hidden'), addRowKey: url.searchParams.get('addrow'), lateCss: url.searchParams.has('latecss') }))
 
             return
         }
@@ -253,5 +255,5 @@ export function serve(port = 0) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     writeFileSync(join(root, 'tests/browser/.harness.html'), pageHtml())
     const { port } = await serve(4177)
-    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight, ?hidden, ?addrow=<key>)`)
+    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight, ?hidden, ?addrow=<key>, ?latecss)`)
 }

@@ -1045,3 +1045,21 @@ export function matchesKey(event, binding) {
 }
 
 export const DEFAULT_KEYS = { save: 'mod+s', fill_down: 'mod+d', undo: 'mod+z', redo: 'mod+y', add_row: 'mod+enter', cut: 'mod+x' }
+
+/**
+ * A binding as a hint reads it: "mod+s" is "Ctrl+S", or "⌘S" on a Mac; "mod+enter" is "Ctrl+Enter" / "⌘↩";
+ * "ctrl+shift+d" is "Ctrl+Shift+D" / "⌃⇧D". The toolbar's tooltips are built from the configured bindings.
+ */
+export function shortcutLabel(spec, mac = false) {
+    const b = parseKeybinding(spec)
+    const names = { enter: mac ? '↩' : 'Enter', return: mac ? '↩' : 'Enter', escape: 'Esc', esc: 'Esc', space: 'Space', backspace: mac ? '⌫' : 'Backspace', delete: mac ? '⌦' : 'Delete', tab: mac ? '⇥' : 'Tab', arrowup: '↑', arrowdown: '↓', arrowleft: '←', arrowright: '→', up: '↑', down: '↓', left: '←', right: '→' }
+    const parts = []
+    if (b.ctrl) parts.push(mac ? '⌃' : 'Ctrl')
+    if (b.alt) parts.push(mac ? '⌥' : 'Alt')
+    if (b.shift) parts.push(mac ? '⇧' : 'Shift')
+    if (b.meta) parts.push(mac ? '⌘' : 'Win')
+    if (b.mod) parts.push(mac ? '⌘' : 'Ctrl')
+    parts.push(names[b.key] ?? (b.key.length === 1 ? b.key.toUpperCase() : b.key.charAt(0).toUpperCase() + b.key.slice(1)))
+
+    return parts.join(mac ? '' : '+')
+}

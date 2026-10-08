@@ -30,7 +30,8 @@
     --ps-sheet-locked: color-mix(in oklab, var(--gray-100) 55%, transparent);
     --ps-sheet-created-bg: color-mix(in oklab, var(--success-500) 8%, transparent);
     --ps-sheet-radius: 0.5rem;
-    --ps-sheet-height: calc(100dvh - var(--topbar-height, 4rem) - 11rem);
+    /* auto: measured by the sheet (the window below the grid's top edge, shrunk to the rows); a length fixes it */
+    --ps-sheet-height: auto;
     --ps-sheet-font: inherit;
 
     display: flex;
@@ -179,10 +180,18 @@
 .ps-sheet-count { font-size: 0.8125rem; color: var(--ps-sheet-muted); white-space: nowrap; }
 .ps-sheet-per-page { height: 2rem; }
 
+/* One line under the grid, always there (a live region must exist before its text changes): a passing hint, else the active cell's error or conflict. */
 .ps-sheet-hint {
+    min-height: 1.25rem;
     font-size: 0.8125rem;
     color: var(--ps-sheet-muted);
 }
+.ps-sheet-hint-error { color: var(--danger-700); }
+.dark .ps-sheet-hint-error { color: var(--danger-300); }
+.ps-sheet-hint-conflict { color: #7e22ce; }
+.dark .ps-sheet-hint-conflict { color: #d8b4fe; }
+button.ps-sheet-pill { cursor: pointer; border: 0; font: inherit; font-size: 0.75rem; font-weight: 600; }
+button.ps-sheet-pill:focus-visible { outline: 2px solid var(--primary-500, #6366f1); outline-offset: 1px; }
 
 /* ------------------------------------------------------------------ grid */
 
@@ -193,7 +202,7 @@
  */
 .ps-sheet-grid {
     height: var(--ps-sheet-height);
-    min-height: 16rem;
+    min-height: 8rem;
     border-radius: var(--ps-sheet-radius);
     overflow: hidden;
 }

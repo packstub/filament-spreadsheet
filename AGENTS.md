@@ -132,8 +132,18 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   would `innerHTML`. Data calls await `tableBuilt`.
 - Grid height and the row window: Tabulator is built on `.ps-sheet-grid` itself with `height: 'var(--ps-sheet-height)'`
   (never `'100%'`: the parent has no height, the grid would grow to its rows and nothing would be windowed; no
-  `height` on `.ps-sheet .tabulator` either, it is the same element). The variable is the stylesheet's default or
-  `config.height` (`getSpreadsheetHeight()`), bound on the root by the view. So **a row may have no element**: address
+  `height` on `.ps-sheet .tabulator` either, it is the same element). The stylesheet's default is `auto`, which
+  `spreadsheet.js` `fit()` replaces by a measured length written as the variable on the root: the window below
+  the grid's top edge less what follows the grid (`after()`: the following siblings at each level up to the body,
+  the ancestors' bottom padding, the body's margin; never the document's height, which a `min-height: 100vh` body
+  turns into a fixed point), the grid's own borders off, no more than the rows need (header + rows × the measured
+  row pitch, at least three rows), and when less than eight rows are left on the first screen (a sheet under a form)
+  the window below `--topbar-height` instead. It runs before the grid is built, in `sync()`, from the grid's `rows` callback
+  (Tabulator's `dataProcessed`: the first page is applied before `tableBuilt`, so at `sync()` the table still holds
+  no rows and the height would stay at the three-row floor), on `window` resize and from a `ResizeObserver` on the
+  root (disconnected in `destroy()`); a difference under 2 px is not written (a write
+  redraws the grid and the observer sees the root change). `config.height` (`getSpreadsheetHeight()`), bound on the
+  root by the view, or a length a theme sets on the variable (`_fixed`: read once the variable has a value; it reads `''` until `x-load-css` has brought the stylesheet, and the harness's `?latecss` covers that), turns the measuring off. So **a row may have no element**: address
   rows by id through the table (`getRow(id)`, which answers `false` for an unknown id), never by DOM position;
   `grid.scrollTo(id, position)` brings one into view (Tabulator's `scrollToRow` plus a few rounds of correction, its
   estimates stop short of the last row); `addRow()` scrolls to the new row; `grid.edit()` scrolls the active cell back
@@ -179,6 +189,15 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   its row out of the window. `cellFocus`, a `focusin` listener on the grid (removed in `destroy()`), hands the focus to
   the holder a tick later when a cell without an open editor still holds it.
   `updateRows()` and `scrollTo()` do nothing after `destroy()` (an editor that commits while the sheet is removed).
+- Status line and marks: `.ps-sheet-hint` is always rendered (a live region announces a change only when it existed
+  before it; `min-height` keeps the layout still) and shows `hint` (a flash) or `status` (the active cell's error,
+  conflict with both values through `plain()`, or row error; `updateStatus()` from the grid's `select` callback and
+  `sync()`). The errors pill is a button: `nextError()` walks the page's rows by `grid.ids()` × the visible columns,
+  picks the mark after the active cell (wrapping; `errors_elsewhere` when the page has none but the buffer does),
+  `scrollTo()`s, `select()`s and `refocus()`es. `paint()` sets `aria-invalid`; `redrawHeader()` sets `aria-sort`
+  (`none` on the others, as Tabulator writes it at build) and runs once after `tableBuilt`. Tooltips come from
+  `keyLabel(name)` → `S.shortcutLabel(spec, mac)` over the merged bindings; `mac` is read from
+  `navigator.userAgentData.platform` (`"macOS"`, so the test is case-insensitive) or `navigator.platform`.
 - Editor keys (`grid.js`): `editorKeys` is a **capture-phase** `keydown` listener on the grid element (removed in
   `destroy()`), a no-op unless an editor is open. PageUp / PageDown / Home / End stop there: Tabulator's bindings page
   or jump the grid (`scrollPageUp`, `scrollToStart`, …), macOS scrolls the holder on Home / End, and a row leaving the

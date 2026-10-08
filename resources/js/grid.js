@@ -102,6 +102,9 @@ function paint(cell, column, t) {
     else if (hasConflict) title = `${t.conflict}\n${t.your_value}: ${display(column, cell.getValue())}\n${t.their_value}: ${display(column, conflict)}`
     if (title) el.setAttribute('title', title)
     else el.removeAttribute('title')
+    // A refused cell says so to assistive tech as well as by its colour (the message is in the title and the status line).
+    if (error) el.setAttribute('aria-invalid', 'true')
+    else el.removeAttribute('aria-invalid')
 }
 
 function baseFormatter(column, locale) {
@@ -203,6 +206,7 @@ function editorFor(column) {
  *   on.sort(col)                        header clicked
  *   on.paste(text)                      text pasted into the grid
  *   on.select(count, ids)               rows in the active range, and their ids
+ *   on.rows(count)                      the table's rows changed (a page applied, rows added or removed)
  *   on.editing(open)                    an editor opened or closed
  *
  * Delete/Backspace and Ctrl+X are the component's (clear() through its own
@@ -423,6 +427,8 @@ export function createGrid(element, options) {
     table.on('rangeAdded', selectionChanged)
     table.on('rangeChanged', selectionChanged)
     table.on('rangeRemoved', selectionChanged)
+    // The rows the table holds changed (a page set, rows added or removed), also when it was asked before tableBuilt.
+    table.on('dataProcessed', () => on.rows?.(table.getRows().length))
 
     // Ctrl+ArrowDown / Ctrl+ArrowUp (with Shift too) jump to the end of the column: Tabulator scrolls there
     // from estimated row heights and can leave the cell it jumped to outside the window. Once it has
@@ -834,7 +840,10 @@ export function createGrid(element, options) {
                 const column = columns.find((c) => c.name === col.getField())
                 const el = col.getElement()?.querySelector('.ps-sheet-title')
                 if (! column || ! el) continue
-                el.textContent = column.label + (s.column === column.name ? (s.direction === 'desc' ? ' ▼' : ' ▲') : '')
+                const sorted = s.column === column.name
+                el.textContent = column.label + (sorted ? (s.direction === 'desc' ? ' ▼' : ' ▲') : '')
+                // Tabulator writes aria-sort="none" on every header itself (its Sort module, not registered, would keep it).
+                col.getElement().setAttribute('aria-sort', sorted ? (s.direction === 'desc' ? 'descending' : 'ascending') : 'none')
             }
         },
 
@@ -851,6 +860,9 @@ export function createGrid(element, options) {
             table.destroy()
         },
     }
+
+    // The default sort's arrow is drawn by the title formatter at creation; its aria-sort needs the header elements.
+    ready.then(() => { if (! destroyed) api.redrawHeader() })
 
     return api
 }

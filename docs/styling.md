@@ -10,7 +10,7 @@ Restyle it by overriding the `--ps-sheet-*` variables on `.ps-sheet` in your the
 
 ```css
 .ps-sheet {
-    --ps-sheet-height: calc(100dvh - var(--topbar-height, 4rem) - 11rem);   /* the grid's height; null from getSpreadsheetHeight() uses this */
+    --ps-sheet-height: auto;                    /* the grid's height: auto is measured by the sheet, a length fixes it */
     --ps-sheet-dirty: var(--warning-500);       /* the amber corner */
     --ps-sheet-dirty-bg: ...;
     --ps-sheet-error: var(--danger-500);
@@ -25,7 +25,7 @@ Restyle it by overriding the `--ps-sheet-*` variables on `.ps-sheet` in your the
 }
 ```
 
-The dark palette is set under `.dark .ps-sheet`. The grid's height is the window's height minus the top bar and the toolbar by default; `getSpreadsheetHeight()` on the page returns another CSS height (`'32rem'`, `'calc(100dvh - 20rem)'`), which the sheet sets as `--ps-sheet-height` on its root, or set the variable in your theme. The grid scrolls inside that height (never less than `16rem`) and renders only the rows around the visible window, so give it a real height: a percentage of a parent without one would not be a height at all.
+The dark palette is set under `.dark .ps-sheet`. The grid's height is measured by default: the window below the grid's top edge, less what follows the grid on the page (the line under it, the page's padding, anything after the sheet), so the page does not scroll for the sheet alone; a page with fewer rows than that fits shrinks the grid to its rows (at least three), and the height follows the window, the toolbar wrapping to a second line, and the rows as they are added. A sheet far down a long page (under a form) takes the window below the top bar instead of what is left of the first screen, and the page scrolls to it. To fix the height, `getSpreadsheetHeight()` on the page returns a CSS length (`'32rem'`, `'calc(100dvh - 20rem)'`), which the sheet sets as `--ps-sheet-height` on its root, or set the variable to a length in your theme; `auto` means measured. The grid scrolls inside its height and renders only the rows around the visible window, so a fixed height must be a real one: a percentage of a parent without a height would not be a height at all.
 
 ## Classes to hook
 

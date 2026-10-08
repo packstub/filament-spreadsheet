@@ -26,7 +26,7 @@
 | Ctrl + Enter | Add a row (when the sheet is creatable); the selection moves to its first editable cell. In an open editor it commits the cell first |
 | Right-click a row | The row menu (delete / keep) |
 
-`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`). Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, what you type goes into the new row (the selection is on its first editable cell, scrolled into view), and Ctrl+Z takes the row away. A click into the search box or a filter while you are typing in a cell keeps what you typed as a change and puts the caret where you clicked.
+`mod` is Ctrl on Windows and Linux, ⌘ on macOS. The shortcuts for save, fill-down, undo, redo, add-row and cut can be changed in the config (`keybindings`); the toolbar's tooltips show each one as it is bound, with ⌘ on a Mac. Ctrl+S works anywhere in the sheet, and with an editor still open it takes what you typed first (Save does the same on a click), so the cell you are in is part of the save; every other shortcut applies while the grid has the focus, so in the search box or a filter Ctrl+Z undoes your typing, not the sheet. A toolbar button hands the keyboard back to the grid: after a click on Undo, Ctrl+Y redoes; after Add row, what you type goes into the new row (the selection is on its first editable cell, scrolled into view), and Ctrl+Z takes the row away. A click into the search box or a filter while you are typing in a cell keeps what you typed as a change and puts the caret where you clicked.
 
 ## Keys inside an open editor
 
@@ -53,7 +53,7 @@ A select opened with Enter, F2 or a double-click lists every option, with the cu
 
 Copy a block in your spreadsheet, select the top-left cell in the sheet, Ctrl+V. The block lands there, column by column, each cell read by the column's type ([Columns](columns.md)): `1 234,50` becomes 1234.5 in a number column, `Paint` the option with that label in a select, `yes` a tick, `28/02/2026` a date when the column shows `d/m/Y`. Quoted cells (a newline inside a cell) are read the way Excel writes them.
 
-- A cell that cannot be read (`abc` in a number) is pasted as it is and painted red at once, with the reason on hover, in a new row too; the server would refuse it too. Fix it or undo.
+- A cell that cannot be read (`abc` in a number) is pasted as it is and painted red at once, with the reason on hover and, when it is the active cell, in the line under the grid, in a new row too; the server would refuse it too. Fix it or undo.
 - A cell that cannot be edited (a read-only column, a locked cell, a row you may not update) is skipped; the toolbar says how many were.
 - Columns past the last one are ignored; rows past the last one become **new rows** when the sheet is `creatable()`, starting from the columns' defaults. New rows stop at the config's `max_rows_per_save` (2,000 by default, counting the changed and deleted rows too), and the toolbar says how many lines were left out: save, then paste the rest.
 - One copied cell pasted over a selection fills the whole selection, as in Excel.
@@ -65,7 +65,7 @@ Select a range whose first row holds the values you want, press Ctrl+D: every co
 
 ## What a changed cell looks like
 
-A changed cell keeps an amber corner until it is saved (or undone, or changed back to what the server sent, which is not a change at all). The toolbar counts them, and the pages they sit on: sorting, searching, filtering or paging never loses them. A red cell is one the column or the server refused, with the message on hover; a purple one changed on the server while you were editing ([Saving](saving.md#conflicts)).
+A changed cell keeps an amber corner until it is saved (or undone, or changed back to what the server sent, which is not a change at all). The toolbar counts them, and the pages they sit on: sorting, searching, filtering or paging never loses them. A red cell is one the column or the server refused, a purple one changed on the server while you were editing ([Saving](saving.md#conflicts)); the message is on hover and, for the active cell, in the line under the grid (their value next to yours for a conflict), so it is readable from the keyboard and on a touch screen. The toolbar's "4 cells need attention" is a button: each press moves the active cell to the next marked cell of the page, wrapping around; when the marked cells are on other pages it says so. A refused cell carries `aria-invalid`, the sorted header `aria-sort`, and the line under the grid is a live region, so a screen reader hears the save and paste messages and the active cell's error.
 
 ## While a save is in flight
 

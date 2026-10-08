@@ -70,4 +70,6 @@ return [
     'too_many_cells' => 'Acest rând conține mai multe celule decât are foaia coloane.',
     'too_many_rows' => 'Prea multe rânduri într-o salvare (cel mult :max). Salvează în loturi mai mici.',
     'error_count' => '{1} :count celulă necesită atenție|[2,*] :count celule necesită atenție',
+    'next_error' => 'Mergi la următoarea celulă marcată',
+    'errors_elsewhere' => 'Celulele marcate sunt pe alte pagini.',
 ];
