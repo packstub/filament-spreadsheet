@@ -28,9 +28,7 @@ return [
     'row_menu' => 'Row actions',
     'delete_row' => 'Delete row',
     'restore_row' => 'Keep row',
-    'select_all' => 'Select all rows',
     'open_sheet' => 'Edit as sheet',
-    'shortcuts' => 'Enter or F2 edits, Tab and Enter move, Ctrl+C/V copy and paste, Ctrl+D fills down, Ctrl+Z undoes, Ctrl+S saves',
 
     // Prompts
     'confirm_discard' => 'Discard all unsaved changes?',

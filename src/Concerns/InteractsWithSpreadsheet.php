@@ -140,7 +140,6 @@ trait InteractsWithSpreadsheet
         }
 
         return [
-            'key' => 'spreadsheet:'.($sheet->getKey() ?? static::class).':'.(auth()->id() ?? 'guest'),
             'columns' => array_map(fn ($column) => $column->toArray(), $sheet->getColumns()),
             'filters' => array_map(fn ($filter) => $filter->toArray(), $sheet->getFilters()),
             'perPage' => $sheet->getPerPage(),
@@ -150,8 +149,6 @@ trait InteractsWithSpreadsheet
             'creatable' => $sheet->canCreate(),
             'deletable' => $sheet->isDeletable(),
             'readOnly' => $sheet->isReadOnly(),
-            'saveMode' => $sheet->getSaveMode()->value,
-            'versioned' => $sheet->getVersionColumn() !== null,
             'maxRowsPerSave' => $sheet->getMaxRowsPerSave(),
             'confirmLeave' => (bool) config('packstub-spreadsheet.confirm_leave', true),
             'frozenFirstColumn' => (bool) config('packstub-spreadsheet.frozen_first_column', true),

@@ -32,6 +32,40 @@ it('reads numbers the way a paste from any locale writes them', function () {
         ->and(NumberColumn::parse('0x1A'))->toBeNull();
 });
 
+it('reads a lone separator by the decimal mark: the config\'s, else the locale\'s', function () {
+    expect(NumberColumn::parse('0,125', ','))->toBe(0.125)
+        ->and(NumberColumn::parse('1,234', ','))->toBe(1.234)
+        ->and(NumberColumn::parse('1.234', ','))->toBe(1234)
+        ->and(NumberColumn::parse('1.5', ','))->toBe(1.5)
+        ->and(NumberColumn::parse('1.234.567', ','))->toBe(1234567)
+        ->and(NumberColumn::parse('12.', ','))->toBe(12)
+        ->and(NumberColumn::parse('1.234,5', ','))->toBe(1234.5)
+        ->and(NumberColumn::parse('1,234.5', ','))->toBe(1234.5)
+        ->and(NumberColumn::parse('1,2,3', ','))->toBeNull()
+        ->and(NumberColumn::parse('0,125', '.'))->toBe(125)
+        ->and(NumberColumn::parse('1.234', '.'))->toBe(1.234);
+
+    $price = NumberColumn::make('price');
+
+    expect(NumberColumn::decimalSeparator())->toBe('.')
+        ->and($price->coerce('0,125'))->toBe(125)
+        ->and($price->toArray()['decimal'])->toBe('.');
+
+    app()->setLocale('de');
+    expect(NumberColumn::decimalSeparator())->toBe(',')
+        ->and($price->coerce('0,125'))->toBe(0.125)
+        ->and($price->toArray()['decimal'])->toBe(',');
+
+    config()->set('packstub-spreadsheet.decimal_separator', '.');
+    expect(NumberColumn::decimalSeparator())->toBe('.')
+        ->and($price->coerce('0,125'))->toBe(125);
+
+    app()->setLocale('en');
+    config()->set('packstub-spreadsheet.decimal_separator', ',');
+    expect($price->coerce('0,125'))->toBe(0.125)
+        ->and($price->toArray()['decimal'])->toBe(',');
+});
+
 it('rounds to the column\'s decimals and refuses fractions on an integer column', function () {
     $price = NumberColumn::make('price')->decimals(2);
     $stock = NumberColumn::make('stock')->integer();

@@ -48,6 +48,18 @@ test('parseNumber reads every locale the way the server does', () => {
     assert.ok(Number.isNaN(S.parseNumber('abc')))
     assert.ok(Number.isNaN(S.parseNumber('1.2.3')))
     assert.ok(Number.isNaN(S.parseNumber('0x1A')))
+
+    // A comma locale: the comma is always the decimal mark, a lone dot with three-digit groups separates thousands.
+    assert.equal(S.parseNumber('0,125', ','), 0.125)
+    assert.equal(S.parseNumber('1,234', ','), 1.234)
+    assert.equal(S.parseNumber('1.234', ','), 1234)
+    assert.equal(S.parseNumber('1.5', ','), 1.5)
+    assert.equal(S.parseNumber('1.234.567', ','), 1234567)
+    assert.equal(S.parseNumber('1.234,5', ','), 1234.5)
+    assert.ok(Number.isNaN(S.parseNumber('1,2,3', ',')))
+    assert.equal(S.parseNumber('0,125', '.'), 125)
+    assert.equal(S.coerce({ type: 'number', decimal: ',' }, '0,125').value, 0.125)
+    assert.equal(S.coerce({ type: 'number' }, '0,125').value, 125)
     assert.equal(S.parseNumber(7), 7)
 })
 

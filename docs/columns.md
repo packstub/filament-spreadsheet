@@ -14,6 +14,8 @@ TextColumn::make('name')
     ->readOnly()                             // never editable
     ->readOnly(fn (Product $p) => $p->is_locked) // not for some records: the cell is greyed and refused
     ->rules(['required', 'max:120'])         // Laravel rules (a list, "required|max:120", or fn (?Product $record): array)
+    ->validationMessages(['required' => 'Every product needs a name.']) // per rule, as a Filament field (or a closure)
+    ->validationAttribute('product name')    // what the default messages call it; default: the label
     ->default('Untitled')                    // the value a new row starts with (a value or a closure)
     ->hidden(fn () => ! auth()->user()->isAdmin()) // left out of the sheet, never written
     ->sortable(false)                        // no sorting from the header (a computed column never sorts)
@@ -41,7 +43,7 @@ NumberColumn::make('price')->decimals(2)->min(0)->max(9999)
 NumberColumn::make('stock')->integer()->min(0)
 ```
 
-Numbers on the wire (a `decimal:2` cast's `"12.50"` becomes `12.5`). `decimals()` rounds what is saved and formats what is shown, half away from zero on the number as it is written (`1.005` is 1.01, `-2.675` is -2.68), the same in the browser and on the server; `integer()` refuses fractions and whole numbers past 9,007,199,254,740,991 (the largest a browser holds exactly). `min()` and `max()` add rules. What a paste brings is read the same way on both sides: with both separators present the last one is the decimal mark (`1,234.50` and `1.234,50` are both 1234.5), a lone comma followed by one or two digits is a decimal mark (`0,5`), otherwise it groups thousands (`1,234`); spaces, thin spaces and apostrophes are ignored.
+Numbers on the wire (a `decimal:2` cast's `"12.50"` becomes `12.5`). `decimals()` rounds what is saved and formats what is shown, half away from zero on the number as it is written (`1.005` is 1.01, `-2.675` is -2.68), the same in the browser and on the server; `integer()` refuses fractions and whole numbers past 9,007,199,254,740,991 (the largest a browser holds exactly). `min()` and `max()` add rules. What a paste brings is read the same way on both sides: with both separators present the last one is the decimal mark (`1,234.50` and `1.234,50` are both 1234.5), a lone separator is read by the panel's decimal mark (`app()->getLocale()`, or the config's `decimal_separator`): the mark itself is always decimal (`0,125` is 0.125 for a German panel, 125 for an English one), the other one is decimal with one or two digits after it (`0.5`) and groups thousands otherwise (`1.234`); spaces, thin spaces and apostrophes are ignored.
 
 ## `BooleanColumn`
 
@@ -107,4 +109,4 @@ A formula is evaluated by a small interpreter on each side, never as PHP or Java
 
 ## Writing your own type
 
-Extend `Column` (or one of the types) and override `getType()`, `presentValue()`, `coerce()` and `typeRules()`; the grid draws an unknown type as text. Anything the browser must know goes into `toArray()`.
+Extend `Column` (or one of the types) and override `getType()`, `presentValue()`, `coerce()` and `typeRules()`; the grid draws an unknown type as text. Anything the browser must know goes into `toArray()`. `coerce()` turns what the browser sent into the attribute's value and throws `Packstub\Spreadsheet\Exceptions\InvalidValue` with the message for the cell when it cannot (`$this->invalid('not_a_number')` builds one from a translation key); a `SaveRejected` from there would refuse the whole save instead.

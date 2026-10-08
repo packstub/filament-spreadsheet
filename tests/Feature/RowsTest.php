@@ -196,15 +196,12 @@ it('hands the browser everything it needs in the config, the first page of rows 
         'creatable' => true,
         'deletable' => true,
         'readOnly' => false,
-        'saveMode' => 'all_or_nothing',
-        'versioned' => true,
         'confirmLeave' => true,
         'frozenFirstColumn' => true,
         'rowHeight' => 32,
         'locale' => 'en',
         'height' => null,
     ])
-        ->and($config['key'])->toBe('spreadsheet:'.ProductSheet::class.':guest')
         ->and($config['state']['rows'][0]['values']['sku'])->toBe('A-1')
         ->and(array_column($config['filters'], 'type'))->toBe(['select', 'select', 'dateRange'])
         ->and($config['filters'][1]['options'])->toBe([['value' => '1', 'label' => 'Yes'], ['value' => '0', 'label' => 'No']])

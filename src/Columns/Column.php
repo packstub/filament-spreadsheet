@@ -38,6 +38,11 @@ abstract class Column
 
     protected ?string $placeholder = null;
 
+    /** @var array<string, string>|Closure */
+    protected array|Closure $validationMessages = [];
+
+    protected string|Closure|null $validationAttribute = null;
+
     final public function __construct(protected string $name) {}
 
     public static function make(string $name): static
@@ -103,6 +108,27 @@ abstract class Column
     public function rules(array|string|Closure $rules): static
     {
         $this->rules = $rules;
+
+        return $this;
+    }
+
+    /**
+     * Messages per rule for this column, as a Filament field's: `['required' => 'Every product needs a SKU.']`,
+     * or `fn (?Model $record): array`.
+     *
+     * @param  array<string, string>|Closure  $messages
+     */
+    public function validationMessages(array|Closure $messages): static
+    {
+        $this->validationMessages = $messages;
+
+        return $this;
+    }
+
+    /** The name the default messages call the column (`"The product code field is required."`); the label by default. */
+    public function validationAttribute(string|Closure|null $attribute): static
+    {
+        $this->validationAttribute = $attribute;
 
         return $this;
     }
@@ -261,6 +287,26 @@ abstract class Column
         }
 
         return [...$rules, 'nullable', ...$this->typeRules()];
+    }
+
+    /**
+     * The messages of validationMessages(), keyed by rule.
+     *
+     * @return array<string, string>
+     */
+    public function getValidationMessages(?Model $record): array
+    {
+        $messages = $this->validationMessages instanceof Closure ? ($this->validationMessages)($record) : $this->validationMessages;
+
+        return array_filter((array) $messages, fn ($m, $k) => is_string($m) && is_string($k), ARRAY_FILTER_USE_BOTH);
+    }
+
+    /** What the validator calls the column: validationAttribute(), else the label. */
+    public function getValidationAttribute(): string
+    {
+        $attribute = $this->validationAttribute instanceof Closure ? ($this->validationAttribute)() : $this->validationAttribute;
+
+        return $attribute ?? $this->getLabel();
     }
 
     /**

@@ -28,9 +28,7 @@ return [
     'row_menu' => 'Acțiuni pe rând',
     'delete_row' => 'Șterge rândul',
     'restore_row' => 'Păstrează rândul',
-    'select_all' => 'Selectează toate rândurile',
     'open_sheet' => 'Editează ca foaie de calcul',
-    'shortcuts' => 'Enter sau F2 editează, Tab și Enter mută, Ctrl+C/V copiază și lipește, Ctrl+D umple în jos, Ctrl+Z anulează, Ctrl+S salvează',
 
     // Prompts
     'confirm_discard' => 'Renunți la toate modificările nesalvate?',
