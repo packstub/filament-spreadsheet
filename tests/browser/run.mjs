@@ -608,6 +608,7 @@ try {
     await page.keyboard.type('Held')
     await page.keyboard.press('Enter')
     await page.waitForTimeout(50)
+    const priceBefore = await page.evaluate(() => document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="price"]').innerText)
     const delaySave = () => page.evaluate(() => {
         window.__wire.__origSave ??= window.__wire.spreadsheetSave
         const orig = window.__wire.__origSave
@@ -640,14 +641,14 @@ try {
 
         return { focusInGrid, saving: sh.saving, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-saving'), editing: sh.grid.isEditing(), dirty: { ...sh.dirty }, changes1: Object.keys(sh.buffer.changes['1'] ?? {}), changes2: sh.buffer.changes['2'] ?? null, created: sh.buffer.createdOrder.length, undoDisabled: document.querySelector('.ps-sheet-seg-btn[aria-label="Undo"]').disabled, priceText: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="price"]').innerText }
     })
-    check('while a save is in flight typing, F2, Delete, Ctrl+Enter, Ctrl+D, Ctrl+Z, a paste, Add row, a deletion and an edit change nothing, and the sheet says so', during.focusInGrid && during.saving && during.cue && ! during.editing && during.dirty.total === 1 && during.dirty.cells === 1 && during.changes1.join() === 'name' && during.changes2 === null && during.created === 0 && during.undoDisabled && during.priceText === '42.00', JSON.stringify(during))
+    check('while a save is in flight typing, F2, Delete, Ctrl+Enter, Ctrl+D, Ctrl+Z, a paste, Add row, a deletion and an edit change nothing, and the sheet says so', during.focusInGrid && during.saving && during.cue && ! during.editing && during.dirty.total === 1 && during.dirty.cells === 1 && during.changes1.join() === 'name' && during.changes2 === null && during.created === 0 && during.undoDisabled && during.priceText === priceBefore, JSON.stringify({ ...during, priceBefore }))
     const afterHeld = await awaitSave(() => {
         const sh = window.sheet()
         const server = window.__server.products.find((p) => p.id === '1')
 
         return { saving: sh.saving, cue: document.querySelector('.ps-sheet').classList.contains('ps-sheet-is-saving'), dirty: sh.dirty.total, changes1: sh.buffer.changes['1'] ?? null, undo: sh.buffer.undo.length, canUndo: sh.canUndo, serverName: server.name, serverPrice: server.price, nameText: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText, priceText: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="price"]').innerText, version: sh.rows[0].version === server.version }
     })
-    check('the answer lands cleanly: the held cell is saved, nothing from meanwhile is in the buffer or on the grid', ! afterHeld.saving && ! afterHeld.cue && afterHeld.dirty === 0 && afterHeld.changes1 === null && afterHeld.undo === 0 && ! afterHeld.canUndo && afterHeld.serverName === 'Held' && afterHeld.serverPrice === 42 && afterHeld.nameText === 'Held' && afterHeld.priceText === '42.00' && afterHeld.version, JSON.stringify(afterHeld))
+    check('the answer lands cleanly: the held cell is saved, nothing from meanwhile is in the buffer or on the grid', ! afterHeld.saving && ! afterHeld.cue && afterHeld.dirty === 0 && afterHeld.changes1 === null && afterHeld.undo === 0 && ! afterHeld.canUndo && afterHeld.serverName === 'Held' && String(afterHeld.serverPrice) === String(parseFloat(priceBefore)) && afterHeld.nameText === 'Held' && afterHeld.priceText === priceBefore && afterHeld.version, JSON.stringify({ ...afterHeld, priceBefore }))
     await cell(0, 'price').click()
     await page.keyboard.type('5')
     await page.keyboard.press('Enter')
