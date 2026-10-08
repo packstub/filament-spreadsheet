@@ -451,8 +451,10 @@ export function evaluateFormula(tree, get) {
 /**
  * The row's values with every formula column computed from the others (a formula
  * column read by another is computed first). What the server's presentRow() does.
+ * A cell that could not be read (`errors` has it: a pasted "abc" in a number) is
+ * empty to a formula, as it would be to the server, never its raw text.
  */
-export function computeRow(columns, values) {
+export function computeRow(columns, values, errors = {}) {
     const formulas = {}
     for (const c of columns) if (c.type === 'computed' && Array.isArray(c.formula)) formulas[c.name] = c
     const names = Object.keys(formulas)
@@ -461,6 +463,7 @@ export function computeRow(columns, values) {
     const out = { ...values }
     const done = {}
     const get = (name) => {
+        if (errors[name] && ! formulas[name]) return null
         if (formulas[name] && ! done[name]) {
             done[name] = true
             let v = evaluateFormula(formulas[name].formula, get)

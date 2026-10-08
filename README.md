@@ -36,6 +36,8 @@ Filament's editable table columns (`TextInputColumn`, `SelectColumn`, `ToggleCol
 | --- | --- | --- | --- |
 | 1.x | 4.13+, 5.x | 12.x, 13.x | 8.3+ |
 
+1.x is built for a desktop browser: keyboard, pointer and clipboard. On a touch screen a sheet can be read, searched, filtered and paged; editing cells by touch is planned.
+
 ## Installation
 
 ```bash
@@ -85,7 +87,7 @@ Read more: [Installation](https://packstub.dev/docs/filament-spreadsheet/install
 
 ## Columns
 
-<!-- TODO screenshot: a products sheet with every column type, one cell being edited -->
+![A products sheet: text, select, number, computed, boolean and date columns](docs/images/sheet.png)
 
 A column names an attribute and says how to read and write it. Every write is coerced by its column, validated with its rules and the type's, and refused on the cell when it cannot be read:
 
@@ -98,14 +100,17 @@ SelectColumn::make('status')->options(Status::class),
 SelectColumn::make('category_id')->relationship('category', 'name', fn (Builder $query) => $query->where('active', true)),
 DateColumn::make('available_on')->format('d/m/Y'),
 DateTimeColumn::make('published_at'),
-ComputedColumn::make('margin')->state(fn (Product $product) => $product->price - $product->cost),
+ComputedColumn::make('margin')->formula('price - cost')->decimals(2),   // recomputed in the browser as you type
+ComputedColumn::make('orders')->state(fn (Product $product) => $product->orders_count),
 ```
+
+A `formula()` is a small expression over the sheet's own columns (`if(stock < 5, 'Reorder', 'OK')`, `round(price * 1.2, 2)`, `coalesce(cost, 0)`): the server computes it for every row and the browser again over the unsaved cells, so the value follows an edit, an undo and a paste before Save.
 
 Read more: [Columns](https://packstub.dev/docs/filament-spreadsheet/columns).
 
 ## Editing
 
-<!-- TODO screenshot: a pasted block with dirty corners, one red cell with its message -->
+![After a save with two refused cells, red, the active cell's message under the grid](docs/images/errors.png)
 
 Click a cell to select it, type to replace it, double-click, Enter or F2 to edit it in place. Enter moves down, Tab moves right, Escape cancels. Shift+arrows select a range; Ctrl+C copies it as tab-separated text (labels for selects, ISO dates), Ctrl+X cuts it, Ctrl+V pastes whatever is on the clipboard, Delete clears it (the cells you may edit), Ctrl+D fills the first row down, and the small handle at the corner of the selection drags to fill. Ctrl+Z and Ctrl+Y walk the history, across pages. Changed cells get an amber corner; a cell the column cannot read ("abc" in a number) is red at once, before you even save.
 
@@ -154,7 +159,7 @@ Read more: [Search, sort, filters, pagination](https://packstub.dev/docs/filamen
 
 `config/packstub-spreadsheet.php` holds the defaults: rows per page and the maximum, the most rows one Save may carry, the save mode, the version column, whether leaving with unsaved changes asks first, the frozen first column, the row height, the keyboard shortcuts and the date formats.
 
-<!-- TODO screenshot: the sheet in dark mode -->
+![The sheet in dark mode](docs/images/dark.png)
 
 The stylesheet maps Tabulator's surfaces to Filament's colour variables, follows dark mode and reads right-to-left with the panel. Restyle it with the `--ps-sheet-*` variables on `.ps-sheet`.
 

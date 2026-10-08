@@ -107,6 +107,17 @@
 
     <div class="ps-sheet-grid" x-ref="grid" x-on:contextmenu.prevent="openMenu($event)"></div>
 
+    {{-- Discard and Delete rows ask here (showModal: focus kept inside, Escape cancels); a click on the backdrop cancels too --}}
+    <dialog class="ps-sheet-dialog" x-ref="dialog" x-on:close="dialogClosed()" x-on:click="if ($event.target === $refs.dialog) $refs.dialog.close('cancel')" :aria-label="dialog ? dialog.text : ''">
+        <form method="dialog" class="ps-sheet-dialog-box">
+            <p class="ps-sheet-dialog-text" x-text="dialog ? dialog.text : ''"></p>
+            <div class="ps-sheet-dialog-actions">
+                <button type="submit" value="cancel" class="ps-sheet-btn" x-text="t.cancel"></button>
+                <button type="submit" value="ok" class="ps-sheet-btn" :class="dialog && dialog.danger ? 'ps-sheet-btn-danger' : 'ps-sheet-btn-primary'" x-ref="dialogOk" x-text="dialog ? dialog.confirm : ''"></button>
+            </div>
+        </form>
+    </dialog>
+
     {{-- always rendered: a live region announces a change only when it existed before it --}}
     <div class="ps-sheet-hint" role="status" aria-live="polite" :class="hint ? '' : (status && 'ps-sheet-hint-' + status.kind)" x-text="hint ?? (status ? status.text : '')"></div>
 

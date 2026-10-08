@@ -1,6 +1,6 @@
 # Editing
 
-<!-- TODO screenshot: a range selected, the fill handle at its corner, dirty corners on a few cells -->
+![Two prices typed in: amber corners on the changed cells, Save enabled with the count](images/edits.png)
 
 ## Keyboard
 

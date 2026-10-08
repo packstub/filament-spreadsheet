@@ -5,6 +5,7 @@
 - PHP 8.3 or newer
 - Laravel 12 or 13
 - Filament 4.13 or newer, or Filament 5
+- A desktop browser for editing (keyboard, pointer, clipboard); on a touch screen 1.x reads, searches, filters and pages a sheet, editing by touch is planned
 
 ## 1. Require the package
 

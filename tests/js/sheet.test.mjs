@@ -569,6 +569,8 @@ test('computeRow fills every formula column from the row, a formula read by anot
     assert.deepEqual(S.computeRow(cols, values), { price: 12.5, stock: 4, share: 16.67, value: 50, margin: 7 })
     assert.deepEqual(values.value, 99, 'the row passed in is left alone')
     assert.deepEqual(S.computeRow(cols, { price: 'abc', stock: 4 }), { price: 'abc', stock: 4, share: null, value: null })
+    // a cell that failed coercion is empty to a formula: `if(price > 0, …)` must not see 'abc' as text greater than 0
+    assert.deepEqual(S.computeRow(cols, { price: 'abc', stock: 4 }, { price: 'Not a number.' }), { price: 'abc', stock: 4, share: null, value: null })
     assert.equal(S.computeRow([{ name: 'price', type: 'number' }], values), values, 'no formula, the same object')
 })
 

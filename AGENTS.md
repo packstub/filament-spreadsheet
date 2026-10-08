@@ -130,6 +130,9 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   by `applyPaste()`. `removeRows()` of many ids runs under `blockRedraw()`. Anything Tabulator renders from data goes in
   as an element with `textContent` (select option labels via `itemFormatter`, the placeholder), never as a string it
   would `innerHTML`. Data calls await `tableBuilt`.
+- Columns are never virtualised (`renderHorizontal: 'basic'`): Tabulator's horizontal virtual renderer intermittently
+  left the right-hand cells of every row blank (the header intact), once collapsing the grid to its first column; a
+  sheet has a dozen columns, the rows are the windowed axis.
 - Grid height and the row window: Tabulator is built on `.ps-sheet-grid` itself with `height: 'var(--ps-sheet-height)'`
   (never `'100%'`: the parent has no height, the grid would grow to its rows and nothing would be windowed; no
   `height` on `.ps-sheet .tabulator` either, it is the same element). The stylesheet's default is `auto`, which

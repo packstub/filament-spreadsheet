@@ -1,6 +1,6 @@
 # Styling
 
-<!-- TODO screenshot: the sheet in dark mode -->
+![The sheet in dark mode](images/dark.png)
 
 The stylesheet bundles Tabulator's base CSS and lays Filament's colour variables (`--gray-*`, `--primary-*`, `--danger-*`, `--warning-*`, `--success-*`) over every coloured surface, so the sheet follows your panel's theme and dark mode without compiling the plugin's views. The toolbar uses logical properties: it reads right-to-left with the panel.
 

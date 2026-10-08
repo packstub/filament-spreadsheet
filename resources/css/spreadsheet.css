@@ -193,6 +193,25 @@
 button.ps-sheet-pill { cursor: pointer; border: 0; font: inherit; font-size: 0.75rem; font-weight: 600; }
 button.ps-sheet-pill:focus-visible { outline: 2px solid var(--primary-500, #6366f1); outline-offset: 1px; }
 
+/* ------------------------------------------------------------------ dialog */
+
+.ps-sheet-dialog { border: 0; padding: 0; background: transparent; color: var(--ps-sheet-text); }
+.ps-sheet-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.ps-sheet-dialog-box {
+    min-width: 20rem;
+    max-width: 28rem;
+    padding: 1.25rem;
+    border: 1px solid var(--ps-sheet-border);
+    border-radius: 0.75rem;
+    background: var(--ps-sheet-bg);
+    box-shadow: 0 20px 50px rgb(0 0 0 / 0.2);
+    font-family: var(--ps-sheet-font);
+}
+.ps-sheet-dialog-text { margin: 0 0 1rem; font-size: 0.9375rem; line-height: 1.5; }
+.ps-sheet-dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.ps-sheet-dialog .ps-sheet-btn-danger { background: var(--danger-600); border-color: var(--danger-600); color: #fff; }
+.ps-sheet-dialog .ps-sheet-btn-danger:hover { background: var(--danger-500); color: #fff; }
+
 /* ------------------------------------------------------------------ grid */
 
 /*

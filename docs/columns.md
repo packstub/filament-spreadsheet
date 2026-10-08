@@ -1,6 +1,6 @@
 # Columns
 
-<!-- TODO screenshot: a sheet with every column type, the select's list open -->
+![A products sheet: text, select, number, computed, boolean and date columns](images/sheet.png)
 
 A column names an attribute of the model and says how it is read into the grid and written back. Every column lives in `Packstub\Spreadsheet\Columns`.
 

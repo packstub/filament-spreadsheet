@@ -1,6 +1,6 @@
 # Your first sheet
 
-<!-- TODO screenshot: the products sheet next to the list, the SheetAction in the list's header -->
+![The products list with Edit as sheet in its header](images/list-action.png)
 
 ## The resource page
 

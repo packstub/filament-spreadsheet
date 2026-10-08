@@ -205,7 +205,7 @@ function editorFor(column) {
  *   on.rangeEdit([{ id, col, from, to }])  cells written by the fill handle (the component re-checks each)
  *   on.sort(col)                        header clicked
  *   on.paste(text)                      text pasted into the grid
- *   on.select(count, ids)               rows in the active range, and their ids
+ *   on.select(count, ids, cols)         rows in the active range, their ids, and how many columns it spans
  *   on.rows(count)                      the table's rows changed (a page applied, rows added or removed)
  *   on.editing(open)                    an editor opened or closed
  *
@@ -287,7 +287,10 @@ export function createGrid(element, options) {
         // The variable is set on .ps-sheet (the stylesheet's default, or the page's getSpreadsheetHeight()).
         height: 'var(--ps-sheet-height)',
         layout: 'fitDataStretch',
-        renderHorizontal: 'virtual',
+        // Rows are windowed, columns are not: with 'virtual' the horizontal renderer now and then left the right-hand
+        // cells of every row unrendered (the header drawn, the cells blank, once down to the first column), seen
+        // after a delete near the end of a short page and after a paste. A sheet has a dozen columns at most.
+        renderHorizontal: 'basic',
         renderVertical: 'virtual',
         rowHeight: options.rowHeight ?? 32,
         placeholder: placeholder(t.empty),
@@ -383,7 +386,8 @@ export function createGrid(element, options) {
     const current = new Map()
 
     // Tabulator builds itself asynchronously: data calls wait for it.
-    const ready = new Promise((r) => table.on('tableBuilt', r))
+    let built = false
+    const ready = new Promise((r) => table.on('tableBuilt', () => { built = true; r() }))
 
     const remember = (rows) => {
         for (const row of rows) {
@@ -423,7 +427,7 @@ export function createGrid(element, options) {
         if (edits.length) on.rangeEdit?.(edits)
     })
 
-    const selectionChanged = () => { const rows = api.selection()?.rows ?? []; on.select?.(rows.length, rows) }
+    const selectionChanged = () => { const s = api.selection(); const rows = s?.rows ?? []; on.select?.(rows.length, rows, s?.cols.length ?? 0) }
     table.on('rangeAdded', selectionChanged)
     table.on('rangeChanged', selectionChanged)
     table.on('rangeRemoved', selectionChanged)
@@ -718,6 +722,7 @@ export function createGrid(element, options) {
 
         /** The active range as row ids and column names, or null. */
         selection() {
+            if (! built) return null // getRanges() before tableBuilt warns (a status update from the first sync())
             const ranges = table.getRanges()
             const range = ranges[ranges.length - 1]
             if (! range) return null

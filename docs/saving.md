@@ -1,6 +1,6 @@
 # Saving
 
-<!-- TODO screenshot: after a save with two refused cells, red, one with its message shown -->
+![After a save with two refused cells, red, the active cell's message under the grid](images/errors.png)
 
 ## One batch
 
