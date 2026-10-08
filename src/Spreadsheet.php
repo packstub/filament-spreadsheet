@@ -428,6 +428,8 @@ class Spreadsheet
      *
      * @param  array<string, mixed>  $request
      * @return array{rows: list<array<string, mixed>>, total: int, page: int, perPage: int, lastPage: int, sort: array{column: string, direction: string}}
+     *
+     * @internal called by the Livewire trait; its shape may change in a minor
      */
     public function rows(array $request = []): array
     {
@@ -469,6 +471,8 @@ class Spreadsheet
      * the columns locked for this record and whether it may be changed or deleted.
      *
      * @return array<string, mixed>
+     *
+     * @internal called by the Livewire trait; its shape may change in a minor
      */
     public function presentRow(Model $record): array
     {
@@ -519,7 +523,11 @@ class Spreadsheet
         ];
     }
 
-    /** The record's version as a string (the raw attribute), null without a version column. */
+    /**
+     * The record's version as a string (the raw attribute), null without a version column.
+     *
+     * @internal called by the Livewire trait; its shape may change in a minor
+     */
     public function version(Model $record): ?string
     {
         $column = $this->getVersionColumn();
@@ -550,6 +558,8 @@ class Spreadsheet
      * propagates, for the caller to report.
      *
      * @throws SaveRejected
+     *
+     * @internal called by the Livewire trait; its shape may change in a minor
      */
     public function save(SavePayload $payload): SaveResult
     {
@@ -751,6 +761,8 @@ class Spreadsheet
      * @param  list<string>  $ids
      *
      * @throws SaveRejected
+     *
+     * @internal called by the Livewire trait; its shape may change in a minor
      */
     public function delete(array $ids): SaveResult
     {
@@ -759,6 +771,7 @@ class Spreadsheet
 
     /* ------------------------------------------------------------------ internals */
 
+    /** @internal called by the Livewire trait; its shape may change in a minor */
     public function baseQuery(): Builder
     {
         $query = $this->query instanceof Closure ? app()->call($this->query) : $this->query;
@@ -770,7 +783,11 @@ class Spreadsheet
         return clone $query;
     }
 
-    /** @param  array<string, mixed>  $filters */
+    /**
+     * @param  array<string, mixed>  $filters
+     *
+     * @internal called by the Livewire trait; its shape may change in a minor
+     */
     public function filteredQuery(array $filters = []): Builder
     {
         $query = $this->baseQuery();
@@ -787,6 +804,8 @@ class Spreadsheet
      *
      * @param  list<string>  $ids
      * @return array<string, Model>
+     *
+     * @internal called by the Livewire trait; its shape may change in a minor
      */
     public function findRecords(array $ids, bool $lock = false): array
     {

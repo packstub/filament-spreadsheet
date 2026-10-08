@@ -28,9 +28,7 @@ return [
     'row_menu' => 'Zeilenaktionen',
     'delete_row' => 'Zeile löschen',
     'restore_row' => 'Zeile behalten',
-    'select_all' => 'Alle Zeilen auswählen',
     'open_sheet' => 'Als Tabelle bearbeiten',
-    'shortcuts' => 'Enter oder F2 bearbeitet, Tab und Enter bewegen, Strg+C/V kopiert und fügt ein, Strg+D füllt nach unten, Strg+Z macht rückgängig, Strg+S speichert',
 
     // Prompts
     'confirm_discard' => 'Alle ungespeicherten Änderungen verwerfen?',

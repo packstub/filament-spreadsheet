@@ -107,4 +107,4 @@ A formula is evaluated by a small interpreter on each side, never as PHP or Java
 
 ## Writing your own type
 
-Extend `Column` (or one of the types) and override `getType()`, `presentValue()`, `coerce()` and `typeRules()`; the grid draws an unknown type as text. Anything the browser must know goes into `toArray()`.
+Extend `Column` (or one of the types) and override `getType()`, `presentValue()`, `coerce()` and `typeRules()`; the grid draws an unknown type as text. Anything the browser must know goes into `toArray()`. `coerce()` turns what the browser sent into the attribute's value and throws `Packstub\Spreadsheet\Exceptions\InvalidValue` with the message for the cell when it cannot (`$this->invalid('not_a_number')` builds one from a translation key); a `SaveRejected` from there would refuse the whole save instead.
