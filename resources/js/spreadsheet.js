@@ -110,6 +110,8 @@ export default function packstubSpreadsheet(config) {
                         // button is not offered for a selection it would do nothing with.
                         select: (count, ids = []) => { this.selected = this.readOnly || ! this.deletable ? 0 : this.deletableIds(ids).length; this.updateStatus() },
                         editing: (open) => { this.editing = open },
+                        // The first page is applied before tableBuilt: the rows land later than sync(), and the height follows them.
+                        rows: () => this.fit(),
                     },
                 })
 
@@ -220,7 +222,13 @@ export default function packstubSpreadsheet(config) {
             const grid = this.$refs.grid
             if (! grid || this.height) return
             const rootStyle = getComputedStyle(this.$root)
-            if (this._fixed === undefined) this._fixed = rootStyle.getPropertyValue('--ps-sheet-height').trim() !== 'auto'
+            // The stylesheet is loaded on request (x-load-css): until it is here the variable reads '' and nothing
+            // is known yet; a value that is not `auto` (a theme's length) fixes the height, read once.
+            if (this._fixed === undefined) {
+                const value = rootStyle.getPropertyValue('--ps-sheet-height').trim()
+                if (value === '') return
+                this._fixed = value !== 'auto'
+            }
             if (this._fixed) return
             const rect = grid.getBoundingClientRect()
             if (! rect.width) return // hidden: nothing to measure, the observer calls again when it is shown

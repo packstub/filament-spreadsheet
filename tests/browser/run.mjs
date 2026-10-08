@@ -935,6 +935,13 @@ try {
     const fitsWindow = (x) => x.headerTop + x.grid <= x.window - 30 && x.headerTop + x.grid >= x.window - 60
     console.log(`     measured height: grid ${m.grid}px (variable ${m.variable}), top ${m.headerTop}px in a ${m.window}px window, ${m.rowEls} row elements of ${m.loaded} rows, holder ${m.client}/${m.scroll}px, document ${m.doc}px`)
     check('without a configured height the grid is measured: the window below its top edge less a line for the status, and it still windows its rows', /px$/.test(m.variable) && Math.abs(m.grid - m.configured - m.borders) < 1 && fitsWindow(m) && m.rowEls < m.loaded && m.scroll > m.client && m.doc <= m.window, JSON.stringify(m))
+    // the stylesheet arriving after the component started (x-load-css in a panel): the variable reads '' at first, then auto
+    await page.goto(`http://127.0.0.1:${port}/?autoheight&latecss`)
+    await page.waitForFunction(() => window.sheet()?.rows?.length === 100)
+    await page.waitForTimeout(700)
+    const lateCss = await measure()
+    check('a stylesheet loaded after the component started still gets the measured height', /px$/.test(lateCss.variable) && fitsWindow(lateCss) && lateCss.rowEls < lateCss.loaded && lateCss.doc <= lateCss.window, JSON.stringify(lateCss))
+    await fresh('?autoheight')
     await page.setViewportSize({ width: 1400, height: 1200 })
     await page.evaluate(() => window.sheet().setPerPage(25))
     await page.waitForFunction(() => window.sheet().rows.length === 25)

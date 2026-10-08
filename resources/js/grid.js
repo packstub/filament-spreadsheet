@@ -206,6 +206,7 @@ function editorFor(column) {
  *   on.sort(col)                        header clicked
  *   on.paste(text)                      text pasted into the grid
  *   on.select(count, ids)               rows in the active range, and their ids
+ *   on.rows(count)                      the table's rows changed (a page applied, rows added or removed)
  *   on.editing(open)                    an editor opened or closed
  *
  * Delete/Backspace and Ctrl+X are the component's (clear() through its own
@@ -426,6 +427,8 @@ export function createGrid(element, options) {
     table.on('rangeAdded', selectionChanged)
     table.on('rangeChanged', selectionChanged)
     table.on('rangeRemoved', selectionChanged)
+    // The rows the table holds changed (a page set, rows added or removed), also when it was asked before tableBuilt.
+    table.on('dataProcessed', () => on.rows?.(table.getRows().length))
 
     // Ctrl+ArrowDown / Ctrl+ArrowUp (with Shift too) jump to the end of the column: Tabulator scrolls there
     // from estimated row heights and can leave the cell it jumped to outside the window. Once it has

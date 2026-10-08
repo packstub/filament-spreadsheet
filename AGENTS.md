@@ -138,10 +138,12 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   the ancestors' bottom padding, the body's margin; never the document's height, which a `min-height: 100vh` body
   turns into a fixed point), the grid's own borders off, no more than the rows need (header + rows × the measured
   row pitch, at least three rows), and when less than eight rows are left on the first screen (a sheet under a form)
-  the window below `--topbar-height` instead. It runs before the grid is built, in `sync()`, on `window` resize and
-  from a `ResizeObserver` on the root (disconnected in `destroy()`); a difference under 2 px is not written (a write
+  the window below `--topbar-height` instead. It runs before the grid is built, in `sync()`, from the grid's `rows` callback
+  (Tabulator's `dataProcessed`: the first page is applied before `tableBuilt`, so at `sync()` the table still holds
+  no rows and the height would stay at the three-row floor), on `window` resize and from a `ResizeObserver` on the
+  root (disconnected in `destroy()`); a difference under 2 px is not written (a write
   redraws the grid and the observer sees the root change). `config.height` (`getSpreadsheetHeight()`), bound on the
-  root by the view, or a length a theme sets on the variable (`_fixed`: read once), turns the measuring off. So **a row may have no element**: address
+  root by the view, or a length a theme sets on the variable (`_fixed`: read once the variable has a value; it reads `''` until `x-load-css` has brought the stylesheet, and the harness's `?latecss` covers that), turns the measuring off. So **a row may have no element**: address
   rows by id through the table (`getRow(id)`, which answers `false` for an unknown id), never by DOM position;
   `grid.scrollTo(id, position)` brings one into view (Tabulator's `scrollToRow` plus a few rounds of correction, its
   estimates stop short of the last row); `addRow()` scrolls to the new row; `grid.edit()` scrolls the active cell back
