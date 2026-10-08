@@ -41,7 +41,7 @@ NumberColumn::make('price')->decimals(2)->min(0)->max(9999)
 NumberColumn::make('stock')->integer()->min(0)
 ```
 
-Numbers on the wire (a `decimal:2` cast's `"12.50"` becomes `12.5`). `decimals()` rounds what is saved and formats what is shown; `integer()` refuses fractions. `min()` and `max()` add rules. What a paste brings is read the same way on both sides: with both separators present the last one is the decimal mark (`1,234.50` and `1.234,50` are both 1234.5), a lone comma followed by one or two digits is a decimal mark (`0,5`), otherwise it groups thousands (`1,234`); spaces, thin spaces and apostrophes are ignored.
+Numbers on the wire (a `decimal:2` cast's `"12.50"` becomes `12.5`). `decimals()` rounds what is saved and formats what is shown, half away from zero on the number as it is written (`1.005` is 1.01, `-2.675` is -2.68), the same in the browser and on the server; `integer()` refuses fractions and whole numbers past 9,007,199,254,740,991 (the largest a browser holds exactly). `min()` and `max()` add rules. What a paste brings is read the same way on both sides: with both separators present the last one is the decimal mark (`1,234.50` and `1.234,50` are both 1234.5), a lone comma followed by one or two digits is a decimal mark (`0,5`), otherwise it groups thousands (`1,234`); spaces, thin spaces and apostrophes are ignored.
 
 ## `BooleanColumn`
 
@@ -77,11 +77,33 @@ A `DateTimeColumn` is wall-clock time in the app's timezone (`app.timezone`), th
 ## `ComputedColumn`
 
 ```php
+ComputedColumn::make('value')->formula('price * stock')->decimals(2)
 ComputedColumn::make('margin')->state(fn (Product $product) => $product->price - $product->cost)
 ComputedColumn::make('category.name')
 ```
 
-Read-only, computed from the record on every read (after a save too, so it follows the saved values). Without `state()` it reads the attribute or dotted path.
+Read-only, computed on every read (after a save too, so it follows the saved values). Without `formula()` or `state()` it reads the attribute or dotted path. `decimals()` rounds a number (half away from zero), shows it with that many places and aligns it right.
+
+### Row formulas
+
+A `formula()` reads the row's other columns, and the browser computes it again as the row is edited: type a new stock and the value cell changes before Save, an undo puts it back. The server computes the same formula for every row it sends, so after a save the cell shows what was stored.
+
+```php
+ComputedColumn::make('value')->formula('price * stock')->decimals(2),
+ComputedColumn::make('margin')->formula('price - cost')->decimals(2),
+ComputedColumn::make('margin_pct')->formula('if(price > 0, margin / price * 100)')->decimals(1),
+ComputedColumn::make('reorder')->formula("if(stock < 5, 'Reorder', 'OK')"),
+ComputedColumn::make('label')->formula("sku & ' · ' & category.name"),
+```
+
+- **Names** are the sheet's columns, as they are on the wire: a number column's number, a select's key (`category_id = 2`), a boolean's `true` / `false`, a date as `2026-02-28` (so `available_on < '2026-03-01'` compares dates), a dotted column's value (`category.name`). A formula may read another formula column (`margin_pct` above reads `margin`). A name that is not a visible column of the sheet, or a formula that reads itself through others, throws when the sheet is built.
+- **Literals:** numbers (`1.5`, `.5`, `1e3`), text in single or double quotes, `true`, `false`, `null`.
+- **Operators**, loosest first: `=` `==` `!=` `<>` `<` `<=` `>` `>=` (one per expression), `&` (joins text), `+` `-`, `*` `/` `%`, unary `-`; parentheses group.
+- **Functions:** `if(condition, then, else)` (no else: empty), `and(…)`, `or(…)`, `not(x)`, `round(x, digits)` (half away from zero on the number as it is written, so `round(1.005, 2)` is 1.01; negative digits round to tens, hundreds…), `floor(x)`, `ceil(x)`, `abs(x)`, `min(…)`, `max(…)`, `sum(…)`, `coalesce(…)` (the first value that is not empty).
+
+An empty cell is empty in arithmetic: `price * stock` with no stock is empty, not zero. Say `coalesce(stock, 0)` to read it as zero; `sum()`, `min()` and `max()` skip empty values. Text that is not a number, a division by zero and a result that is not finite are empty too. Comparisons are numeric when both sides read as numbers (`'3.0' = 3`), otherwise they compare the text; an empty value equals only another empty one and is neither less nor greater than anything. In a condition, empty, `0`, `false` and `''` are false.
+
+A formula is evaluated by a small interpreter on each side, never as PHP or JavaScript, so it is safe to build from configuration; it reads only the row it is on. A formula column cannot be sorted or searched (the database does not hold its value): for that, store the value in a column and compute it in a model observer. For anything a formula cannot say (a relation's sum, a call to a service), use `state()`, which the server computes from the record and the browser shows as it was sent.
 
 ## Writing your own type
 

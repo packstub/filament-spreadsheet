@@ -30,7 +30,8 @@
  */
 
 import { createRequire } from 'node:module'
-import { mkdirSync, existsSync } from 'node:fs'
+import { mkdirSync, existsSync, readdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { serve, root } from './harness.mjs'
 
@@ -47,7 +48,16 @@ const results = []
 const check = (name, ok, detail = '') => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail && ! ok ? ` — ${detail}` : ''}`) }
 
 const { server, port } = await serve()
-const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM })
+// PLAYWRIGHT_CHROMIUM, or the build this playwright-core expects, or the newest headless shell in the cache (a
+// sibling's playwright-core can be a version behind the browsers last downloaded).
+const cache = join(homedir(), 'Library/Caches/ms-playwright')
+const newestShell = () => {
+    const dirs = existsSync(cache) ? readdirSync(cache).filter((d) => d.startsWith('chromium_headless_shell-')).sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1])) : []
+    for (const d of dirs) for (const sub of readdirSync(join(cache, d))) { const exe = join(cache, d, sub, 'chrome-headless-shell'); if (existsSync(exe)) return exe }
+    return undefined
+}
+const executablePath = process.env.PLAYWRIGHT_CHROMIUM ?? (existsSync(chromium.executablePath()) ? undefined : newestShell())
+const browser = await chromium.launch({ headless: true, executablePath })
 const page = await browser.newPage({ viewport: { width: 1400, height: 800 } })
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
@@ -249,11 +259,14 @@ try {
     await cell(1, 'name').click()
     await page.keyboard.type('Mine')
     await page.keyboard.press('Enter')
+    await page.evaluate(() => { const sh = window.sheet(); const flash = sh.flash; window.__flashes = []; sh.flash = (m) => { window.__flashes.push(m); flash.call(sh, m) } })
     await page.keyboard.press('Control+s')
     await page.waitForFunction(() => window.__server.calls.save.length === 3)
     await page.waitForTimeout(80)
     s = await state()
     check('a conflict keeps the cell, paints it purple and names their value', (await cellClasses(1, 'name')).includes('ps-sheet-cell-conflict') && (await cell(1, 'name').getAttribute('title')).includes('Their value: Renamed') && s.dirty.total === 1)
+    const flashes = await page.evaluate(() => window.__flashes)
+    check('a save refused by a conflict alone says so once, and that saving again keeps the value', flashes.length === 1 && flashes[0].includes('Save again to keep yours'), JSON.stringify(flashes))
     await page.screenshot({ path: join(shots, 'conflict.png') })
     await server_(() => { window.__server.state.conflictOn = null })
     await page.keyboard.press('Control+s')
@@ -382,6 +395,9 @@ try {
     await page.waitForTimeout(50)
     const readOnlyRow = await page.evaluate(() => ({ changes: window.sheet().buffer.changes['40'], text: document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell[tabulator-field="name"]').innerText }))
     check('Delete on a read-only row neither buffers nor blanks the cell', readOnlyRow.changes === undefined && readOnlyRow.text === 'Product 40', JSON.stringify(readOnlyRow))
+    const deleteButton = page.locator('.ps-sheet-btn-danger', { hasText: 'Delete' })
+    const offered = { selected: (await state()).selected, disabled: await deleteButton.isDisabled() }
+    check('a selection on a row the policy keeps from deleting counts no row: Delete rows is disabled', offered.selected === 0 && offered.disabled, JSON.stringify(offered))
 
     // Delete over a range holding a locked cell (cost on SKU-025) and the computed margin clears only what may be edited
     await page.locator('.ps-sheet-search input').fill('SKU-025')
@@ -982,6 +998,18 @@ try {
     await page.waitForTimeout(60)
     const inside = await page.evaluate(() => ({ two: window.sheet().buffer.changes['2']?.name, price: window.sheet().buffer.changes['5']?.price, holder: !! document.activeElement?.classList?.contains('tabulator-tableholder') }))
     check('a click on another cell with an editor open still commits it and keeps the keyboard in the grid', f.holder && ! f.editing && inside.two === 'Two' && inside.price === 7 && inside.holder, JSON.stringify({ f, inside }))
+    await cell(1, 'name').click()
+    await page.keyboard.type('Two again')
+    await cell(3, 'name').click()
+    await page.waitForTimeout(60)
+    await scrollToRow(90)
+    await page.waitForTimeout(250)
+    const away = await page.evaluate(() => ({ holder: !! document.activeElement?.classList?.contains('tabulator-tableholder'), cell: !! document.activeElement?.classList?.contains('tabulator-cell') }))
+    await page.keyboard.press('F2')
+    await page.waitForTimeout(40)
+    const afterAway = (await state()).editing
+    await page.keyboard.press('Escape')
+    check('after a click on another cell with an editor open, the focus is not left on the cell element: its row scrolled out of the window, the keyboard still reaches the grid', away.holder && ! away.cell && afterAway, JSON.stringify({ away, afterAway }))
     await cell(2, 'name').click()
     await page.keyboard.type('Three')
     await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
@@ -2088,6 +2116,32 @@ try {
     })
     check('destroying the grid removes the editor-key listeners (keydown, and the keyup kept from the select list)', keyListener)
 
+    /* ---------------------------------------------------------------- a formula column follows the row's unsaved cells */
+
+    await fresh()
+    errorsSeen = errors.length
+    const marginOf = async () => ({ value: await page.evaluate(() => window.sheet().grid.value('1', 'margin')), text: (await cell(0, 'margin').innerText()).trim() })
+    const formulaBefore = await marginOf()
+    await cell(0, 'cost').click()
+    await page.keyboard.type('10')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(80)
+    const formulaEdited = await marginOf()
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(80)
+    const formulaUndone = await marginOf()
+    await page.keyboard.press('Control+y')
+    await page.waitForTimeout(80)
+    await page.locator('.ps-sheet-btn-primary').click()
+    await page.waitForFunction(() => ! window.sheet().saving && window.sheet().dirty.total === 0)
+    await page.waitForTimeout(80)
+    const formulaSaved = await marginOf()
+    await page.locator('.ps-sheet-btn', { hasText: 'Add row' }).click()
+    await page.waitForTimeout(150)
+    const temp = await page.evaluate(() => window.sheet().buffer.createdOrder[0])
+    const formulaNew = await page.evaluate((id) => window.sheet().grid.value(id, 'margin'), temp)
+    check('a formula cell follows an unsaved edit (13.70 − 10 = 3.70), the undo and the save; a new row\'s is empty', formulaBefore.value === 6.6 && formulaBefore.text === '6.60' && formulaEdited.value === 3.7 && formulaEdited.text === '3.70' && formulaUndone.value === 6.6 && formulaSaved.value === 3.7 && formulaSaved.text === '3.70' && formulaNew === null && errors.length === errorsSeen, JSON.stringify({ formulaBefore, formulaEdited, formulaUndone, formulaSaved, formulaNew, errors: errors.slice(errorsSeen) }))
+
     /* ---------------------------------------------------------------- leaving with text in an open editor; removing the sheet with one */
 
     await fresh()
@@ -2174,6 +2228,8 @@ try {
     server.close()
 }
 
+const tabulatorWarnings = [...new Set(logged.filter((m) => /^Invalid (column definition|table constructor) option/.test(m)))]
+check('Tabulator warns about no option it does not know (one its modules would read but is not registered)', ! tabulatorWarnings.length, tabulatorWarnings.join(' | '))
 if (errors.length) check('no console or page errors', false, errors.join(' | '))
 else check('no console or page errors', true)
 

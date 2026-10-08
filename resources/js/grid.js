@@ -116,9 +116,11 @@ function baseFormatter(column, locale) {
         case 'select':
             return (cell) => escapeHtml(display(column, cell.getValue()))
         case 'number':
+        case 'computed':
             return (cell) => {
                 const v = cell.getValue()
                 if (v === null || v === undefined || v === '') return ''
+                if (typeof v === 'boolean' && column.type === 'computed') return v ? 'true' : 'false'
                 if (typeof v !== 'number') return escapeHtml(String(v))
 
                 return new Intl.NumberFormat(locale, { minimumFractionDigits: column.decimals ?? 0, maximumFractionDigits: column.decimals ?? 20, useGrouping: false }).format(v)
@@ -200,7 +202,7 @@ function editorFor(column) {
  *   on.rangeEdit([{ id, col, from, to }])  cells written by the fill handle (the component re-checks each)
  *   on.sort(col)                        header clicked
  *   on.paste(text)                      text pasted into the grid
- *   on.select(count)                    rows in the active range
+ *   on.select(count, ids)               rows in the active range, and their ids
  *   on.editing(open)                    an editor opened or closed
  *
  * Delete/Backspace and Ctrl+X are the component's (clear() through its own
@@ -230,7 +232,7 @@ export function createGrid(element, options) {
             width: column.width ?? undefined,
             minWidth: { number: 90, date: 120, datetime: 160, boolean: 70 }[column.type] ?? 80,
             frozen: column.frozen || (options.frozenFirstColumn && i === 0),
-            hozAlign: column.type === 'number' ? 'right' : column.type === 'boolean' ? 'center' : 'left',
+            hozAlign: column.type === 'number' || (column.type === 'computed' && column.decimals != null) ? 'right' : column.type === 'boolean' ? 'center' : 'left',
             cssClass: `ps-sheet-col-${column.type}`,
             formatter: (cell) => { paint(cell, column, t); return base(cell) },
             titleFormatter: (cell) => {
@@ -287,7 +289,6 @@ export function createGrid(element, options) {
         placeholder: placeholder(t.empty),
         rowHeader: {
             field: ROWNUM,
-            headerSort: false,
             resizable: false,
             frozen: true,
             width: 56,
@@ -318,7 +319,9 @@ export function createGrid(element, options) {
         clipboardCopyRowRange: 'range',
         clipboardCopyStyled: false,
         clipboardCopyConfig: { columnHeaders: false, rowHeaders: false, columnGroups: false, columnCalcs: false, formatCells: false },
-        columnDefaults: { headerSort: false, resizable: 'header', headerHozAlign: 'left' },
+        // No headerSort: the Sort module is not registered (a header click asks the server), and Tabulator warns
+        // about the option on every column without it.
+        columnDefaults: { resizable: 'header', headerHozAlign: 'left' },
         columns: defs,
     })
 
@@ -355,6 +358,21 @@ export function createGrid(element, options) {
             focusHolder({ ...(options ?? {}), preventScroll: true })
         }
     }
+
+    // An editable cell has a tabindex (Tabulator's Edit module), so a click on one while an editor is open
+    // focuses that cell: the browser's focus follows Tabulator's holder.focus() in the editor's blur and
+    // wins. The keyboard then lives on a cell element, which goes away when its row leaves the window, and
+    // the focus with it (to the body: the sheet takes no keys until the next click). A cell that still
+    // holds the focus once the tick is over, without an editor in it, hands it to the holder.
+    const cellFocus = (e) => {
+        const target = e.target
+        if (! target?.classList?.contains('tabulator-cell')) return
+        setTimeout(() => {
+            if (destroyed || document.activeElement !== target || target.classList.contains('tabulator-editing')) return
+            focusHolder({ preventScroll: true })
+        }, 0)
+    }
+    element.addEventListener('focusin', cellFocus)
 
     let destroyed = false
 
@@ -401,7 +419,7 @@ export function createGrid(element, options) {
         if (edits.length) on.rangeEdit?.(edits)
     })
 
-    const selectionChanged = () => on.select?.(api.selection()?.rows.length ?? 0)
+    const selectionChanged = () => { const rows = api.selection()?.rows ?? []; on.select?.(rows.length, rows) }
     table.on('rangeAdded', selectionChanged)
     table.on('rangeChanged', selectionChanged)
     table.on('rangeRemoved', selectionChanged)
@@ -823,6 +841,7 @@ export function createGrid(element, options) {
         destroy() {
             destroyed = true
             element.removeEventListener('focusout', editingChanged)
+            element.removeEventListener('focusin', cellFocus)
             element.removeEventListener('keydown', jumped)
             element.removeEventListener('keydown', editorKeys, true)
             element.removeEventListener('keydown', altArrows, true)

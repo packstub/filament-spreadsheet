@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Traits\Conditionable;
 use Packstub\Spreadsheet\Columns\Column;
+use Packstub\Spreadsheet\Columns\ComputedColumn;
 use Packstub\Spreadsheet\Columns\SelectColumn;
 use Packstub\Spreadsheet\Enums\SaveMode;
 use Packstub\Spreadsheet\Events\RowSaveFailed;
@@ -318,7 +319,9 @@ class Spreadsheet
 
     public function getSaveMode(): SaveMode
     {
-        return $this->saveMode ?? SaveMode::fromName(config('packstub-spreadsheet.save_mode'));
+        $mode = config('packstub-spreadsheet.save_mode');
+
+        return $this->saveMode ?? ($mode instanceof SaveMode ? $mode : SaveMode::fromName($mode));
     }
 
     public function isReadOnly(): bool
@@ -474,12 +477,36 @@ class Spreadsheet
         $values = [];
         $locked = [];
 
+        $formulas = [];
+
         foreach ($this->getColumns() as $column) {
+            if ($column instanceof ComputedColumn && $column->getFormula() !== null) {
+                $formulas[$column->getName()] = $column;
+                $values[$column->getName()] = null;
+
+                continue;
+            }
+
             $values[$column->getName()] = $column->present($record);
 
             if ($column->hasRecordReadOnly() && $column->isReadOnlyFor($record)) {
                 $locked[] = $column->getName();
             }
+        }
+
+        // Formulas read the row's other values (after casts), a formula column its value once computed.
+        $done = [];
+        $resolve = function (string $name) use (&$resolve, &$values, &$done, $formulas): mixed {
+            if (isset($formulas[$name]) && ! isset($done[$name])) {
+                $done[$name] = true;
+                $values[$name] = $formulas[$name]->compute($resolve);
+            }
+
+            return $values[$name] ?? null;
+        };
+
+        foreach (array_keys($formulas) as $name) {
+            $resolve($name);
         }
 
         return [
@@ -556,7 +583,7 @@ class Spreadsheet
         $perRow = $this->getSaveMode() === SaveMode::PerRow;
 
         $work = function () use ($payload, $result, $updated, $created, &$deleted, &$failed, $perRow): void {
-            $records = $this->findRecords([...array_keys($payload->changed), ...$payload->deleted]);
+            $records = $this->findRecords([...array_keys($payload->changed), ...$payload->deleted], lock: true);
 
             foreach ($payload->changed as $id => $values) {
                 $record = $records[$id] ?? null;
@@ -686,18 +713,30 @@ class Spreadsheet
             return $result;
         }
 
+        // The rows are committed from here on: a listener or a re-read that throws is reported, and the
+        // answer still says what was written. Answered as a failure, the browser would keep its buffer and
+        // the next Save would create the new rows again and find its own updates in conflict.
         if ($updated->isNotEmpty() || $created->isNotEmpty() || $deleted !== []) {
-            RowsSaved::dispatch($updated->values(), $created->values(), $deleted, $this->key);
+            try {
+                RowsSaved::dispatch($updated->values(), $created->values(), $deleted, $this->key);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
-        $fresh = $this->freshRows($updated->merge($created->values()));
+        try {
+            $fresh = $this->freshRows($updated->merge($created->values()));
+        } catch (\Throwable $e) {
+            report($e);
+            $fresh = [];
+        }
 
         foreach ($updated as $record) {
-            $result->saved[(string) $record->getKey()] = $fresh[(string) $record->getKey()] ?? $this->presentRow($record);
+            $result->saved[(string) $record->getKey()] = $fresh[(string) $record->getKey()] ?? $this->savedRow($record);
         }
 
         foreach ($created as $temp => $record) {
-            $result->created[$temp] = $fresh[(string) $record->getKey()] ?? $this->presentRow($record);
+            $result->created[$temp] = $fresh[(string) $record->getKey()] ?? $this->savedRow($record);
         }
 
         $result->deleted = $deleted;
@@ -749,7 +788,7 @@ class Spreadsheet
      * @param  list<string>  $ids
      * @return array<string, Model>
      */
-    public function findRecords(array $ids): array
+    public function findRecords(array $ids, bool $lock = false): array
     {
         $ids = array_values(array_unique(array_filter($ids, fn ($id) => $id !== '')));
 
@@ -765,7 +804,15 @@ class Spreadsheet
 
         $records = [];
 
-        foreach ($this->baseQuery()->whereKey($ids)->get() as $record) {
+        $query = $this->baseQuery()->whereKey($ids);
+
+        // A save locks its rows until it commits: two saves of the same row run one after the other, and
+        // the second sees the first's version (a conflict) instead of overwriting it.
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        foreach ($query->get() as $record) {
             $records[(string) $record->getKey()] = $record;
         }
 
@@ -1060,13 +1107,41 @@ class Spreadsheet
             return [];
         }
 
+        $keys = $records->map(fn (Model $r) => $r->getKey())->all();
         $rows = [];
 
-        foreach ($this->newModel()->newQuery()->whereKey($records->map(fn (Model $r) => $r->getKey())->all())->get() as $record) {
+        // Through query() first, so its with(), withCount() and selects are there as on the page; a row
+        // the save moved out of it (a filter column changed) is read on its own.
+        foreach ($this->baseQuery()->whereKey($keys)->get() as $record) {
             $rows[(string) $record->getKey()] = $this->presentRow($record);
         }
 
+        $missing = array_values(array_filter($keys, fn ($key) => ! isset($rows[(string) $key])));
+
+        if ($missing !== []) {
+            foreach ($this->newModel()->newQuery()->whereKey($missing)->get() as $record) {
+                $rows[(string) $record->getKey()] = $this->presentRow($record);
+            }
+        }
+
         return $rows;
+    }
+
+    /**
+     * A saved record as the answer gives it when it could not be read again: the record in memory,
+     * or only its key and version when even that cannot be presented.
+     *
+     * @return array<string, mixed>
+     */
+    protected function savedRow(Model $record): array
+    {
+        try {
+            return $this->presentRow($record);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['id' => (string) $record->getKey(), 'version' => $this->version($record)];
+        }
     }
 
     /** Give the relationship selects their options once per instance. */
@@ -1082,6 +1157,47 @@ class Spreadsheet
             if ($column instanceof SelectColumn && $column->getRelationshipName() !== null) {
                 $column->prepare($this->newModel());
             }
+        }
+
+        $this->checkFormulas();
+    }
+
+    /** Every name a formula reads is a column of the sheet, and no formula reads itself through another. */
+    protected function checkFormulas(): void
+    {
+        $columns = [];
+        foreach ($this->getColumns() as $column) {
+            $columns[$column->getName()] = $column;
+        }
+
+        $state = [];
+        $visit = function (string $name, array $path) use (&$visit, &$state, $columns): void {
+            $column = $columns[$name];
+            $formula = $column instanceof ComputedColumn ? $column->getFormula() : null;
+
+            if ($formula === null || ($state[$name] ?? null) === 'done') {
+                return;
+            }
+
+            if (($state[$name] ?? null) === 'visiting') {
+                throw new \LogicException('ComputedColumn ['.$path[0].']: the formula reads itself ('.implode(' → ', [...$path, $name]).').');
+            }
+
+            $state[$name] = 'visiting';
+
+            foreach ($formula->references() as $ref) {
+                if (! isset($columns[$ref])) {
+                    throw new \LogicException("ComputedColumn [{$name}]: the formula reads [{$ref}], which is not a column of the sheet (a hidden column is not).");
+                }
+
+                $visit($ref, [...$path, $name]);
+            }
+
+            $state[$name] = 'done';
+        };
+
+        foreach (array_keys($columns) as $name) {
+            $visit($name, []);
         }
     }
 

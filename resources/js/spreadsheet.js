@@ -94,7 +94,9 @@ export default function packstubSpreadsheet(config) {
                         rangeEdit: (edits) => this.onRangeEdit(edits),
                         sort: (col) => this.sortBy(col),
                         paste: (text) => this.onPaste(text),
-                        select: (count) => { this.selected = this.readOnly || ! this.deletable ? 0 : count },
+                        // The rows Delete rows would delete: a row the policy keeps (a viewer's) is not counted, so the
+                        // button is not offered for a selection it would do nothing with.
+                        select: (count, ids = []) => { this.selected = this.readOnly || ! this.deletable ? 0 : this.deletableIds(ids).length },
                         editing: (open) => { this.editing = open },
                     },
                 })
@@ -130,8 +132,10 @@ export default function packstubSpreadsheet(config) {
         /** A server row as the grid shows it: the buffer laid over, the flags in _m. */
         displayRow(row) {
             const o = S.overlay(this.buffer, row)
+            // A row with unsaved cells shows its formulas over them; a clean row the server's values.
+            const values = Object.keys(o.dirty).length ? S.computeRow(this.columns, o.values) : o.values
 
-            return { id: row.id, ...o.values, _m: { dirty: o.dirty, errors: o.errors, conflicts: o.conflicts, rowError: o.rowError, locked: row.locked ?? [], readOnly: !! row.readOnly, deleted: o.deleted, created: false } }
+            return { id: row.id, ...values, _m: { dirty: o.dirty, errors: o.errors, conflicts: o.conflicts, rowError: o.rowError, locked: row.locked ?? [], readOnly: !! row.readOnly, deleted: o.deleted, created: false } }
         },
 
         createdRow(temp) {
@@ -139,7 +143,7 @@ export default function packstubSpreadsheet(config) {
             const dirty = {}
             for (const c of this.columns) if (c.editable) dirty[c.name] = true
 
-            return { id: temp, ...values, _m: { dirty, errors: this.buffer.errors[temp] ?? {}, conflicts: {}, rowError: this.buffer.rowErrors[temp] ?? null, locked: [], readOnly: false, deleted: false, created: true } }
+            return { id: temp, ...S.computeRow(this.columns, values), _m: { dirty, errors: this.buffer.errors[temp] ?? {}, conflicts: {}, rowError: this.buffer.rowErrors[temp] ?? null, locked: [], readOnly: false, deleted: false, created: true } }
         },
 
         /** Every row on the grid, in order, with the values shown now (for paste and fill-down). */
@@ -428,11 +432,15 @@ export default function packstubSpreadsheet(config) {
             this.refocus()
         },
 
+        deletableIds(ids) {
+            return ids.filter((id) => S.isCreated(this.buffer, id) || this.rows.find((r) => r.id === id)?.deletable)
+        },
+
         deleteSelected() {
             if (this.readOnly || ! this.deletable || this.saving) return
             const sel = this.grid.selection()
             if (! sel || ! sel.rows.length) return
-            const ids = sel.rows.filter((id) => S.isCreated(this.buffer, id) || this.rows.find((r) => r.id === id)?.deletable)
+            const ids = this.deletableIds(sel.rows)
             if (! ids.length) return
             if (! window.confirm(choice(t.confirm_delete, ids.length))) return
             this.markDeleted(ids)
@@ -537,10 +545,14 @@ export default function packstubSpreadsheet(config) {
             this.sync()
 
             const written = out.saved.length + out.created.length + out.deleted.length
-            if (result.message) this.notify(result.message, result.rolledBack ? 'danger' : 'warning')
-            else if (out.failed.length) this.notify(choice(t.partly_saved, written, { saved: written, failed: out.failed.length }), 'warning')
+            const conflicts = Object.keys(this.buffer.conflicts).length > 0
+            // Only conflicts refused the batch: one message, the one that says what to do ("fix the marked
+            // cells" would ask to change values that are fine).
+            const onlyConflicts = conflicts && ! Object.keys(this.buffer.errors).length && ! Object.keys(this.buffer.rowErrors).length
+            if (result.message && ! (result.rolledBack && onlyConflicts)) this.notify(result.message, result.rolledBack ? 'danger' : 'warning')
+            else if (out.failed.length && (written || ! onlyConflicts)) this.notify(choice(t.partly_saved, written, { saved: written, failed: out.failed.length }), 'warning')
             else if (written) this.notify(choice(t.saved, written), 'success')
-            if (Object.keys(this.buffer.conflicts).length) this.notify(t.has_conflicts, 'warning')
+            if (conflicts) this.notify(t.has_conflicts, 'warning')
         },
 
         discard() {

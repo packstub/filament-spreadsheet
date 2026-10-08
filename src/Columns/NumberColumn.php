@@ -2,6 +2,8 @@
 
 namespace Packstub\Spreadsheet\Columns;
 
+use Packstub\Spreadsheet\Formula;
+
 /**
  * A numeric attribute. What the browser sends (a number, or a pasted string such
  * as "1 234,50" or "1,234.50") is read locale-safely: with both separators present
@@ -10,6 +12,9 @@ namespace Packstub\Spreadsheet\Columns;
  */
 class NumberColumn extends Column
 {
+    /** The largest whole number a browser holds exactly (Number.MAX_SAFE_INTEGER). */
+    public const MAX_SAFE_INTEGER = 9007199254740991;
+
     protected ?int $decimals = null;
 
     protected bool $integer = false;
@@ -93,10 +98,17 @@ class NumberColumn extends Column
                 throw $this->invalid('not_an_integer');
             }
 
+            // Past 2^53 the browser cannot hold the number exactly, and past PHP_INT_MAX the cast wraps
+            // (or warns on PHP 8.5): the same limit as the browser's Number.isSafeInteger().
+            if (abs((float) $number) > self::MAX_SAFE_INTEGER) {
+                throw $this->invalid('integer_too_large');
+            }
+
             return (int) $number;
         }
 
-        return $this->decimals === null ? $number + 0 : round((float) $number, $this->decimals);
+        // Half away from zero, the browser's rule too (PHP's round() changed its own in 8.4).
+        return $this->decimals === null ? $number + 0 : Formula::round((float) $number, $this->decimals);
     }
 
     /** A pasted number ("1 234,50", "1,234.50", "-3", "1e3"), or null when it is not one. */

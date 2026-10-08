@@ -13,8 +13,15 @@ enum SaveMode: string
     /** Each row in its own savepoint: the valid rows are committed, the refused ones come back with their errors. */
     case PerRow = 'per_row';
 
+    /** The config's `save_mode`: unset is AllOrNothing, a value that is no mode is refused (a typo would pass silently). */
     public static function fromName(?string $name): self
     {
-        return self::tryFrom((string) $name) ?? self::AllOrNothing;
+        if ($name === null || $name === '') {
+            return self::AllOrNothing;
+        }
+
+        return self::tryFrom($name) ?? throw new \InvalidArgumentException(
+            "Unknown spreadsheet save mode [{$name}]: use 'all_or_nothing' or 'per_row'.",
+        );
     }
 }

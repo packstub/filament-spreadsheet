@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
+use Packstub\Spreadsheet\Columns\ComputedColumn;
+use Packstub\Spreadsheet\Columns\TextColumn;
 use Packstub\Spreadsheet\Enums\SaveMode;
 use Packstub\Spreadsheet\Events\RowSaveFailed;
 use Packstub\Spreadsheet\Events\RowsSaved;
@@ -582,4 +584,51 @@ it('reports a database failure on one row in PerRow mode and keeps the others', 
         ->and($b->fresh()->name)->toBe('Product');
 
     Exceptions::assertReported(fn (UniqueConstraintViolationException $e) => str_contains($e->getMessage(), 'UNIQUE'));
+});
+
+it('answers a committed save as saved when a RowsSaved listener throws, and reports the exception', function () {
+    Exceptions::fake();
+    Event::listen(RowsSaved::class, fn () => throw new RuntimeException('search index down'));
+    $a = product('a-1', 'Old');
+
+    $result = save(['changed' => [$a->id => ['name' => 'New']], 'created' => ['n1' => ['sku' => 'c-3', 'name' => 'Created']]]);
+
+    expect($result->rolledBack)->toBeFalse()
+        ->and($result->message)->toBeNull()
+        ->and($result->saved[(string) $a->id]['values']['name'])->toBe('New')
+        ->and(keys($result->created))->toBe(['n1'])
+        ->and($a->fresh()->name)->toBe('New')
+        ->and(Product::query()->count())->toBe(2);
+
+    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'search index down');
+});
+
+it('reads the saved rows again through query(), its selects included', function () {
+    $a = product('a-1', 'quiet');
+    $spreadsheet = sheet()
+        ->query(fn () => Product::query()->select('products.*')->selectRaw('upper(name) as shout'))
+        ->columns([
+            TextColumn::make('name'),
+            ComputedColumn::make('shout')->state(fn (Product $product) => $product->shout),
+        ]);
+
+    CarbonImmutable::setTestNow('2026-10-14 10:00:05');
+    $result = $spreadsheet->save(SavePayload::fromArray(['changed' => [$a->id => ['name' => 'loud']]]));
+
+    expect($result->saved[(string) $a->id]['values'])->toMatchArray(['name' => 'loud', 'shout' => 'LOUD']);
+});
+
+it('takes the save mode from the config, an enum case too, and refuses one that is no mode', function () {
+    config(['packstub-spreadsheet.save_mode' => 'per_row']);
+    expect(sheet()->getSaveMode())->toBe(SaveMode::PerRow);
+
+    config(['packstub-spreadsheet.save_mode' => SaveMode::PerRow]);
+    expect(sheet()->getSaveMode())->toBe(SaveMode::PerRow);
+
+    config(['packstub-spreadsheet.save_mode' => null]);
+    expect(sheet()->getSaveMode())->toBe(SaveMode::AllOrNothing);
+
+    $spreadsheet = sheet();
+    config(['packstub-spreadsheet.save_mode' => 'per-row']);
+    expect(fn () => $spreadsheet->getSaveMode())->toThrow(InvalidArgumentException::class, "Unknown spreadsheet save mode [per-row]: use 'all_or_nothing' or 'per_row'.");
 });
