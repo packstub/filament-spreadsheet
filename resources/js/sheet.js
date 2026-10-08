@@ -69,11 +69,13 @@ const FALSY = ['0', 'false', 'no', 'n', 'off', 'nu', 'nein', 'non', 'нет', ''
 
 /**
  * A number as a paste from any locale writes it: "1 234,50", "1,234.50",
- * "1.234,50", "1'234.5". Both separators: the last one is the decimal mark. A
- * lone comma followed by one or two digits is a decimal mark, otherwise it groups
- * thousands. null for an empty string, NaN for anything else.
+ * "1.234,50", "1'234.5". Both separators: the last one is the decimal mark. A lone
+ * separator is read by `decimal`, the sheet's decimal mark (NumberColumn::parse()
+ * alike): the mark itself is decimal when it is alone, the other one is decimal
+ * with one or two digits after it and groups thousands otherwise. null for an
+ * empty string, NaN for anything else.
  */
-export function parseNumber(raw) {
+export function parseNumber(raw, decimal = '.') {
     if (typeof raw === 'number') return raw
     if (typeof raw === 'boolean') return raw ? 1 : 0
     let s = String(raw ?? '').replace(/[  \s']/g, '')
@@ -83,10 +85,16 @@ export function parseNumber(raw) {
 
     if (comma > -1 && dot > -1) {
         s = comma > dot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '')
-    } else if (comma > -1) {
-        const after = s.length - comma - 1
-        const single = s.indexOf(',') === comma
-        s = single && after > 0 && after !== 3 ? s.replace(',', '.') : s.replace(/,/g, '')
+    } else if (comma > -1 || dot > -1) {
+        const mark = comma > -1 ? ',' : '.'
+        const last = Math.max(comma, dot)
+        const after = s.length - last - 1
+        const single = s.indexOf(mark) === last
+        if (mark === decimal) {
+            if (single) s = s.replace(mark, '.')
+        } else {
+            s = single && after > 0 && after !== 3 ? s.replace(mark, '.') : s.split(mark).join('')
+        }
     }
 
     if (! /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s)) return NaN
@@ -234,7 +242,7 @@ export function coerce(column, raw, t = {}) {
 
     switch (column.type) {
         case 'number': {
-            const n = parseNumber(raw)
+            const n = parseNumber(raw, column.decimal ?? '.')
             if (n === null || Number.isNaN(n) || ! Number.isFinite(n)) return fail('not_a_number', 'Not a number.')
             if (column.integer && ! Number.isInteger(n)) return fail('not_an_integer', 'Not a whole number.')
             if (column.integer && ! Number.isSafeInteger(n)) return fail('integer_too_large', 'Too large a whole number.')

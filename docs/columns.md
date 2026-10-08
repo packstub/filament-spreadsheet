@@ -14,6 +14,8 @@ TextColumn::make('name')
     ->readOnly()                             // never editable
     ->readOnly(fn (Product $p) => $p->is_locked) // not for some records: the cell is greyed and refused
     ->rules(['required', 'max:120'])         // Laravel rules (a list, "required|max:120", or fn (?Product $record): array)
+    ->validationMessages(['required' => 'Every product needs a name.']) // per rule, as a Filament field (or a closure)
+    ->validationAttribute('product name')    // what the default messages call it; default: the label
     ->default('Untitled')                    // the value a new row starts with (a value or a closure)
     ->hidden(fn () => ! auth()->user()->isAdmin()) // left out of the sheet, never written
     ->sortable(false)                        // no sorting from the header (a computed column never sorts)

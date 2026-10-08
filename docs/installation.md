@@ -44,3 +44,4 @@ A sheet lives on a page. `SpreadsheetResourcePage` sits next to a resource's lis
 | `keybindings` | `[]` | Overrides: `save`, `fill_down`, `undo`, `redo`, `add_row`, `cut` as `mod+s`-style strings (`mod` is Ctrl or ⌘) |
 | `date_format` | `Y-m-d` | PHP format a date cell shows (`format()` on a column wins) |
 | `datetime_format` | `Y-m-d H:i` | PHP format a date-time cell shows |
+| `decimal_separator` | `null` | The decimal mark a typed or pasted number with one separator is read by (`0,125`): `null` follows `app()->getLocale()`, or `','` / `'.'` |
