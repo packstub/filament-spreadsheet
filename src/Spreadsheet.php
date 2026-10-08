@@ -16,6 +16,7 @@ use Illuminate\Support\Traits\Conditionable;
 use Packstub\Spreadsheet\Columns\Column;
 use Packstub\Spreadsheet\Columns\ComputedColumn;
 use Packstub\Spreadsheet\Columns\SelectColumn;
+use Packstub\Spreadsheet\Enums\FiltersLayout;
 use Packstub\Spreadsheet\Enums\SaveMode;
 use Packstub\Spreadsheet\Events\RowSaveFailed;
 use Packstub\Spreadsheet\Events\RowsSaved;
@@ -55,6 +56,8 @@ class Spreadsheet
 
     /** @var list<Filter> */
     protected array $filters = [];
+
+    protected FiltersLayout|string|null $filtersLayout = null;
 
     protected bool $creatable = false;
 
@@ -305,6 +308,19 @@ class Spreadsheet
     public function getFilters(): array
     {
         return $this->filters;
+    }
+
+    /** Where the filters are shown: in a dropdown behind a funnel button (default), inline in the toolbar, or on a row above the grid. */
+    public function filtersLayout(FiltersLayout|string $layout): static
+    {
+        $this->filtersLayout = $layout;
+
+        return $this;
+    }
+
+    public function getFiltersLayout(): FiltersLayout
+    {
+        return FiltersLayout::fromConfig($this->filtersLayout ?? config('packstub-spreadsheet.filters_layout'));
     }
 
     public function isCreatable(): bool

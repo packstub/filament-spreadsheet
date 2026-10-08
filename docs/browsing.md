@@ -36,7 +36,7 @@ A sortable column must be a real database column: the sort is an `ORDER BY` on i
 ])
 ```
 
-A select is a small native select in the toolbar (`Filter::select()`); `Filter::boolean()` is a yes/no select; `Filter::dateRange()` two date inputs, either side open. By default a select narrows `where(<name>, <value>)`, a boolean `where(<name>, true|false)`, a date range `where(<name>, >=, from)` and `where(<name>, <, the day after until)` (plain ranges, so the column's index stays in use). `query()` replaces the default. A value the filter did not offer, or a malformed date, is ignored: the browser cannot inject a raw value.
+A select is a Filament select (`Filter::select()`); `Filter::boolean()` is a yes/no select; `Filter::dateRange()` two date inputs, either side open. By default a select narrows `where(<name>, <value>)`, a boolean `where(<name>, true|false)`, a date range `where(<name>, >=, from)` and `where(<name>, <, the day after until)` (plain ranges, so the column's index stays in use). `query()` replaces the default. A value the filter did not offer, or a malformed date, is ignored: the browser cannot inject a raw value.
 
 ## Pagination
 
@@ -45,6 +45,20 @@ A select is a small native select in the toolbar (`Filter::select()`); `Filter::
 ```
 
 The page size runs from 25 to `max_per_page` (1,000) in the footer under the grid, where the pager is, as in a Filament table; `perPage()` sets the initial one. Row numbers continue across pages. The grid scrolls inside its own height, the header and the toolbar staying in place, however many rows the page holds. Another page, page size, sort, search or filter result opens at its first row; the same page read again (a `packstub-spreadsheet-refresh`, the re-read after a save, Discard) stays where it was scrolled to, with the active cell and the selected range where they were (when that row is gone, on the row now at its place), so what you type next goes into the cell you were on. A sheet with 5,000 rows is five pages of 1,000 or fifty of 100; see [Performance](performance.md) for what fits.
+
+## Where the filters are
+
+Filters open from a funnel button in the toolbar by default, the number of active ones on the button and a *Reset filters* link in the panel, as a Filament table's do. `filtersLayout()` on the definition puts them elsewhere, and the config's `filters_layout` sets the default for every sheet:
+
+```php
+use Packstub\Spreadsheet\Enums\FiltersLayout;
+
+->filtersLayout(FiltersLayout::Toolbar)      // inline in the toolbar, after the search box
+->filtersLayout(FiltersLayout::AboveContent) // on a row of their own between the toolbar and the grid
+->filtersLayout(FiltersLayout::Dropdown)     // behind the funnel button (the default)
+```
+
+The config takes the same three as strings: `dropdown`, `toolbar`, `above`.
 
 ## When a request fails
 

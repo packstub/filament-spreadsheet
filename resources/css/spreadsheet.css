@@ -93,12 +93,33 @@
 .ps-sheet-filter-on .fi-input-wrp { --tw-ring-color: var(--ps-sheet-ring); box-shadow: 0 0 0 1px var(--ps-sheet-ring); }
 .ps-sheet-dash { color: var(--ps-sheet-muted); }
 
+/* Delete rows: a gray button, the trash in the danger colour. */
+.ps-sheet-btn-danger .fi-icon { color: var(--danger-600); }
+.dark .ps-sheet-btn-danger .fi-icon { color: var(--danger-400); }
+
+/* The filters: inline in the toolbar, on a row above the grid, or stacked in the funnel button's dropdown panel. */
+.ps-sheet-filters-inline, .ps-sheet-filters-above { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.ps-sheet-filters-above { margin-top: 0.5rem; }
+.ps-sheet-filters-panel { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; }
+.ps-sheet-filters-panel .ps-sheet-field, .ps-sheet-filters-panel .fi-input-wrp { width: 100%; }
+.ps-sheet-filters-panel .ps-sheet-range { flex-wrap: wrap; }
+.ps-sheet-filters-trigger { position: relative; display: inline-flex; }
+.ps-sheet-filters-reset { align-self: flex-start; }
+
+/* The shortcuts list in the help modal. */
+.ps-sheet-shortcuts { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1.5rem; margin: 0; }
+.ps-sheet-shortcut { display: contents; }
+.ps-sheet-shortcut dt { font-size: 0.875rem; }
+.ps-sheet-shortcut dd { margin: 0; text-align: end; }
+.ps-sheet-kbd { display: inline-block; padding: 0.125rem 0.5rem; border: 1px solid var(--ps-sheet-border); border-bottom-width: 2px; border-radius: 0.375rem; background: var(--ps-sheet-surface, var(--ps-sheet-bg)); font-family: inherit; font-size: 0.8125rem; white-space: nowrap; }
+
 .ps-sheet-pill { white-space: nowrap; }
 button.ps-sheet-pill { cursor: pointer; }
 
 /* Under the grid: the status line left, the pager right. */
 .ps-sheet-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 0.5rem; }
-.ps-sheet-footer .ps-sheet-hint { flex: 1 1 12rem; }
+.ps-sheet-status { display: flex; align-items: center; gap: 0.5rem; flex: 1 1 12rem; min-width: 0; }
+.ps-sheet-status .ps-sheet-hint { flex: 1; }
 .ps-sheet-pager { display: inline-flex; align-items: center; gap: 0.5rem; margin-inline-start: auto; }
 .ps-sheet-pager-text,
 .ps-sheet-count { font-size: 0.8125rem; color: var(--ps-sheet-muted); white-space: nowrap; }
@@ -153,8 +174,12 @@ button.ps-sheet-pill { cursor: pointer; }
 .ps-sheet .tabulator .tabulator-header .tabulator-col.tabulator-range-highlight { background: var(--ps-sheet-range); color: var(--ps-sheet-text); }
 .ps-sheet .tabulator .tabulator-header .tabulator-col.tabulator-range-selected { background: var(--primary-600); color: #fff; }
 .ps-sheet .tabulator .tabulator-header .tabulator-frozen.tabulator-frozen-left { border-right: 2px solid var(--ps-sheet-border); }
+/* A frozen header cell is opaque: the head and range tints are translucent, and the columns scrolling under it showed through. */
+.ps-sheet .tabulator .tabulator-header .tabulator-col.tabulator-frozen { background: linear-gradient(var(--ps-sheet-head), var(--ps-sheet-head)), var(--ps-sheet-bg); }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.tabulator-frozen.ps-sheet-col-sortable:hover { background: linear-gradient(var(--ps-sheet-hover), var(--ps-sheet-hover)), var(--ps-sheet-bg); }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.tabulator-frozen.tabulator-range-highlight { background: linear-gradient(var(--ps-sheet-range), var(--ps-sheet-range)), var(--ps-sheet-bg); }
 .ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-col-readonly .tabulator-col-title { color: var(--ps-sheet-muted); font-weight: 500; }
-.ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-rownum { background: var(--ps-sheet-head); }
+.ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-rownum { background: linear-gradient(var(--ps-sheet-head), var(--ps-sheet-head)), var(--ps-sheet-bg); }
 
 .ps-sheet .tabulator .tabulator-tableholder { background: var(--ps-sheet-bg); }
 .ps-sheet .tabulator .tabulator-tableholder:focus-visible { outline: none; }
@@ -175,16 +200,19 @@ button.ps-sheet-pill { cursor: pointer; }
     align-items: center;
     height: 100%;
 }
-.ps-sheet .tabulator-row .tabulator-cell.tabulator-frozen.tabulator-frozen-left { border-right: 2px solid var(--ps-sheet-border); background: inherit; }
+/* A frozen cell is opaque too (the row's hover and range tints are translucent). */
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-frozen.tabulator-frozen-left { border-right: 2px solid var(--ps-sheet-border); background: var(--ps-sheet-bg); }
+.ps-sheet .tabulator-row.tabulator-selectable:hover .tabulator-cell.tabulator-frozen.tabulator-frozen-left { background: linear-gradient(var(--ps-sheet-hover), var(--ps-sheet-hover)), var(--ps-sheet-bg); }
+.ps-sheet .tabulator-row .tabulator-cell.tabulator-frozen.tabulator-range-selected { background: linear-gradient(var(--ps-sheet-range), var(--ps-sheet-range)), var(--ps-sheet-bg); }
 .ps-sheet .tabulator-row .tabulator-cell.ps-sheet-rownum {
     justify-content: center;
     color: var(--ps-sheet-muted);
-    background: var(--ps-sheet-head);
+    background: linear-gradient(var(--ps-sheet-head), var(--ps-sheet-head)), var(--ps-sheet-bg);
     font-size: 0.75rem;
     user-select: none;
     cursor: pointer;
 }
-.ps-sheet .tabulator-row.tabulator-range-highlight .tabulator-cell.tabulator-range-row-header { background: var(--ps-sheet-range); color: var(--ps-sheet-text); }
+.ps-sheet .tabulator-row.tabulator-range-highlight .tabulator-cell.tabulator-range-row-header { background: linear-gradient(var(--ps-sheet-range), var(--ps-sheet-range)), var(--ps-sheet-bg); color: var(--ps-sheet-text); }
 .ps-sheet .tabulator-row.tabulator-range-selected .tabulator-cell.tabulator-range-row-header { background: var(--primary-600); color: #fff; }
 .ps-sheet .tabulator-row .tabulator-cell.tabulator-range-selected { background: var(--ps-sheet-range); }
 .ps-sheet .tabulator .tabulator-tableholder .tabulator-range-overlay .tabulator-range { border-color: var(--ps-sheet-ring); }

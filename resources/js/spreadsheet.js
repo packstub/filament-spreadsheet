@@ -26,6 +26,8 @@ export default function packstubSpreadsheet(config) {
         t,
         columns: config.columns ?? [],
         filters: config.filters ?? [],
+        // Where the filters are shown: 'dropdown' (a funnel button), 'toolbar' (inline) or 'above' (a row over the grid).
+        filtersLayout: config.filtersLayout ?? 'dropdown',
         active: {},
         search: '',
         page: 1,
@@ -372,6 +374,51 @@ export default function packstubSpreadsheet(config) {
         },
 
         /** A shortcut as the tooltip of its button reads it: the configured binding, ⌘ on a Mac. */
+        /** The filters that narrow the rows: a select with a value, a range with either date. */
+        activeFilterCount() {
+            return this.filters.filter((f) => f.type === 'dateRange' ? (this.active[f.name]?.from || this.active[f.name]?.until) : this.active[f.name]).length
+        },
+
+        resetFilters() {
+            for (const f of this.filters) this.active[f.name] = f.type === 'dateRange' ? { from: '', until: '' } : ''
+            this.refresh()
+        },
+
+        /** The shortcuts as bound (the configurable ones) and the grid's own, for the help modal. */
+        shortcutList() {
+            const fixed = (label, spec) => ({ label, keys: S.shortcutLabel(spec, mac) })
+            return [
+                { label: t.save, keys: this.keyLabel('save') },
+                { label: t.undo, keys: this.keyLabel('undo') },
+                { label: t.redo, keys: this.keyLabel('redo') },
+                { label: t.add_row, keys: this.keyLabel('add_row') },
+                { label: t.shortcut_fill_down, keys: this.keyLabel('fill_down') },
+                fixed(t.shortcut_copy, 'mod+c'),
+                fixed(t.shortcut_paste, 'mod+v'),
+                { label: t.shortcut_cut, keys: this.keyLabel('cut') },
+                fixed(t.shortcut_clear, 'delete'),
+                fixed(t.shortcut_edit, 'enter'),
+                fixed(t.shortcut_select, 'shift+arrowdown'),
+                fixed(t.shortcut_jump, 'mod+arrowdown'),
+                fixed(t.shortcut_toggle, 'space'),
+            ]
+        },
+
+        openHelp() {
+            const el = this.$root.querySelector('.ps-sheet-help')
+            if (el?.id) window.dispatchEvent(new CustomEvent('open-modal', { detail: { id: el.id } }))
+        },
+
+        /**
+         * A Filament modal of the sheet reports `modal-closed` (bubbling to the root): the dialog resolves its
+         * question, the help modal hands the keyboard back to the grid once its focus trap has let go.
+         */
+        modalClosed(e) {
+            const id = e?.detail?.id
+            if (id && id === this.$root.querySelector('.ps-sheet-dialog')?.id) this.dialogClosed(e)
+            else if (id && id === this.$root.querySelector('.ps-sheet-help')?.id) this.$nextTick(() => this.refocus())
+        },
+
         keyLabel(name) {
             return S.shortcutLabel(specs[name] ?? S.DEFAULT_KEYS[name] ?? '', mac)
         },

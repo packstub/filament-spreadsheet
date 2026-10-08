@@ -2278,6 +2278,41 @@ try {
     await page.waitForTimeout(80)
     await page.screenshot({ path: join(shots, 'rtl.png') })
 
+    // a frozen column's header and cells are opaque: the columns scrolling under them never show through (the head and range tints are translucent)
+    await fresh()
+    const frozen = await page.evaluate(() => { const h = getComputedStyle(document.querySelector('.tabulator-header .tabulator-col.tabulator-frozen[tabulator-field="sku"]')); const c = getComputedStyle(document.querySelector('.tabulator-tableholder .tabulator-row .tabulator-cell.tabulator-frozen[tabulator-field="sku"]')); return { headerImage: h.backgroundImage, headerColor: h.backgroundColor, cellColor: c.backgroundColor } })
+    check('a frozen column header and its cells paint an opaque background', frozen.headerImage.includes('linear-gradient') && ! /rgba\(0, 0, 0, 0\)|transparent/.test(frozen.headerColor) && ! /rgba\(0, 0, 0, 0\)|transparent/.test(frozen.cellColor), JSON.stringify(frozen))
+
+    // the errors badge sits in the footer beside the status line
+    check('the errors badge is in the footer status line', await page.evaluate(() => !! document.querySelector('.ps-sheet-footer .ps-sheet-status .ps-sheet-pill-errors') && ! document.querySelector('.ps-sheet-toolbar .ps-sheet-pill-errors')))
+
+    // the filters behind a funnel button: the panel opens, a pick narrows the rows and counts on the button, Reset clears
+    await fresh('?filters=dropdown')
+    const dropdownShape = await page.evaluate(() => ({ btn: !! document.querySelector('.ps-sheet-filters-btn')?.getClientRects().length, inline: !! document.querySelector('.ps-sheet-filters-inline'), above: !! document.querySelector('.ps-sheet-filters-above'), panelOpen: !! document.querySelector('.ps-sheet-filters-panel')?.getClientRects().length }))
+    await page.locator('.ps-sheet-filters-btn').click()
+    await page.waitForTimeout(250)
+    const panelOpen = await page.evaluate(() => !! document.querySelector('.ps-sheet-filters-panel')?.getClientRects().length)
+    await page.locator('.ps-sheet-filters-panel .ps-sheet-filter select').first().selectOption('1')
+    await page.waitForFunction(() => window.sheet().rows.length < 100 && ! window.sheet().loading)
+    const picked = await page.evaluate(() => ({ rows: window.sheet().rows.length, count: document.querySelector('.ps-sheet-filters-count')?.textContent.trim(), reset: !! document.querySelector('.ps-sheet-filters-reset')?.getClientRects().length }))
+    await page.locator('.ps-sheet-filters-reset').click()
+    await page.waitForFunction(() => window.sheet().rows.length === 100 && ! window.sheet().loading)
+    const reset = await page.evaluate(() => ({ count: document.querySelector('.ps-sheet-filters-count')?.getClientRects().length ?? 0, value: document.querySelector('.ps-sheet-filters-panel .ps-sheet-filter select').value }))
+    check('filtersLayout dropdown: a funnel button opens the filters, a pick narrows the rows and is counted on the button, Reset filters clears them', dropdownShape.btn && ! dropdownShape.inline && ! dropdownShape.above && ! dropdownShape.panelOpen && panelOpen && picked.rows < 100 && picked.count === '1' && picked.reset && reset.count === 0 && reset.value === '', JSON.stringify({ dropdownShape, panelOpen, picked, reset }))
+    await fresh('?filters=above')
+    const above = await page.evaluate(() => ({ above: !! document.querySelector('.ps-sheet-filters-above .ps-sheet-filter select')?.getClientRects().length, toolbar: !! document.querySelector('.ps-sheet-toolbar .ps-sheet-filter'), btn: !! document.querySelector('.ps-sheet-filters-btn') }))
+    check('filtersLayout above: the filters on a row of their own under the toolbar', above.above && ! above.toolbar && ! above.btn, JSON.stringify(above))
+
+    // the shortcuts: a "?" button opens Filament's modal with every shortcut as bound; Escape closes it and hands the keyboard back to the grid
+    await fresh()
+    await page.locator('.ps-sheet-help-btn').click()
+    await page.waitForTimeout(400)
+    const help = await page.evaluate(() => { const m = document.querySelector('.ps-sheet-help'); return { open: m.classList.contains('fi-modal-open'), items: m.querySelectorAll('.ps-sheet-shortcut').length, first: m.querySelector('.ps-sheet-shortcut dd').textContent.trim(), expected: window.sheet().keyLabel('save') } })
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+    const helpClosed = await page.evaluate(() => ({ open: document.querySelector('.ps-sheet-help').classList.contains('fi-modal-open'), focus: !! document.activeElement?.closest('.ps-sheet-grid') }))
+    check('the help button opens the shortcuts modal with the bound keys; Escape closes it and the grid has the keyboard again', help.open && help.items === 13 && help.first === help.expected && ! helpClosed.open && helpClosed.focus, JSON.stringify({ help, helpClosed }))
+
     // read-only
     await page.goto(`http://127.0.0.1:${port}/?readonly`)
     await page.waitForSelector('.tabulator-tableholder .tabulator-row')

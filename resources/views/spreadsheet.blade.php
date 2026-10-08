@@ -5,8 +5,7 @@
 
     $config = $this->getSpreadsheetConfig();
     $dialogId = $this->getId() . '-ps-sheet-dialog';
-    // A filter's label is Alpine's (the filters come with the config): the wrapper's prefix carries the span.
-    $filterLabel = new HtmlString('<span x-text="filter.label"></span>');
+    $helpId = $this->getId() . '-ps-sheet-help';
     // The dialog's heading and text are the component's (dialog.heading, dialog.text): spans for the modal's slots.
     $dialogHeading = new HtmlString('<span x-text="dialog ? dialog.heading : \'\'"></span>');
     $dialogText = new HtmlString('<span class="ps-sheet-dialog-text" x-text="dialog ? dialog.text : \'\'"></span>');
@@ -35,7 +34,7 @@
     x-data="packstubSpreadsheet(@js($config))"
     x-on:keydown.escape.window="onEscape()"
     x-on:packstub-spreadsheet-refresh.window="refresh()"
-    x-on:modal-closed="dialogClosed($event)"
+    x-on:modal-closed="modalClosed($event)"
     class="ps-sheet"
     style="visibility: hidden"
     :class="{ 'ps-sheet-is-readonly': readOnly, 'ps-sheet-is-saving': saving, 'ps-sheet-is-loading': loading, 'ps-sheet-is-dirty': dirty.total > 0 }"
@@ -100,8 +99,7 @@
         </div>
 
         <x-filament::button
-            color="danger"
-            outlined
+            color="gray"
             :icon="Heroicon::OutlinedTrash"
             class="ps-sheet-btn ps-sheet-btn-danger"
             x-show="deletable && selected"
@@ -118,7 +116,6 @@
         <div class="ps-sheet-spacer"></div>
 
         <x-filament::badge color="gray" class="ps-sheet-pill ps-sheet-pill-readonly" x-show="readOnly"><span x-text="t.read_only_badge"></span></x-filament::badge>
-        <x-filament::badge tag="button" color="danger" class="ps-sheet-pill ps-sheet-pill-errors" x-show="errorCount" x-on:click="nextError()" x-bind:title="t.next_error"><span x-text="errorsLabel()"></span></x-filament::badge>
         {{-- what the Save badge's count does not say: changes on other pages, new rows, rows to delete --}}
         <x-filament::badge color="warning" class="ps-sheet-pill ps-sheet-pill-dirty" x-show="dirty.total && (dirty.pages > 1 || dirty.created || dirty.deleted)"><span x-text="changesLabel()"></span></x-filament::badge>
 
@@ -126,32 +123,44 @@
             <x-filament::input type="search" inline-prefix autocomplete="off" x-model="search" x-on:input.debounce.400ms="refresh()" x-bind:placeholder="t.search" x-bind:aria-label="t.search" />
         </x-filament::input.wrapper>
 
-        <template x-for="filter in filters" :key="filter.name">
-            <div class="ps-sheet-filter-wrap">
-                <template x-if="filter.type === 'dateRange'">
-                    <div class="ps-sheet-range ps-sheet-filter" :class="{ 'ps-sheet-filter-on': active[filter.name].from || active[filter.name].until }">
-                        <x-filament::input.wrapper :prefix="$filterLabel" class="ps-sheet-field">
-                            <x-filament::input type="date" x-model="active[filter.name].from" x-on:change="refresh()" x-bind:aria-label="filter.label + ' ' + t.from" />
-                        </x-filament::input.wrapper>
-                        <span class="ps-sheet-dash">–</span>
-                        <x-filament::input.wrapper class="ps-sheet-field">
-                            <x-filament::input type="date" x-model="active[filter.name].until" x-on:change="refresh()" x-bind:aria-label="filter.label + ' ' + t.until" />
-                        </x-filament::input.wrapper>
-                    </div>
-                </template>
-                <template x-if="filter.type !== 'dateRange'">
-                    <x-filament::input.wrapper :prefix="$filterLabel" class="ps-sheet-field ps-sheet-filter" x-bind:class="{ 'ps-sheet-filter-on': active[filter.name] }">
-                        <x-filament::input.select x-model="active[filter.name]" x-on:change="refresh()" x-bind:aria-label="filter.label">
-                            <option value="" x-text="t.all"></option>
-                            <template x-for="option in filter.options" :key="option.value">
-                                <option :value="option.value" x-text="option.label"></option>
-                            </template>
-                        </x-filament::input.select>
-                    </x-filament::input.wrapper>
-                </template>
+        {{-- the filters inline (filtersLayout toolbar) --}}
+        <template x-if="filtersLayout === 'toolbar'">
+            <div class="ps-sheet-filters ps-sheet-filters-inline">
+                @include('packstub-spreadsheet::filters')
             </div>
         </template>
+
+        {{-- the filters behind a funnel button (filtersLayout dropdown): the count of active ones on the button, a reset link in the panel --}}
+        <template x-if="filtersLayout === 'dropdown' && filters.length">
+            <div class="ps-sheet-filters-dropdown">
+                <x-filament::dropdown placement="bottom-end" width="xs">
+                    <x-slot name="trigger">
+                        <div class="ps-sheet-filters-trigger">
+                            <x-filament::icon-button color="gray" :icon="Heroicon::OutlinedFunnel" :label="__('packstub-spreadsheet::spreadsheet.filters')" class="ps-sheet-filters-btn" x-bind:title="t.filters" />
+                            <div class="fi-icon-btn-badge-ctn" x-show="activeFilterCount()">
+                                <x-filament::badge size="xs" color="primary" class="ps-sheet-filters-count"><span x-text="activeFilterCount()"></span></x-filament::badge>
+                            </div>
+                        </div>
+                    </x-slot>
+                    <div class="ps-sheet-filters ps-sheet-filters-panel">
+                        @include('packstub-spreadsheet::filters', ['stacked' => true])
+                        <x-filament::link tag="button" color="danger" size="sm" class="ps-sheet-filters-reset" x-show="activeFilterCount()" x-on:click="resetFilters()">
+                            <span x-text="t.reset_filters"></span>
+                        </x-filament::link>
+                    </div>
+                </x-filament::dropdown>
+            </div>
+        </template>
+
+        <x-filament::icon-button color="gray" :icon="Heroicon::OutlinedQuestionMarkCircle" :label="__('packstub-spreadsheet::spreadsheet.shortcuts')" class="ps-sheet-help-btn" x-bind:title="t.shortcuts" x-on:click="openHelp()" />
     </div>
+
+    {{-- the filters on a row of their own (filtersLayout above) --}}
+    <template x-if="filtersLayout === 'above' && filters.length">
+        <div class="ps-sheet-filters ps-sheet-filters-above">
+            @include('packstub-spreadsheet::filters')
+        </div>
+    </template>
 
     <div class="ps-sheet-grid" x-ref="grid" x-on:contextmenu.prevent="openMenu($event)"></div>
 
@@ -184,9 +193,24 @@
         </x-slot>
     </x-filament::modal>
 
+    {{-- the keyboard shortcuts, as bound, in Filament's modal --}}
+    <x-filament::modal :id="$helpId" width="md" :heading="__('packstub-spreadsheet::spreadsheet.shortcuts')" :restores-focus="false" class="ps-sheet-help">
+        <dl class="ps-sheet-shortcuts">
+            <template x-for="item in shortcutList()" :key="item.label">
+                <div class="ps-sheet-shortcut">
+                    <dt x-text="item.label"></dt>
+                    <dd><kbd class="ps-sheet-kbd" x-text="item.keys"></kbd></dd>
+                </div>
+            </template>
+        </dl>
+    </x-filament::modal>
+
     {{-- under the grid: the status line (always rendered: a live region announces a change only when it existed before it) and the pager --}}
     <div class="ps-sheet-footer">
-        <div class="ps-sheet-hint" role="status" aria-live="polite" :class="hint ? '' : (status && 'ps-sheet-hint-' + status.kind)" x-text="hint ?? (status ? status.text : '')"></div>
+        <div class="ps-sheet-status">
+            <x-filament::badge tag="button" color="danger" class="ps-sheet-pill ps-sheet-pill-errors" x-show="errorCount" x-on:click="nextError()" x-bind:title="t.next_error"><span x-text="errorsLabel()"></span></x-filament::badge>
+            <div class="ps-sheet-hint" role="status" aria-live="polite" :class="hint ? '' : (status && 'ps-sheet-hint-' + status.kind)" x-text="hint ?? (status ? status.text : '')"></div>
+        </div>
 
         <nav class="ps-sheet-pager" :aria-label="t.page_of.replace(':page', page).replace(':pages', lastPage)">
             <span class="ps-sheet-count" x-text="rowsLabel()"></span>

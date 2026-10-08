@@ -197,7 +197,7 @@ it('hands the browser everything it needs in the config, the first page of rows 
         'deletable' => true,
         'readOnly' => false,
         'confirmLeave' => true,
-        'frozenFirstColumn' => true,
+        'frozenFirstColumn' => false,
         'rowHeight' => 32,
         'locale' => 'en',
         'height' => null,

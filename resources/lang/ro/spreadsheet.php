@@ -29,6 +29,18 @@ return [
     'delete_row' => 'Șterge rândul',
     'restore_row' => 'Păstrează rândul',
     'open_sheet' => 'Editează ca foaie de calcul',
+    'filters' => 'Filtre',
+    'reset_filters' => 'Resetează filtrele',
+    'shortcuts' => 'Scurtături de tastatură',
+    'shortcut_copy' => 'Copiază celulele selectate',
+    'shortcut_paste' => 'Lipește la celula selectată',
+    'shortcut_clear' => 'Golește celulele selectate',
+    'shortcut_edit' => 'Editează celula selectată',
+    'shortcut_select' => 'Extinde selecția',
+    'shortcut_jump' => 'Sari la marginea celulelor completate',
+    'shortcut_toggle' => 'Comută o celulă da/nu',
+    'shortcut_fill_down' => 'Completează selecția în jos de la primul rând',
+    'shortcut_cut' => 'Taie celulele selectate',
 
     // Prompts
     'confirm_discard' => 'Renunți la toate modificările nesalvate?',

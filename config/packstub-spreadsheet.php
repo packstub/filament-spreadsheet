@@ -40,16 +40,22 @@ return [
     | Grid
     |--------------------------------------------------------------------------
     |
-    | Whether leaving the page with unsaved changes asks first, whether the
-    | first column is pinned while scrolling sideways, the height of a row in
-    | pixels, and the keyboard shortcuts (a browser shortcut string per action;
-    | see the docs for the names).
+    | Whether leaving the page with unsaved changes asks first; whether the
+    | first column is pinned while scrolling sideways (off by default: the grid
+    | warns that a pinned column beside the row numbers can misbehave with
+    | range selection); where the filters are shown (`dropdown` behind a funnel
+    | button, `toolbar` inline, `above` on a row over the grid; a definition's
+    | filtersLayout() wins); the height of a row in pixels; and the keyboard
+    | shortcuts (a browser shortcut string per action; see the docs for the
+    | names).
     |
     */
 
     'confirm_leave' => true,
 
-    'frozen_first_column' => true,
+    'frozen_first_column' => false,
+
+    'filters_layout' => 'dropdown',
 
     'row_height' => 32,
 

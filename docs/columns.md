@@ -10,7 +10,7 @@ A column names an attribute of the model and says how it is read into the grid a
 TextColumn::make('name')
     ->label('Product name')                  // default: the name, headlined ("category_id" → "Category")
     ->width(220)                             // pixels; default: what the content needs
-    ->frozen()                               // pinned while scrolling sideways (the first column is, by config)
+    ->frozen()                               // pinned while scrolling sideways (`frozen_first_column` in the config pins the first one)
     ->readOnly()                             // never editable
     ->readOnly(fn (Product $p) => $p->is_locked) // not for some records: the cell is greyed and refused
     ->rules(['required', 'max:120'])         // Laravel rules (a list, "required|max:120", or fn (?Product $record): array)

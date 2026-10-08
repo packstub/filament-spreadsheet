@@ -32,7 +32,8 @@ The dark palette is set under `.dark .ps-sheet`. The grid's height is measured b
 | Class | On |
 | --- | --- |
 | `.ps-sheet`, `.ps-sheet-is-dirty`, `.ps-sheet-is-saving`, `.ps-sheet-is-loading`, `.ps-sheet-is-readonly` | the root |
-| `.ps-sheet-toolbar`, `.ps-sheet-btn`, `.ps-sheet-btn-primary`, `.ps-sheet-pill-dirty`, `.ps-sheet-pill-errors` | the toolbar |
+| `.ps-sheet-toolbar`, `.ps-sheet-btn`, `.ps-sheet-btn-primary`, `.ps-sheet-btn-danger`, `.ps-sheet-search`, `.ps-sheet-filter`, `.ps-sheet-filters-btn`, `.ps-sheet-pill-dirty` | the toolbar |
+| `.ps-sheet-footer`, `.ps-sheet-status`, `.ps-sheet-hint`, `.ps-sheet-pill-errors`, `.ps-sheet-pager` | the footer under the grid |
 | `.ps-sheet-cell-dirty`, `.ps-sheet-cell-error`, `.ps-sheet-cell-conflict`, `.ps-sheet-cell-locked` | a cell |
 | `.ps-sheet-row-created`, `.ps-sheet-row-deleted`, `.ps-sheet-row-readonly`, `.ps-sheet-row-error` | a row |
 | `.ps-sheet-col-<type>`, `.ps-sheet-col-sortable`, `.ps-sheet-col-readonly`, `.ps-sheet-rownum` | a column's cells and header |

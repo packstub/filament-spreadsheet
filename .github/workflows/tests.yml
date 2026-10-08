@@ -82,3 +82,40 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
           git diff --exit-code -- resources/dist || (echo "::error::resources/dist is stale: run npm run build and commit it" && exit 1)
+
+  # The browser harness (tests/browser/run.mjs): the real view rendered through the test app, driven in headless
+  # Chromium through Playwright. One PHP / Laravel / Filament combination: it tests the browser side, the matrix
+  # above tests the server side.
+  browser:
+    name: Browser harness
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.4"
+          extensions: pdo_sqlite
+          coverage: none
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Setup Node 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Playwright's Chromium
+        run: |
+          npm ci --no-audit --no-fund
+          npx --yes playwright@$(node -p "require('./node_modules/playwright-core/package.json').version") install --with-deps chromium
+
+      - name: Run the browser harness
+        env:
+          PLAYWRIGHT_CORE: ${{ github.workspace }}/node_modules/playwright-core
+        run: npm run test:browser

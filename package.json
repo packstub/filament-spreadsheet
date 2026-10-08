@@ -5,10 +5,12 @@
     "scripts": {
         "build": "node build.mjs",
         "dev": "node build.mjs --watch",
-        "test": "node --test tests/js/*.test.mjs"
+        "test": "node --test tests/js/*.test.mjs",
+        "test:browser": "node tests/browser/run.mjs"
     },
     "devDependencies": {
         "esbuild": "^0.28.2",
-        "tabulator-tables": "^6.6.0"
+        "tabulator-tables": "^6.6.0",
+        "playwright-core": "1.64.0"
     }
 }

@@ -40,7 +40,8 @@ A sheet lives on a page. `SpreadsheetResourcePage` sits next to a resource's lis
 | `save_mode` | `all_or_nothing` | `all_or_nothing` or `per_row` (see [Saving](saving.md)); any other value throws |
 | `version_column` | `updated_at` | The attribute compared before a row is written; `null` turns the check off |
 | `confirm_leave` | `true` | Ask before leaving the page with unsaved changes |
-| `frozen_first_column` | `true` | Pin the first column while scrolling sideways |
+| `frozen_first_column` | `false` | Pin the first column while scrolling sideways (Tabulator warns a pinned column beside the row numbers can misbehave with range selection) |
+| `filters_layout` | `dropdown` | Where the filters are: `dropdown` behind a funnel button, `toolbar` inline, `above` the grid (`filtersLayout()` on a definition wins) |
 | `row_height` | `32` | Pixels |
 | `keybindings` | `[]` | Overrides: `save`, `fill_down`, `undo`, `redo`, `add_row`, `cut` as `mod+s`-style strings (`mod` is Ctrl or ⌘) |
 | `date_format` | `Y-m-d` | PHP format a date cell shows (`format()` on a column wins) |

@@ -142,6 +142,7 @@ trait InteractsWithSpreadsheet
         return [
             'columns' => array_map(fn ($column) => $column->toArray(), $sheet->getColumns()),
             'filters' => array_map(fn ($filter) => $filter->toArray(), $sheet->getFilters()),
+            'filtersLayout' => $sheet->getFiltersLayout()->value,
             'perPage' => $sheet->getPerPage(),
             'pageSizes' => $sizes,
             'sort' => $sheet->getDefaultSort(),
@@ -151,7 +152,7 @@ trait InteractsWithSpreadsheet
             'readOnly' => $sheet->isReadOnly(),
             'maxRowsPerSave' => $sheet->getMaxRowsPerSave(),
             'confirmLeave' => (bool) config('packstub-spreadsheet.confirm_leave', true),
-            'frozenFirstColumn' => (bool) config('packstub-spreadsheet.frozen_first_column', true),
+            'frozenFirstColumn' => (bool) config('packstub-spreadsheet.frozen_first_column', false),
             'rowHeight' => max(24, (int) config('packstub-spreadsheet.row_height', 32)),
             'keybindings' => array_filter((array) config('packstub-spreadsheet.keybindings', []), 'is_string'),
             'locale' => str_replace('_', '-', app()->getLocale()),

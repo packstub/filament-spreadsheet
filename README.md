@@ -157,7 +157,7 @@ Read more: [Search, sort, filters, pagination](https://packstub.dev/docs/filamen
 
 ## Configuration
 
-`config/packstub-spreadsheet.php` holds the defaults: rows per page and the maximum, the most rows one Save may carry, the save mode, the version column, whether leaving with unsaved changes asks first, the frozen first column, the row height, the keyboard shortcuts and the date formats.
+`config/packstub-spreadsheet.php` holds the defaults: rows per page and the maximum, the most rows one Save may carry, the save mode, the version column, whether leaving with unsaved changes asks first, a pinned first column (off by default), where the filters are (a dropdown, the toolbar or a row above the grid), the row height, the keyboard shortcuts and the date formats.
 
 ![The sheet in dark mode](docs/images/dark.png)
 

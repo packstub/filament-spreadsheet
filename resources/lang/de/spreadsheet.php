@@ -29,6 +29,18 @@ return [
     'delete_row' => 'Zeile löschen',
     'restore_row' => 'Zeile behalten',
     'open_sheet' => 'Als Tabelle bearbeiten',
+    'filters' => 'Filter',
+    'reset_filters' => 'Filter zurücksetzen',
+    'shortcuts' => 'Tastenkürzel',
+    'shortcut_copy' => 'Markierte Zellen kopieren',
+    'shortcut_paste' => 'An der markierten Zelle einfügen',
+    'shortcut_clear' => 'Markierte Zellen leeren',
+    'shortcut_edit' => 'Markierte Zelle bearbeiten',
+    'shortcut_select' => 'Auswahl erweitern',
+    'shortcut_jump' => 'Zum Rand der gefüllten Zellen springen',
+    'shortcut_toggle' => 'Ja/Nein-Zelle umschalten',
+    'shortcut_fill_down' => 'Auswahl von der ersten Zeile nach unten füllen',
+    'shortcut_cut' => 'Markierte Zellen ausschneiden',
 
     // Prompts
     'confirm_discard' => 'Alle ungespeicherten Änderungen verwerfen?',

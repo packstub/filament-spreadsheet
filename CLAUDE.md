@@ -14,7 +14,7 @@ composer test:js            # browser side's pure parts: node --test tests/js (p
 composer lint               # Pint
 npm run build               # resources/{js,css} → resources/dist (esbuild); commit the result
 npm run dev                 # rebuild on change
-node tests/browser/run.mjs  # headless Chromium harness (not CI): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, keys on a boolean cell, Alt+arrows, a keyboard-only pass
+node tests/browser/run.mjs  # headless Chromium harness (also the `browser` CI job, through the repo's own playwright-core): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, keys on a boolean cell, Alt+arrows, a keyboard-only pass
 ```
 
 CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.2 / 4.* / 5.*, and checks that `npm run build`
@@ -289,7 +289,16 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   (`x-bind:disabled`, `x-show`, `x-on:click`); the `ps-sheet-*` classes beside theirs are the hooks the harness and the demo
   rig address, keep them. A colour is a set of classes (`fi-color-danger fi-bg-color-600 …`), not one: the dialog has one
   OK button per colour, `x-show`n. The toolbar shows what applies (the Save group once `dirty.total || editing || canUndo
-  || canRedo`, Delete rows once `selected`); the pager and `.ps-sheet-hint` sit in `.ps-sheet-footer` under the grid.
+  || canRedo`, Delete rows once `selected`); the pager, `.ps-sheet-hint` and the errors badge sit in `.ps-sheet-footer` under the grid.
+  The filters are `resources/views/filters.blade.php`, included once per layout (`filtersLayout`: `toolbar` inline,
+  `above` on a row under the toolbar, `dropdown` in `x-filament::dropdown` behind a funnel icon-button with
+  `activeFilterCount()` as a badge and `resetFilters()`), the one the config picks shown by `x-if`; the harness page
+  defaults to `toolbar` (`?filters=dropdown|above`). `shortcutList()` feeds the help modal (`openHelp()`, id
+  `{livewire id}-ps-sheet-help`); both modals report `modal-closed` to the root's `modalClosed($event)`, which
+  resolves the dialog or refocuses the grid a tick later (the focus trap still holds the focus when the event fires).
+  Frozen header cells and cells paint `linear-gradient(tint, tint), var(--ps-sheet-bg)`: the head, hover and range
+  tints are translucent and the columns scrolling under a pinned one showed through. `frozen_first_column` defaults
+  to false (Tabulator's warning about a frozen column beside the range header).
   The dialog is Filament's modal, id `{livewire id}-ps-sheet-dialog`, opened by `confirm()` through the `open-modal`
   window event and resolved on `modal-closed` (bubbling from the modal to the root's `x-on:modal-closed`); the buttons
   call `answerDialog(answer, $root.id)`: inside the modal's own Alpine component `$root` is the modal, so a method called

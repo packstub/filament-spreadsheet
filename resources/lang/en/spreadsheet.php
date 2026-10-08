@@ -29,6 +29,18 @@ return [
     'delete_row' => 'Delete row',
     'restore_row' => 'Keep row',
     'open_sheet' => 'Edit as sheet',
+    'filters' => 'Filters',
+    'reset_filters' => 'Reset filters',
+    'shortcuts' => 'Keyboard shortcuts',
+    'shortcut_copy' => 'Copy the selected cells',
+    'shortcut_paste' => 'Paste at the selected cell',
+    'shortcut_clear' => 'Clear the selected cells',
+    'shortcut_edit' => 'Edit the selected cell',
+    'shortcut_select' => 'Extend the selection',
+    'shortcut_jump' => 'Jump to the edge of the filled cells',
+    'shortcut_toggle' => 'Flip a yes/no cell',
+    'shortcut_fill_down' => 'Fill the selection down from its first row',
+    'shortcut_cut' => 'Cut the selected cells',
 
     // Prompts
     'confirm_discard' => 'Discard all unsaved changes?',
