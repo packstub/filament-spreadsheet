@@ -9,7 +9,7 @@
 
 ## Page sizes
 
-The default page is 100 rows; the toolbar goes up to `max_per_page` (1,000). The grid has a height of its own (measured by default: the window below the grid's top edge, or less when the page has fewer rows, see [Styling](styling.md)) and scrolls inside it, the header and the toolbar staying in place. It builds elements only for the rows around the visible window, and for the columns in view: about 60 row elements in a grid of some 500 pixels, whether the page holds 100 rows or 1,000. So the number of elements follows the grid's height, not the page size, and the cost of a bigger page is the query, the JSON and the policy checks. A sheet of 10,000 rows is ten pages of 1,000 — the unsaved cells follow across pages, so a bulk change over several pages is one Save. For a fixed table of that size, sort by the key and let the user page.
+The default page is 100 rows; the toolbar goes up to `max_per_page` (1,000). The grid has a height of its own (measured by default: the window below the grid's top edge, or less when the page has fewer rows, see [Styling](styling.md)) and scrolls inside it, the header and the toolbar staying in place. It builds elements only for the rows around the visible window (every column of those rows: a sheet has a dozen columns, the rows are the long axis): about 60 row elements in a grid of some 500 pixels, whether the page holds 100 rows or 1,000. So the number of elements follows the grid's height, not the page size, and the cost of a bigger page is the query, the JSON and the policy checks. A sheet of 10,000 rows is ten pages of 1,000 — the unsaved cells follow across pages, so a bulk change over several pages is one Save. For a fixed table of that size, sort by the key and let the user page.
 
 ## Saves
 
