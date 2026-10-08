@@ -70,4 +70,6 @@ return [
     'too_many_cells' => 'This row carries more cells than the sheet has columns.',
     'too_many_rows' => 'Too many rows in one save (at most :max). Save in smaller batches.',
     'error_count' => '{1} :count cell needs attention|[2,*] :count cells need attention',
+    'next_error' => 'Go to the next marked cell',
+    'errors_elsewhere' => 'The marked cells are on other pages.',
 ];

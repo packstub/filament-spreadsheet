@@ -576,3 +576,15 @@ test('a computed number is copied with its decimals', () => {
     assert.equal(S.display({ type: 'computed', decimals: 2 }, 50), '50.00')
     assert.equal(S.display({ type: 'computed', decimals: null }, 'low'), 'low')
 })
+
+test('shortcutLabel reads a binding the way a tooltip shows it, per platform', () => {
+    assert.equal(S.shortcutLabel('mod+s'), 'Ctrl+S')
+    assert.equal(S.shortcutLabel('mod+s', true), '⌘S')
+    assert.equal(S.shortcutLabel('mod+enter'), 'Ctrl+Enter')
+    assert.equal(S.shortcutLabel('mod+enter', true), '⌘↩')
+    assert.equal(S.shortcutLabel('ctrl+shift+d'), 'Ctrl+Shift+D')
+    assert.equal(S.shortcutLabel('ctrl+shift+d', true), '⌃⇧D')
+    assert.equal(S.shortcutLabel('mod+shift+a', true), '⇧⌘A')
+    assert.equal(S.shortcutLabel('alt+f2'), 'Alt+F2')
+    assert.equal(S.shortcutLabel('f2', true), 'F2')
+})

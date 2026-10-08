@@ -16,9 +16,11 @@ export { choice }
 export default function packstubSpreadsheet(config) {
     const t = config.i18n ?? {}
     const keys = {}
+    const specs = { ...S.DEFAULT_KEYS, ...(config.keybindings ?? {}) }
     // The $wire calls not answered yet (see call()). Kept out of the Alpine data: a reactive copy would never compare equal.
     let waiting = []
-    for (const [name, spec] of Object.entries({ ...S.DEFAULT_KEYS, ...(config.keybindings ?? {}) })) keys[name] = S.parseKeybinding(spec)
+    for (const [name, spec] of Object.entries(specs)) keys[name] = S.parseKeybinding(spec)
+    const mac = /mac|iphone|ipad|ipod/i.test(navigator.userAgentData?.platform ?? navigator.platform ?? '')
 
     return {
         t,
@@ -48,6 +50,8 @@ export default function packstubSpreadsheet(config) {
         selected: 0,
         menu: null,
         hint: null,
+        // The active cell's error or conflict, shown under the grid for the keyboard and touch (the title needs a pointer).
+        status: null,
         height: config.height ?? null,
 
         rows: [],
@@ -69,6 +73,13 @@ export default function packstubSpreadsheet(config) {
             this.$root.addEventListener('keydown', this._keydown, true)
             window.addEventListener('beforeunload', this._beforeUnload)
             document.addEventListener('livewire:navigate', this._navigate)
+            // The grid's height follows the window and the rows (see fit()): measured again when the root changes
+            // size (the toolbar wrapping, a hidden sheet shown) and when the window does.
+            this._fitHeight = null
+            this._onResize = () => this.fit()
+            window.addEventListener('resize', this._onResize)
+            this._observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.fit()) : null
+            this._observer?.observe(this.$root)
 
             // Livewire 3 never settles an action's promise when its request fails (Livewire 4 rejects it):
             // the commit hook's `fail` is the one signal both have. See call().
@@ -78,6 +89,7 @@ export default function packstubSpreadsheet(config) {
             })
 
             this.$nextTick(() => {
+                this.fit()
                 this.grid = createGrid(this.$refs.grid, {
                     columns: this.columns,
                     t,
@@ -96,7 +108,7 @@ export default function packstubSpreadsheet(config) {
                         paste: (text) => this.onPaste(text),
                         // The rows Delete rows would delete: a row the policy keeps (a viewer's) is not counted, so the
                         // button is not offered for a selection it would do nothing with.
-                        select: (count, ids = []) => { this.selected = this.readOnly || ! this.deletable ? 0 : this.deletableIds(ids).length },
+                        select: (count, ids = []) => { this.selected = this.readOnly || ! this.deletable ? 0 : this.deletableIds(ids).length; this.updateStatus() },
                         editing: (open) => { this.editing = open },
                     },
                 })
@@ -111,6 +123,9 @@ export default function packstubSpreadsheet(config) {
             window.removeEventListener('beforeunload', this._beforeUnload)
             document.removeEventListener('livewire:navigate', this._navigate)
             if (typeof this._unhook === 'function') this._unhook()
+            window.removeEventListener('resize', this._onResize)
+            this._observer?.disconnect()
+            cancelAnimationFrame(this._fitFrame)
             clearTimeout(this._hint)
             this.grid?.destroy()
         },
@@ -185,6 +200,144 @@ export default function packstubSpreadsheet(config) {
             this.canUndo = this.buffer.undo.length > 0
             this.canRedo = this.buffer.redo.length > 0
             this.errorCount = S.errorCount(this.buffer)
+            this.updateStatus()
+            this.fit()
+        },
+
+        /* ------------------------------------------------------------ height */
+
+        /**
+         * The grid's height when nothing fixes it (`--ps-sheet-height` is `auto`: no getSpreadsheetHeight(), no
+         * length from a theme): what the window holds below the grid's top edge once what follows the grid (the
+         * line under it, the page's padding, anything after the sheet) has its room, so the page does not scroll
+         * for the sheet alone; and no more than the rows need (a short page is a short grid; at least three rows,
+         * so the empty message has a box). A sheet far down a long page (under a form) is not squeezed into what
+         * is left of the first screen: it may take the window below the top bar, and the page scrolls to it.
+         * Written as the variable on the root, so the stylesheet and Tabulator's inline height both follow; a value
+         * that did not change is not written (the ResizeObserver sees the write).
+         */
+        fit() {
+            const grid = this.$refs.grid
+            if (! grid || this.height) return
+            const rootStyle = getComputedStyle(this.$root)
+            if (this._fixed === undefined) this._fixed = rootStyle.getPropertyValue('--ps-sheet-height').trim() !== 'auto'
+            if (this._fixed) return
+            const rect = grid.getBoundingClientRect()
+            if (! rect.width) return // hidden: nothing to measure, the observer calls again when it is shown
+            const rem = parseFloat(rootStyle.fontSize) || 16
+            const length = (v, fallback) => { const m = /^\s*([\d.]+)(px|rem)?\s*$/.exec(v ?? ''); return m ? parseFloat(m[1]) * (m[2] === 'rem' ? rem : 1) : fallback }
+            const rowHeight = Math.max(24, Number(config.rowHeight) || 32)
+            const header = grid.querySelector('.tabulator-header')?.getBoundingClientRect().height || rowHeight + 8
+            // A row element is the row plus its border; the grid's borders are not inside its height.
+            const pitch = grid.querySelector('.tabulator-row')?.getBoundingClientRect().height || rowHeight + 1
+            const rows = this.grid ? this.grid.ids().length : this.rows.length
+            const needed = Math.ceil(header + Math.max(3, rows) * pitch + 2)
+            const top = rect.top + window.scrollY
+            const gs = getComputedStyle(grid)
+            // The variable is the grid's content height: its own borders come on top of it.
+            const borders = gs.boxSizing === 'border-box' ? 0 : (parseFloat(gs.borderTopWidth) || 0) + (parseFloat(gs.borderBottomWidth) || 0)
+            const below = this.after(grid) + borders
+            let available = Math.floor(window.innerHeight - top - below)
+            if (available < header + 8 * pitch) available = Math.max(available, Math.floor(window.innerHeight - length(rootStyle.getPropertyValue('--topbar-height'), 4 * rem) - rem - below))
+            const px = Math.max(Math.ceil(header + 3 * pitch + 2), Math.min(needed, available))
+            // A write redraws the grid and the observer sees the root change: a difference of a pixel is left alone.
+            if (this._fitHeight !== null && Math.abs(px - this._fitHeight) < 2) return
+            this._fitHeight = px
+            this.$root.style.setProperty('--ps-sheet-height', `${px}px`)
+        },
+
+        /**
+         * The room what follows an element takes down to the end of the page: the following siblings at each
+         * level (their margins and the flex gap before them), the padding of each ancestor, the body's margin.
+         * Not the document's height: a body with a min-height of the window would count its empty rest.
+         */
+        after(el) {
+            const px = (v) => parseFloat(v) || 0
+            let sum = 0
+            for (let node = el; node && node !== document.body; node = node.parentElement) {
+                const parent = node.parentElement
+                if (! parent) break
+                const cs = getComputedStyle(parent)
+                sum += px(cs.paddingBottom) + px(cs.borderBottomWidth) + px(getComputedStyle(node).marginBottom)
+                let seen = false
+                for (const sib of parent.children) {
+                    if (sib === node) { seen = true; continue }
+                    if (! seen) continue
+                    const r = sib.getBoundingClientRect()
+                    const ss = getComputedStyle(sib)
+                    if ((! r.height && ! r.width) || ss.position === 'fixed' || ss.position === 'absolute') continue
+                    sum += r.height + px(ss.marginTop) + px(ss.marginBottom) + px(cs.rowGap)
+                }
+            }
+            const body = getComputedStyle(document.body)
+
+            return sum + px(body.paddingBottom) + px(body.marginBottom)
+        },
+
+        /* ------------------------------------------------------------ status */
+
+        /** The active cell's error, conflict or row error for the line under the grid, null when it has none. */
+        updateStatus() {
+            const a = this.grid?.activeCell()
+            const m = a ? this.marks(a.id) : null
+            let next = null
+            if (m?.errors[a.col]) next = { kind: 'error', text: m.errors[a.col] }
+            else if (m && Object.prototype.hasOwnProperty.call(m.conflicts, a.col)) next = { kind: 'conflict', text: `${t.conflict} ${t.their_value}: ${this.plain(a.col, m.conflicts[a.col])} · ${t.your_value}: ${this.plain(a.col, this.grid.value(a.id, a.col))}` }
+            else if (m?.rowError) next = { kind: 'error', text: m.rowError }
+            if ((next?.text ?? null) !== (this.status?.text ?? null)) this.status = next
+        },
+
+        /** What the buffer holds against a row: the refused cells, the conflicts and the row's own error. */
+        marks(id) {
+            return { errors: this.buffer.errors[id] ?? {}, conflicts: this.buffer.conflicts[id] ?? {}, rowError: this.buffer.rowErrors[id] ?? null }
+        },
+
+        /** A value as text for a message: an option's label, a boolean as a word, the rest as it is. */
+        plain(col, value) {
+            if (value === null || value === undefined || value === '') return '—'
+            const column = this.column(col)
+            if (column?.type === 'select') return (column.options ?? []).find((o) => String(o.value) === String(value))?.label ?? String(value)
+            if (column?.type === 'boolean') return value ? (t.yes ?? 'yes') : (t.no ?? 'no')
+
+            return String(value)
+        },
+
+        /**
+         * Move the active cell to the next marked cell of the page (a refused cell, a conflict, a row the server
+         * refused), after the active one in row order, wrapping; the toolbar's count is a button for it.
+         */
+        async nextError() {
+            if (! this.grid) return
+            const cols = this.columns.filter((c) => ! c.hidden).map((c) => c.name)
+            const first = this.columns.find((c) => c.editable && ! c.readOnly)?.name ?? cols[0]
+            const marked = []
+            for (const id of this.grid.ids()) {
+                const m = this.marks(id)
+                for (const col of cols) if (m.errors[col] || Object.prototype.hasOwnProperty.call(m.conflicts, col)) marked.push({ id, col })
+                if (m.rowError && ! marked.some((x) => x.id === id)) marked.push({ id, col: first })
+            }
+            if (! marked.length) { if (this.errorCount) this.flash(t.errors_elsewhere); this.refocus(); return }
+            const a = this.grid.activeCell()
+            const at = a ? marked.findIndex((x) => x.id === a.id && x.col === a.col) : -1
+            let i = at + 1
+            if (at === -1 && a) {
+                // No mark on the active cell: the first one after it in the page's order.
+                const ids = this.grid.ids()
+                const pos = (x) => ids.indexOf(x.id) * cols.length + cols.indexOf(x.col)
+                const here = pos(a)
+                i = marked.findIndex((x) => pos(x) > here)
+                if (i === -1) i = 0
+            }
+            const target = marked[i % marked.length]
+            await this.grid.scrollTo(target.id)
+            this.grid.select(target.id, target.col)
+            this.updateStatus()
+            this.refocus()
+        },
+
+        /** A shortcut as the tooltip of its button reads it: the configured binding, ⌘ on a Mac. */
+        keyLabel(name) {
+            return S.shortcutLabel(specs[name] ?? S.DEFAULT_KEYS[name] ?? '', mac)
         },
 
         request() {

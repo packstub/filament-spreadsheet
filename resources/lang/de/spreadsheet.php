@@ -70,4 +70,6 @@ return [
     'too_many_cells' => 'Diese Zeile enthält mehr Zellen, als das Blatt Spalten hat.',
     'too_many_rows' => 'Zu viele Zeilen in einem Speichervorgang (höchstens :max). Speichern Sie in kleineren Schritten.',
     'error_count' => '{1} :count Zelle braucht Aufmerksamkeit|[2,*] :count Zellen brauchen Aufmerksamkeit',
+    'next_error' => 'Zur nächsten markierten Zelle',
+    'errors_elsewhere' => 'Die markierten Zellen liegen auf anderen Seiten.',
 ];
