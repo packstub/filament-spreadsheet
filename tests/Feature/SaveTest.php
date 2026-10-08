@@ -128,6 +128,17 @@ it('clears a cell of every type to null, unless a required rule refuses the clea
         ->and($product->fresh()->name)->toBe('Hammer');
 });
 
+it('uses the column\'s own messages and attribute name, as a Filament field does', function () {
+    ProductSheet::$ownMessages = true;
+    $product = product('a-1', 'Hammer');
+
+    $refused = save(['changed' => [$product->id => ['sku' => '', 'name' => '']]]);
+    $long = save(['changed' => [$product->id => ['sku' => str_repeat('x', 40)]]]);
+
+    expect($refused->errors[$product->id])->toBe(['sku' => 'Every product needs a SKU.', 'name' => 'The Name field is required.'])
+        ->and($long->errors[$product->id]['sku'])->toBe('The product code field must not be greater than 32 characters.');
+});
+
 it('validates with the column rules, a unique rule ignoring the record itself', function () {
     $a = product('a-1');
     product('b-2');

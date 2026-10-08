@@ -41,6 +41,9 @@ class ProductSheet extends Component
 
     public static ?string $height = null;
 
+    /** sku gets validationMessages() and validationAttribute(). */
+    public static bool $ownMessages = false;
+
     /** @var list<array<string, mixed>> */
     public static array $afterSave = [];
 
@@ -58,6 +61,7 @@ class ProductSheet extends Component
         static::$failInAfterSave = false;
         static::$brokenQuery = false;
         static::$height = null;
+        static::$ownMessages = false;
         static::$afterSave = [];
         static::$beforeSave = [];
     }
@@ -67,7 +71,8 @@ class ProductSheet extends Component
         return $spreadsheet
             ->query(fn () => static::$brokenQuery ? Product::query()->whereRaw('no_such_column = 1') : Product::query()->with('category'))
             ->columns([
-                TextColumn::make('sku')->rules(['required', 'max:32', 'unique:products,sku'])->frozen(),
+                TextColumn::make('sku')->rules(['required', 'max:32', 'unique:products,sku'])->frozen()
+                    ->when(static::$ownMessages, fn (TextColumn $c) => $c->validationMessages(['required' => 'Every product needs a SKU.'])->validationAttribute('product code')),
                 TextColumn::make('name')->rules(['required'])->maxLength(120),
                 SelectColumn::make('category_id')->relationship('category', 'name', fn ($query) => $query->where('is_active', true)),
                 SelectColumn::make('status')->options(Status::class)->default('draft'),

@@ -984,7 +984,7 @@ class Spreadsheet
     /**
      * Laravel's validator over the row: the given columns' rules (the column's own,
      * a `unique` ignoring the record, the type's) against the record's attributes
-     * with the new values laid over.
+     * with the new values laid over, the columns' own messages and attribute names.
      *
      * @param  array<string, mixed>  $data
      * @param  list<string>  $columns
@@ -994,11 +994,16 @@ class Spreadsheet
     {
         $rules = [];
         $names = [];
+        $messages = [];
 
         foreach ($columns as $name) {
             if ($column = $this->getColumn($name)) {
                 $rules[$name] = $column->getRules($record);
-                $names[$name] = $column->getLabel();
+                $names[$name] = $column->getValidationAttribute();
+
+                foreach ($column->getValidationMessages($record) as $rule => $message) {
+                    $messages["{$name}.{$rule}"] = $message;
+                }
             }
         }
 
@@ -1007,7 +1012,7 @@ class Spreadsheet
         }
 
         $row = $record ? [...$record->attributesToArray(), ...$data] : $data;
-        $validator = Validator::make($row, $rules, [], $names);
+        $validator = Validator::make($row, $rules, $messages, $names);
         $errors = [];
 
         if ($validator->fails()) {
