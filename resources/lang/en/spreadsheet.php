@@ -39,6 +39,7 @@ return [
     'shortcut_select' => 'Extend the selection',
     'shortcut_jump' => 'Jump to the edge of the filled cells',
     'shortcut_toggle' => 'Flip a yes/no cell',
+    'shortcut_menu' => 'Row menu',
     'shortcut_fill_down' => 'Fill the selection down from its first row',
     'shortcut_cut' => 'Cut the selected cells',
 
@@ -77,6 +78,8 @@ return [
     'conflict' => 'Changed by someone else since you loaded it.',
     'their_value' => 'Their value',
     'your_value' => 'Your value',
+    'conflict_elsewhere' => 'This cell still holds the value you loaded; another cell of the row was changed.',
+    'no_results' => 'No results',
     'row_failed' => 'This row could not be saved.',
     'row_delete_failed' => 'This row could not be deleted.',
     'too_many_cells' => 'This row carries more cells than the sheet has columns.',

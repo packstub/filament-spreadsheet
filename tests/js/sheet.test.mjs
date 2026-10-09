@@ -340,6 +340,23 @@ test('overlay lays the buffer over a server row', () => {
 
 /* ------------------------------------------------------------------ paste and fill */
 
+test('a blank line past the last row makes no new row; inside the rows it clears the cells', () => {
+    const rows = [row(1), row(2)]
+    const plan = S.pastePlan({ matrix: [['5', 'Paint'], ['', ''], ['', ' '], ['7', 'Tools'], ['', '']], startRow: 1, startCol: 1, rows, columns, creatable: true, defaults: { stock: 0 }, t: T })
+
+    // Row 2 takes the first line; the blank lines past the end are dropped, the filled one is created.
+    assert.equal(plan.edits.length, 2)
+    assert.equal(plan.created.length, 1)
+    assert.equal(plan.created[0].values.price, 7)
+    assert.equal(plan.blank, 3)
+    assert.equal(plan.skipped, 0)
+
+    // The same blank line over an existing row clears its cells.
+    const over = S.pastePlan({ matrix: [['', '']], startRow: 0, startCol: 1, rows, columns, creatable: true, t: T })
+    assert.deepEqual(over.edits.map((e) => [e.col, e.to]), [['price', null], ['stock', null]])
+    assert.equal(over.blank, 0)
+})
+
 test('a paste lands at the anchor, coerces per column, skips what cannot be edited and adds rows past the end', () => {
     const rows = [row(1), row(2, {}, { locked: ['price'] }), row(3, {}, { readOnly: true })]
     const plan = S.pastePlan({

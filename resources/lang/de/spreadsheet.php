@@ -39,6 +39,7 @@ return [
     'shortcut_select' => 'Auswahl erweitern',
     'shortcut_jump' => 'Zum Rand der gefüllten Zellen springen',
     'shortcut_toggle' => 'Ja/Nein-Zelle umschalten',
+    'shortcut_menu' => 'Zeilenmenü',
     'shortcut_fill_down' => 'Auswahl von der ersten Zeile nach unten füllen',
     'shortcut_cut' => 'Markierte Zellen ausschneiden',
 
@@ -77,6 +78,8 @@ return [
     'conflict' => 'Von jemand anderem geändert, seit Sie sie geladen haben.',
     'their_value' => 'Ihr Wert (andere)',
     'your_value' => 'Ihr Wert',
+    'conflict_elsewhere' => 'Diese Zelle hat noch den Wert, den Sie geladen haben; eine andere Zelle der Zeile wurde geändert.',
+    'no_results' => 'Keine Treffer',
     'row_failed' => 'Diese Zeile konnte nicht gespeichert werden.',
     'row_delete_failed' => 'Diese Zeile konnte nicht gelöscht werden.',
     'too_many_cells' => 'Diese Zeile enthält mehr Zellen, als das Blatt Spalten hat.',

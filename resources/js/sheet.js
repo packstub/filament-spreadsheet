@@ -895,7 +895,7 @@ export function editable(column, row, readOnly = false) {
  * rows on the page (each { id, values, locked, readOnly, deleted }) and the
  * visible columns. A single pasted cell over a wider selection fills it (as in
  * Excel); rows past the last one become new rows when creatable. Returns
- * { edits: [{ id, col, from, to }], created: [{ values }], invalid: [{ id, col, error }], skipped: count };
+ * { edits: [{ id, col, from, to }], created: [{ values }], invalid: [{ id, col, error }], skipped: count, blank: count (lines past the last row with nothing on them, no row made) };
  * an unreadable cell of a new row has `id: null` and `created`, its index into `created`
  * (the row has no id until applyPaste() adds it).
  */
@@ -905,7 +905,7 @@ export function pastePlan({ matrix, startRow, startCol, rows, columns, creatable
         cells = Array.from({ length: selection.rows }, () => Array.from({ length: selection.cols }, () => cells[0][0]))
     }
 
-    const out = { edits: [], created: [], invalid: [], skipped: 0 }
+    const out = { edits: [], created: [], invalid: [], skipped: 0, blank: 0 }
 
     cells.forEach((line, r) => {
         const rowIndex = startRow + r
@@ -914,6 +914,9 @@ export function pastePlan({ matrix, startRow, startCol, rows, columns, creatable
 
         if (! row) {
             if (! creatable || readOnly) { out.skipped += line.length; return }
+            // A line with nothing on it (a blank row copied along, the empty line a trailing tab leaves) makes no new
+            // row: a `required` rule would refuse it. Inside the existing rows the same line clears its cells.
+            if (line.every((raw) => String(raw ?? '').trim() === '')) { out.blank++; return }
             fresh = { values: { ...defaults } }
             out.created.push(fresh)
         }

@@ -115,7 +115,7 @@
 
         <div class="ps-sheet-spacer"></div>
 
-        <x-filament::badge color="gray" class="ps-sheet-pill ps-sheet-pill-readonly" x-show="readOnly"><span x-text="t.read_only_badge"></span></x-filament::badge>
+        <x-filament::badge color="gray" class="ps-sheet-pill ps-sheet-pill-readonly" x-show="readOnly || lockedPage"><span x-text="t.read_only_badge"></span></x-filament::badge>
         {{-- what the Save badge's count does not say: changes on other pages, new rows, rows to delete --}}
         <x-filament::badge color="warning" class="ps-sheet-pill ps-sheet-pill-dirty" x-show="dirty.total && (dirty.pages > 1 || dirty.created || dirty.deleted)"><span x-text="changesLabel()"></span></x-filament::badge>
 

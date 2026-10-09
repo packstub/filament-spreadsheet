@@ -39,6 +39,7 @@ return [
     'shortcut_select' => 'Extinde selecția',
     'shortcut_jump' => 'Sari la marginea celulelor completate',
     'shortcut_toggle' => 'Comută o celulă da/nu',
+    'shortcut_menu' => 'Meniul rândului',
     'shortcut_fill_down' => 'Completează selecția în jos de la primul rând',
     'shortcut_cut' => 'Taie celulele selectate',
 
@@ -77,6 +78,8 @@ return [
     'conflict' => 'Modificat de altcineva după ce l-ai încărcat.',
     'their_value' => 'Valoarea lor',
     'your_value' => 'Valoarea ta',
+    'conflict_elsewhere' => 'Celula are încă valoarea încărcată de tine; a fost modificată altă celulă a rândului.',
+    'no_results' => 'Niciun rezultat',
     'row_failed' => 'Rândul nu a putut fi salvat.',
     'row_delete_failed' => 'Rândul nu a putut fi șters.',
     'too_many_cells' => 'Acest rând conține mai multe celule decât are foaia coloane.',

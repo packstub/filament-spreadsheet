@@ -146,7 +146,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   no rows and the height would stay at the three-row floor), on `window` resize and from a `ResizeObserver` on the
   root (disconnected in `destroy()`); a difference under 2 px is not written (a write
   redraws the grid and the observer sees the root change). `config.height` (`getSpreadsheetHeight()`), bound on the
-  root by the view, or a length a theme sets on the variable (`_fixed`: read once the variable has a value; it reads `''` until `x-load-css` has brought the stylesheet, and the harness's `?latecss` covers that), turns the measuring off. So **a row may have no element**: address
+  root by the view, or a length a theme sets on the variable (`_fixed`: read once the variable has a value; it reads `''` until `x-load-css` has brought the stylesheet, and the harness's `?latecss` covers that), turns the measuring off. The stylesheet's event (`packstub-spreadsheet-css`, listened to until `destroy()`) also calls `grid.relayout()` (`table.redraw(true)`): the first page is rendered as the grid is built (`config.state`), and when the stylesheet lands after that (a slow first load of the script: `x-load` holds `x-load-css` back until the script is in) the columns were measured on unstyled cells, each as wide as the grid, the sheet collapsed to its pinned column (the "collapsed columns" report). The harness reproduces it with `?inline&latecss=manual` (`?inline` puts the first page in the config as the view does; `?latecss=<ms>` delays the stylesheet, `manual` leaves it to `window.__loadCss()`), and the case spies on the forced redraw, because the harness page otherwise heals by itself (a size change makes Tabulator redraw). So **a row may have no element**: address
   rows by id through the table (`getRow(id)`, which answers `false` for an unknown id), never by DOM position;
   `grid.scrollTo(id, position)` brings one into view (Tabulator's `scrollToRow` plus a few rounds of correction, its
   estimates stop short of the last row); `addRow()` scrolls to the new row; `grid.edit()` scrolls the active cell back
@@ -192,6 +192,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   its row out of the window. `cellFocus`, a `focusin` listener on the grid (removed in `destroy()`), hands the focus to
   the holder a tick later when a cell without an open editor still holds it.
   `updateRows()` and `scrollTo()` do nothing after `destroy()` (an editor that commits while the sheet is removed).
+- `lockedPage` (set in `applyPage()`): no row the user may edit or delete and nothing to add, so the read-only pill shows (`x-show="readOnly || lockedPage"`) for a viewer. `grid.js` writes the pinned columns' width on the grid element as `--ps-sheet-frozen` (`frozenWidth()`, at `ready`, on `renderComplete` and `columnResized`, in `relayout()`); the holder's `scroll-padding-inline-start` reads it, so a cell focused on a narrow screen scrolls clear of them. `pastePlan()` makes no row from a line with nothing on it past the last row (`blank` counted, not `skipped`).
 - Status line and marks: `.ps-sheet-hint` is always rendered (a live region announces a change only when it existed
   before it; `min-height` keeps the layout still) and shows `hint` (a flash) or `status` (the active cell's error,
   conflict with both values through `plain()`, or row error; `updateStatus()` from the grid's `select` callback and
@@ -220,15 +221,15 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   reads `''` with `validity.badInput` (a part missing: one segment cleared, a year not typed yet), so a blur, Enter or
   Ctrl+S on a half-typed date keeps the cell's value; every part cleared reads `''` without `badInput` and commits
   null (the harness clears parts until `badInput` is false: their number follows the locale).
-- Select editor (`grid.js`): Tabulator's list editor re-filters by the field's text on every `keyup` but the arrows,
+- `rangeEdited` (the fill handle) answers `range.getCells()` structured, one array per row: it is `.flat()`ed. `findJumpItem` of `SelectRangeModule` is patched on the prototype once (a falsy value counted as empty: 0 and false stopped Ctrl+Arrow). `openMenuFor(id, x, y)` is the menu's one path: the view's `contextmenu` through `openMenu(e)`, Shift+F10 / the ContextMenu key through `openMenuAtActive()` (`grid.activeBox()`); `onEscape()` closes it and `refocus()`es. `onNavigate()` on a cancelled Back / Forward (`e.detail.history`) puts `_url` back with `history.pushState(_state, '', _url)` (both read at init). The boolean formatter sets `aria-label` on the cell element. `updateStatus()` says `conflict_elsewhere` when their value equals the buffer's original for the cell.
+- Select editor (`grid.js`): `freetext: true`: typed text confirmed is committed as typed and `coerce()` matches it (Tabulator cancelled it otherwise, the exact label too); `placeholderEmpty` is `t.no_results`. Tabulator's list editor re-filters by the field's text on every `keyup` but the arrows,
   Enter and Escape, so `listKeyup`, a **capture-phase** `keyup` listener on the grid element (removed in `destroy()`),
   stops a deny-list of keys while a list editor is open (`listOpen()`): F2 (the key that opened it), Shift, Control,
   Alt, Meta, CapsLock, Home, End, PageUp, PageDown. A deny-list, not "anything that is not one character": an IME
   reports `Process`. `currentCell` is `false`, not null, when nothing is edited (`?.` does not guard it). The list
   editor ignores `selectContents` and leaves the caret after the label, so a `cellEditing` handler selects the
   label one tick later (the editor is built after that event) for F2 / Enter / a double-click; `api.edit(initial)`
-  sets `typedOpen` around `cell.edit(true)` and keeps its typed text. Tabulator's own rule stays: Enter after typed
-  text resolves the text (cancel when it is no option, null when it is empty, `allowEmpty`), it does not pick the one
+  sets `typedOpen` around `cell.edit(true)` and keeps its typed text. Enter after typed text commits the text (`freetext`; null when it is empty, `allowEmpty`), it does not pick the one
   option left; ArrowDown + Enter pick it.
 - A cell without an editor (boolean, computed: `editor: false`): Tabulator's `editCell` / `cell.edit()` throws there
   (`column.modules.edit` is undefined), and two paths reach it. Enter (`spreadsheet.js` `onKeydown`): Tabulator's range
