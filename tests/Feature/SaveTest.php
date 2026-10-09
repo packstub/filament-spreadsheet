@@ -500,8 +500,7 @@ it('marks the row the database refuses in AllOrNothing mode and rolls the batch 
         ->and($result->errors)->toBe([(string) $c->id => ['name' => 'The Name field is required.']])
         ->and($b->fresh())->toMatchArray(['cost' => '5.00', 'name' => 'Product']);
 
-    // "NOT NULL constraint failed: products.cost" (SQLite), "Column 'cost' cannot be null" (MySQL), 'null value in column "cost"' (Postgres).
-    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'cost'));
+    Exceptions::assertReported(fn (QueryException $e) => refusedNotNull($e, 'cost'));
     Event::assertDispatchedTimes(RowSaveFailed::class, 3);
     Event::assertDispatched(RowSaveFailed::class, fn (RowSaveFailed $e) => $e->record?->is($b) && $e->reason === 'This row could not be saved.');
     Event::assertDispatched(RowSaveFailed::class, fn (RowSaveFailed $e) => $e->record?->is($c) && $e->errors === ['name' => 'The Name field is required.']);
@@ -534,8 +533,7 @@ it('keeps checking the rows after one the database refused in AllOrNothing mode,
         ->and($a->fresh()->cost)->toBe('5.00')
         ->and($b->fresh())->toMatchArray(['sku' => 'B-2', 'name' => 'Product']);
 
-    // "NOT NULL constraint failed: products.cost" (SQLite), "Column 'cost' cannot be null" (MySQL), 'null value in column "cost"' (Postgres).
-    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'cost'));
+    Exceptions::assertReported(fn (QueryException $e) => refusedNotNull($e, 'cost'));
 });
 
 it('answers a delete the database refuses on its row, in both modes', function (SaveMode $mode) {
@@ -649,3 +647,15 @@ it('takes the save mode from the config, an enum case too, and refuses one that 
     config(['packstub-spreadsheet.save_mode' => 'per-row']);
     expect(fn () => $spreadsheet->getSaveMode())->toThrow(InvalidArgumentException::class, "Unknown spreadsheet save mode [per-row]: use 'all_or_nothing' or 'per_row'.");
 });
+
+/**
+ * The database's own NOT NULL refusal of a column, in each driver's words: "NOT NULL constraint failed: products.cost"
+ * (SQLite), "Column 'cost' cannot be null" (MySQL), 'null value in column "cost"' (Postgres). Not the column's name
+ * alone: the message carries the SQL, which names the column whatever the error was.
+ */
+function refusedNotNull(QueryException $e, string $column): bool
+{
+    $column = preg_quote($column, '/');
+
+    return (bool) preg_match("/NOT NULL constraint failed: products\\.{$column}\\b|Column '{$column}' cannot be null|null value in column \"{$column}\"/", $e->getMessage());
+}
