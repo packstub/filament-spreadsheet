@@ -57,6 +57,7 @@ return [
     'offline' => 'Der Server war nicht erreichbar. Ihre Änderungen sind noch da.',
     'paste_skipped' => '{1} :count Zelle konnte nicht eingefügt werden (schreibgeschützt oder außerhalb der Tabelle).|[2,*] :count Zellen konnten nicht eingefügt werden (schreibgeschützt oder außerhalb der Tabelle).',
     'paste_capped' => '{1} :count Zeile wurde nicht hinzugefügt: ein Speichervorgang umfasst höchstens :max Zeilen.|[2,*] :count Zeilen wurden nicht hinzugefügt: ein Speichervorgang umfasst höchstens :max Zeilen.',
+    'paste_blank' => '{1} :count leere Zeile wurde nicht als Zeile hinzugefügt.|[2,*] :count leere Zeilen wurden nicht als Zeilen hinzugefügt.',
     'failed' => 'Das Speichern ist fehlgeschlagen.',
     'load_failed' => 'Die Zeilen konnten nicht geladen werden.',
 

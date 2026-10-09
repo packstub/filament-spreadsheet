@@ -370,6 +370,7 @@ export function createGrid(element, options) {
     const focusHolder = holder ? holder.focus.bind(holder) : () => {}
     let outside = false
     const pointerDown = (e) => {
+        if (! e.target?.closest?.('.tabulator-popup-container, .tabulator-editing')) pickHighlighted()
         outside = ! element.contains(e.target) && ! e.target?.closest?.('.tabulator-popup-container')
         const was = outside
         setTimeout(() => {
@@ -490,6 +491,10 @@ export function createGrid(element, options) {
     // editor stops them itself (see isoEditor: they step the focused segment).
     const editorKeys = (e) => {
         if (! api.isEditing()) return
+        if (listOpen()) {
+            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && ! (e.altKey || e.ctrlKey || e.metaKey)) listNav = true
+            else if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Process') listNav = false
+        }
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             if (e.shiftKey || e.ctrlKey || e.metaKey || e.target?.tagName !== 'INPUT') return
             if (table.modules.edit.currentCell?.column.definition.editor !== 'input') return
@@ -538,6 +543,22 @@ export function createGrid(element, options) {
     // currentCell is false, not null, while nothing is edited.
     const listOpen = () => { const c = table.modules.edit.currentCell; return !! c && c.column.definition.editor === 'list' }
 
+    // A select's typed text is committed as typed (freetext), and Tabulator resolves every blur from that text, also
+    // after ↓ / ↑ highlighted an option: "to", ↓ onto Tools, then Tab or a click elsewhere wrote "to" (red) where Enter
+    // would have picked Tools. Once the arrows moved the highlight (listNav, set in editorKeys, cleared by the next
+    // character), the ways an editor is left without Enter pick the highlighted option first, as a click on it would:
+    // the editor's blur (Tab, Ctrl+S, the component's grid.focus()), a pointer-down anywhere but the list and the
+    // field (Tabulator's popup resolves on the body's mousedown, before the blur) and a scroll of the grid.
+    let listNav = false
+    const pickHighlighted = () => {
+        if (! listNav) return
+        listNav = false
+        if (! listOpen()) return
+        document.querySelector('.tabulator-popup-container .tabulator-edit-list-item.focused')?.click()
+    }
+    element.addEventListener('blur', pickHighlighted, true)
+    holder?.addEventListener('scroll', pickHighlighted, true)
+
     // Tabulator's list editor filters its options by the field's text on every keyup but the arrows, Enter and
     // Escape: the keyup of F2 itself (the key that opened it), of a modifier, of Home / End / PageUp / PageDown
     // would shrink the list to the current label. Those never reach it. A deny-list: any other key may have
@@ -553,6 +574,7 @@ export function createGrid(element, options) {
     // the letter replaces it and filters. Not when the cell was opened by typing (api.edit(initial)): that text stays.
     let typedOpen = false
     table.on('cellEditing', (cell) => {
+        listNav = false
         if (typedOpen || cell.getColumn().getDefinition().editor !== 'list') return
         setTimeout(() => {
             const input = document.activeElement
@@ -866,9 +888,25 @@ export function createGrid(element, options) {
             return row ? String(row.getIndex()) : null
         },
 
-        /** Measure the columns again and redraw: the stylesheet arrived after the first page was rendered. */
-        relayout() {
-            ready.then(() => { if (! destroyed) { table.redraw(true); frozenWidth() } })
+        /**
+         * Measure the columns again: the stylesheet arrived after the first page was rendered on unstyled cells. A
+         * forced redraw scrolls the holder to the top and rebuilds every row, so it waits for an open editor to close
+         * (a rebuild under it would lose the text), then brings the place back: the row at the top of the window when
+         * the holder was scrolling, else the active cell's row (before the stylesheet the holder has no overflow and the
+         * page scrolls instead), and the range. The range goes back once its rows are rendered again: a row the
+         * redraw left out of the window has no cells yet.
+         */
+        async relayout() {
+            await ready
+            while (! destroyed && api.isEditing()) await new Promise((resolve) => setTimeout(resolve, 50))
+            if (destroyed) return
+            const anchor = topRow()
+            const kept = api.selection()
+            table.redraw(true)
+            frozenWidth()
+            if (anchor) await restoreTop(anchor)
+            else if (kept?.rows.length) await api.scrollTo(kept.rows[0], 'center')
+            restoreRange(kept)
         },
 
         /** Refresh the sort arrows in the header (title formatters run once, at column creation). */
@@ -893,6 +931,8 @@ export function createGrid(element, options) {
             element.removeEventListener('keydown', editorKeys, true)
             element.removeEventListener('keydown', altArrows, true)
             element.removeEventListener('keyup', listKeyup, true)
+            element.removeEventListener('blur', pickHighlighted, true)
+            holder?.removeEventListener('scroll', pickHighlighted, true)
             holder?.removeEventListener('keydown', characterKeys)
             document.removeEventListener('mousedown', pointerDown, true)
             table.destroy()
