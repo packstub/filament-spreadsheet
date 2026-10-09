@@ -57,6 +57,7 @@ return [
     'offline' => 'Could not reach the server. Your changes are still here.',
     'paste_skipped' => '{1} :count cell could not be pasted (read-only or outside the sheet).|[2,*] :count cells could not be pasted (read-only or outside the sheet).',
     'paste_capped' => '{1} :count row was not added: a save takes at most :max rows.|[2,*] :count rows were not added: a save takes at most :max rows.',
+    'paste_blank' => '{1} :count empty line was not added as a row.|[2,*] :count empty lines were not added as rows.',
     'failed' => 'The save did not go through.',
     'load_failed' => 'The rows could not be loaded.',
 

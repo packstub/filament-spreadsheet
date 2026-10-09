@@ -218,6 +218,10 @@ export function matchOption(options, raw) {
     if (raw === null || raw === undefined) return null
     const s = String(raw).trim()
     if (s === '') return null
+    // The label first: it is what the cell shows and what Ctrl+C copies, so a label that is also another option's key
+    // (sizes 5 and 50 under the keys 1 and 5) means the option it labels. Then the key, then both case and spaces aside.
+    const label = options.find((o) => String(o.label).trim() === s)
+    if (label) return label.value
     const exact = options.find((o) => o.value === s)
     if (exact) return exact.value
     const lower = s.toLowerCase()
@@ -894,7 +898,7 @@ export function editable(column, row, readOnly = false) {
  * Plan a paste: a matrix of strings dropped at (startRow, startCol) over the
  * rows on the page (each { id, values, locked, readOnly, deleted }) and the
  * visible columns. A single pasted cell over a wider selection fills it (as in
- * Excel); rows past the last one become new rows when creatable. Returns
+ * Excel); rows past the last one become new rows when creatable (a line with nothing for a new row to take makes none). Returns
  * { edits: [{ id, col, from, to }], created: [{ values }], invalid: [{ id, col, error }], skipped: count, blank: count (lines past the last row with nothing on them, no row made) };
  * an unreadable cell of a new row has `id: null` and `created`, its index into `created`
  * (the row has no id until applyPaste() adds it).
@@ -916,7 +920,9 @@ export function pastePlan({ matrix, startRow, startCol, rows, columns, creatable
             if (! creatable || readOnly) { out.skipped += line.length; return }
             // A line with nothing on it (a blank row copied along, the empty line a trailing tab leaves) makes no new
             // row: a `required` rule would refuse it. Inside the existing rows the same line clears its cells.
-            if (line.every((raw) => String(raw ?? '').trim() === '')) { out.blank++; return }
+            // Only the cells a new row takes count: one past the last column or on a read-only or computed column is dropped.
+            const written = line.filter((raw, c) => { const column = columns[startCol + c]; return column && column.editable && ! column.readOnly })
+            if (written.every((raw) => String(raw ?? '').trim() === '')) { out.blank++; out.skipped += line.length - written.length; return }
             fresh = { values: { ...defaults } }
             out.created.push(fresh)
         }

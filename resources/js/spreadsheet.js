@@ -76,8 +76,10 @@ export default function packstubSpreadsheet(config) {
             this._keydown = (e) => this.onKeydown(e)
             this._beforeUnload = (e) => this.onBeforeUnload(e)
             this._navigate = (e) => this.onNavigate(e)
-            this._url = location.href
-            this._state = history.state
+            // The history entry a Back / Forward left (see onNavigate()): the Navigation API reports it before popstate.
+            this._leftEntry = null
+            this._onEntryChange = (e) => { this._leftEntry = e.from ?? null }
+            window.navigation?.addEventListener?.('currententrychange', this._onEntryChange)
             this.$root.addEventListener('keydown', this._keydown, true)
             window.addEventListener('beforeunload', this._beforeUnload)
             document.addEventListener('livewire:navigate', this._navigate)
@@ -96,7 +98,15 @@ export default function packstubSpreadsheet(config) {
             // The first page is rendered as the grid is built (config.state), so when the stylesheet lands after that
             // the columns were measured on unstyled cells (every auto-width column as wide as the grid, the sheet looking
             // collapsed to its pinned column: a slow first load of the script on a panel): the event re-measures them.
-            this._onCss = () => { this.reveal(); this.grid?.relayout() }
+            // Only when the grid was built before the stylesheet applied (the event also comes for a cached stylesheet,
+            // seen at once): the re-measure redraws every row, and it is needed once.
+            this._styledAtBuild = false
+            this._onCss = () => {
+                this.reveal()
+                if (! this.grid || this._styledAtBuild) return
+                this._styledAtBuild = true
+                this.grid.relayout()
+            }
             window.addEventListener('packstub-spreadsheet-css', this._onCss)
             this._revealTimer = setTimeout(() => this.reveal(true), 3000)
             this.reveal()
@@ -110,6 +120,7 @@ export default function packstubSpreadsheet(config) {
 
             this.$nextTick(() => {
                 this.fit()
+                this._styledAtBuild = this.styled()
                 this.grid = createGrid(this.$refs.grid, {
                     columns: this.columns,
                     t,
@@ -146,6 +157,7 @@ export default function packstubSpreadsheet(config) {
             this.$root.removeEventListener('keydown', this._keydown, true)
             window.removeEventListener('beforeunload', this._beforeUnload)
             document.removeEventListener('livewire:navigate', this._navigate)
+            window.navigation?.removeEventListener?.('currententrychange', this._onEntryChange)
             if (typeof this._unhook === 'function') this._unhook()
             window.removeEventListener('resize', this._onResize)
             window.removeEventListener('packstub-spreadsheet-css', this._onCss)
@@ -161,9 +173,14 @@ export default function packstubSpreadsheet(config) {
          * that; not `--ps-sheet-height`, which a configured height binds on the root before any stylesheet), or regardless when `force`: the inline visibility the view renders is cleared, once.
          * The stylesheet's event stays listened to (see init(): it re-measures the columns), until destroy().
          */
+        /** The sheet's stylesheet applies (it sets `--ps-sheet-bg`). */
+        styled() {
+            return getComputedStyle(this.$root).getPropertyValue('--ps-sheet-bg').trim() !== ''
+        },
+
         reveal(force = false) {
             if (this._revealed) return
-            if (! force && getComputedStyle(this.$root).getPropertyValue('--ps-sheet-bg').trim() === '') return
+            if (! force && ! this.styled()) return
             this._revealed = true
             this.$root.style.visibility = ''
             clearTimeout(this._revealTimer)
@@ -634,6 +651,9 @@ export default function packstubSpreadsheet(config) {
             const hints = []
             if (out.capped) hints.push(choice(t.paste_capped ?? ':count rows were not added: a save takes at most :max rows.', out.capped, { max: this.maxRowsPerSave }))
             if (plan.skipped) hints.push(choice(t.paste_skipped ?? ':count cells could not be pasted', plan.skipped))
+            // Empty lines past the last row make no row; said only when the paste did nothing else (a trailing empty line
+            // copied along with real rows is no news).
+            if (plan.blank && ! plan.edits.length && ! plan.created.length) hints.push(choice(t.paste_blank ?? ':count empty lines were not added as rows.', plan.blank))
             if (hints.length) this.flash(hints.join(' '))
         },
 
@@ -908,7 +928,7 @@ export default function packstubSpreadsheet(config) {
             if (field && ! this.$refs.grid?.contains(field)) return
 
             // The row menu from the keyboard, on the active cell's row (not in an open editor: Shift+F10 is the field's there).
-            if ((e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) && ! editing && ! this.menu) { if (this.openMenuAtActive()) own(); return }
+            if ((e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) && ! editing && ! this.menu) { if (this.menuFor(this.grid?.activeCell()?.id)) { own(); this.openMenuAtActive() } return }
 
             if (S.matchesKey(e, keys.undo) && ! editing) { own(); this.undo(); return }
             if ((S.matchesKey(e, keys.redo) || S.matchesKey(e, S.parseKeybinding('mod+shift+z'))) && ! editing) { own(); this.redo(); return }
@@ -989,13 +1009,32 @@ export default function packstubSpreadsheet(config) {
         },
 
         onNavigate(e) {
+            // The way back to the sheet's own entry (below) passes through Livewire's popstate handler as well.
+            if (this._returning) { e.preventDefault(); return }
             if (! this.confirmLeave || ! this.unsaved()) return
             if (window.confirm(t.confirm_leave)) return
             e.preventDefault()
-            // Back / Forward: the browser has moved the address bar already (popstate), and a prevented navigation leaves
-            // the sheet under the other page's URL. The sheet's own URL is put back as a new entry (its state is this
-            // page's); the one the user left for is one more Back away.
-            if (e.detail?.history && this._url && location.href !== this._url) history.pushState(this._state, '', this._url)
+            // Back / Forward: the browser has moved to the other entry already (popstate), and Livewire, though prevented,
+            // has taken that entry for the current page. The sheet goes back to the entry it was on (whatever its URL is
+            // by now), by the Navigation API: that popstate sets Livewire's record of the current page right again,
+            // where a pushState of the sheet's URL left it on the other page's snapshot (a later Back stored the sheet's
+            // markup under it). Without the API the address bar is left on the other entry, as Livewire leaves it.
+            const entry = this._leftEntry
+            if (! e.detail?.history || ! entry || ! window.navigation?.traverseTo || entry.key === window.navigation.currentEntry?.key) return
+            // Cleared after the traversal's own popstate has been through Livewire's listener (registered before this
+            // one): `finished` settles before that popstate, and a flag cleared there let it ask again and go back again.
+            this._returning = true
+            let timer = null
+            const done = () => {
+                window.removeEventListener('popstate', done)
+                clearTimeout(timer)
+                setTimeout(() => { this._returning = false }, 0)
+            }
+            window.addEventListener('popstate', done)
+            timer = setTimeout(done, 2000)
+            try {
+                window.navigation.traverseTo(entry.key)?.finished?.catch?.(done)
+            } catch { done() }
         },
 
         /* ------------------------------------------------------------ menu */
@@ -1005,24 +1044,34 @@ export default function packstubSpreadsheet(config) {
             this.openMenuFor(this.grid?.rowAt(e), e.clientX, e.clientY)
         },
 
-        /** The menu from the keyboard (Shift+F10, the ContextMenu key): on the active cell's row, at its cell. */
-        openMenuAtActive() {
-            const a = this.grid?.activeCell()
-            const box = this.grid?.activeBox()
-            if (! a || ! box) return false
-            this.openMenuFor(a.id, box.left + Math.min(box.width, 24), box.top + box.height / 2)
+        /** The row menu's items for a row, or null when it offers none (a read-only sheet, a row the policy keeps). */
+        menuFor(id) {
+            if (! id || this.readOnly || ! this.deletable || this.saving) return null
+            const created = S.isCreated(this.buffer, id)
+            const row = this.rows.find((r) => r.id === id)
+            if (! created && ! row?.deletable) return null
 
-            return !! this.menu
+            return S.isDeleted(this.buffer, id)
+                ? [{ name: 'keep', label: t.restore_row }]
+                : [{ name: 'delete', label: t.delete_row, color: 'danger' }]
+        },
+
+        /**
+         * The menu from the keyboard (Shift+F10, the ContextMenu key): on the active cell's row, at its cell. A row
+         * scrolled out of the grid's window is brought back first, as typing or F2 bring their cell back.
+         */
+        async openMenuAtActive() {
+            const a = this.grid?.activeCell()
+            if (! a || ! this.menuFor(a.id)) return
+            if (! this.grid.activeBox()) await this.grid.scrollTo(a.id)
+            const box = this.grid.activeBox()
+            if (! box || this.grid.activeCell()?.id !== a.id) return
+            this.openMenuFor(a.id, box.left + Math.min(box.width, 24), box.top + box.height / 2)
         },
 
         openMenuFor(id, clientX, clientY) {
-            if (! id || this.readOnly || ! this.deletable || this.saving) return
-            const created = S.isCreated(this.buffer, id)
-            const row = this.rows.find((r) => r.id === id)
-            if (! created && ! row?.deletable) return
-            const items = S.isDeleted(this.buffer, id)
-                ? [{ name: 'keep', label: t.restore_row }]
-                : [{ name: 'delete', label: t.delete_row, color: 'danger' }]
+            const items = this.menuFor(id)
+            if (! items) return
             const box = this.$root.getBoundingClientRect()
             this.menu = { id, items, x: clientX - box.left, y: clientY - box.top }
             this.$nextTick(() => this.$refs.menu?.querySelector('button')?.focus())

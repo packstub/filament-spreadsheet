@@ -57,6 +57,7 @@ return [
     'offline' => 'Serverul nu a putut fi contactat. Modificările tale sunt încă aici.',
     'paste_skipped' => '{1} :count celulă nu a putut fi lipită (doar citire sau în afara foii).|[2,*] :count celule nu au putut fi lipite (doar citire sau în afara foii).',
     'paste_capped' => '{1} :count rând nu a fost adăugat: o salvare poate avea cel mult :max rânduri.|[2,*] :count rânduri nu au fost adăugate: o salvare poate avea cel mult :max rânduri.',
+    'paste_blank' => '{1} :count linie goală nu a fost adăugată ca rând.|[2,*] :count linii goale nu au fost adăugate ca rânduri.',
     'failed' => 'Salvarea nu a reușit.',
     'load_failed' => 'Rândurile nu au putut fi încărcate.',
 
