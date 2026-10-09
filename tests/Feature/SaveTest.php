@@ -529,7 +529,7 @@ it('keeps checking the rows after one the database refused in AllOrNothing mode,
         ->and($result->rowErrors)->toBe([(string) $a->id => 'This row could not be saved.'])
         ->and($result->errors)->toBe([(string) $b->id => ['sku' => 'The Sku has already been taken.']])
         ->and($result->saved)->toBe([])
-        ->and($queries->contains(fn (string $q) => str_starts_with($q, 'select count(*)') && str_contains($q, '"sku" = ?')))->toBeTrue()
+        ->and($queries->contains(fn (string $q) => str_starts_with($q, 'select count(*)') && preg_match('/["`]sku["`] = \?/', $q)))->toBeTrue()
         ->and($queries->first(fn (string $q) => str_starts_with($q, 'update')))->toBeNull()
         ->and($a->fresh()->cost)->toBe('5.00')
         ->and($b->fresh())->toMatchArray(['sku' => 'B-2', 'name' => 'Product']);
