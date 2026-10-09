@@ -83,6 +83,71 @@ jobs:
           npm run build
           git diff --exit-code -- resources/dist || (echo "::error::resources/dist is stale: run npm run build and commit it" && exit 1)
 
+  databases:
+    # SQLite accepts SQL that MySQL's strict mode and PostgreSQL refuse, has no row locks
+    # (`lockForUpdate`), and lets a transaction go on after a refused statement, which
+    # Postgres does not (the savepoint per row is for that): the suite runs on both servers as well.
+    name: Tests on ${{ matrix.database }} (PHP 8.4, Laravel 13, Filament 5)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - database: mysql
+            port: 3306
+            username: root
+            password: ""
+          - database: pgsql
+            port: 5432
+            username: postgres
+            password: postgres
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: filament_spreadsheet
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=5s --health-timeout=5s --health-retries=10
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: filament_spreadsheet
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=5s --health-timeout=5s --health-retries=10
+
+    env:
+      DB_CONNECTION: ${{ matrix.database }}
+      DB_HOST: 127.0.0.1
+      DB_PORT: ${{ matrix.port }}
+      DB_DATABASE: filament_spreadsheet
+      DB_USERNAME: ${{ matrix.username }}
+      DB_PASSWORD: ${{ matrix.password }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.4"
+          extensions: pdo_mysql, pdo_pgsql
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "illuminate/contracts:13.*" "orchestra/testbench:11.*" "filament/filament:5.*" --no-interaction --no-update
+          composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Run tests
+        run: vendor/bin/pest
+
   # The browser harness (tests/browser/run.mjs): the real view rendered through the test app, driven in headless
   # Chromium through Playwright. One PHP / Laravel / Filament combination: it tests the browser side, the matrix
   # above tests the server side.

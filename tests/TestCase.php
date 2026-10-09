@@ -38,6 +38,11 @@ abstract class TestCase extends Orchestra
         ProductResource::$scope = null;
         Gate::policy(Product::class, ProductPolicy::class);
 
+        // A real server (CI's MySQL and PostgreSQL jobs) keeps its tables between tests.
+        if (config('database.default') !== 'sqlite') {
+            Schema::dropAllTables();
+        }
+
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
@@ -97,8 +102,16 @@ abstract class TestCase extends Orchestra
 
     protected function defineEnvironment($app): void
     {
-        $app['config']->set('database.default', 'sqlite');
-        $app['config']->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
+        // SQLite in memory by default. DB_CONNECTION=mysql or pgsql (with DB_HOST,
+        // DB_DATABASE, DB_USERNAME…) runs the suite on a real server, the way CI does:
+        // MySQL's strict mode and PostgreSQL refuse SQL that SQLite lets through, and
+        // the row locks, the savepoints and the `like … escape` clause only exist there.
+        $connection = (string) env('DB_CONNECTION', 'sqlite');
+        $app['config']->set('database.default', $connection);
+
+        if ($connection === 'sqlite') {
+            $app['config']->set('database.connections.sqlite', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
+        }
         $app['config']->set('auth.providers.users.model', User::class);
         $app['config']->set('app.key', 'base64:2fl+Ktv6fZ7c7ZQfF1Zt6Q0Wd9jz5bJ6rKq8nX0m3Yk=');
         $app['config']->set('app.url', 'http://localhost');
