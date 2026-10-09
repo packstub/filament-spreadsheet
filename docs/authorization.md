@@ -24,7 +24,7 @@ On a standalone page, or when you prefer your own rule, set the closures; each r
 
 Without closures, a standalone page uses the model's policy when it has that ability (`Gate::getPolicyFor()`), and allows when it has none: the page's own access check is the gate then.
 
-What the user sees: a row the policy will not let them update is **greyed** and refuses edits, pastes and fill-downs (the server refuses it again, "You cannot change this row."); a row they may not delete cannot be marked; without `create`, the Add row button is gone and a paste past the last row is skipped.
+What the user sees: a row the policy will not let them update is **greyed** and refuses edits, pastes and fill-downs (the server refuses it again, "You cannot change this row."); a row they may not delete cannot be marked; without `create`, the Add row button is gone and a paste past the last row is skipped. A page with no row the user may edit or delete and no row to add wears the "Read-only" pill, as a `readOnly()` sheet does, so a viewer sees why nothing responds. The policy runs for every row of a page: see [Performance](performance.md#policies) when it reads a permission package.
 
 ## Per cell: read-only columns
 

@@ -979,6 +979,19 @@ try {
     const shownAfter = await page.evaluate(() => ({ visibility: getComputedStyle(document.querySelector('.ps-sheet')).visibility, inline: document.querySelector('.ps-sheet').style.visibility }))
     check('the sheet is invisible until its stylesheet is in, and shown once it is (no unstyled toolbar for an instant)', hiddenBefore === 'hidden' && shownAfter.visibility === 'visible' && shownAfter.inline === '', JSON.stringify({ hiddenBefore, shownAfter }))
     check('a stylesheet loaded after the component started still gets the measured height', /px$/.test(lateCss.variable) && fitsWindow(lateCss) && lateCss.rowEls < lateCss.loaded && lateCss.doc <= lateCss.window, JSON.stringify(lateCss))
+    // The first page rendered as the grid is built (config.state, as the view sends it) with the stylesheet landing after
+    // that (a slow first load of the script on a panel: x-load-css starts with it): the columns were measured on unstyled
+    // cells, each as wide as the grid, the sheet collapsed to its pinned column. The stylesheet's event measures them again.
+    await page.goto(`http://127.0.0.1:${port}/?inline&latecss=manual`)
+    await page.waitForFunction(() => window.sheet()?.rows?.length === 100 && document.querySelectorAll('.ps-sheet .tabulator-col').length > 5)
+    await page.waitForTimeout(200)
+    const colWidths = () => page.evaluate(() => ({ widths: [...document.querySelectorAll('.ps-sheet .tabulator-col')].map((c) => c.offsetWidth), holder: document.querySelector('.ps-sheet .tabulator-tableholder').clientWidth, forced: window.__forced ?? 0 }))
+    const unstyled = await colWidths()
+    await page.evaluate(() => { const table = window.sheet().grid.table; window.__forced = 0; const orig = table.redraw.bind(table); table.redraw = (force) => { if (force) window.__forced++; return orig(force) }; window.__loadCss() })
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.ps-sheet')).getPropertyValue('--ps-sheet-bg').trim() !== '')
+    await page.waitForTimeout(400)
+    const styled = await colWidths()
+    check('the first page rendered before the stylesheet (every column as wide as the grid) is measured again once it applies', unstyled.widths.filter((w) => w >= unstyled.holder - 2).length > 3 && styled.forced >= 1 && styled.widths.every((w) => w < styled.holder / 2) && styled.widths.reduce((a, b) => a + b, 0) <= styled.holder + 2, JSON.stringify({ unstyled, styled }))
     await fresh('?autoheight')
     await page.setViewportSize({ width: 1400, height: 1200 })
     await page.evaluate(() => window.sheet().setPerPage(25))
@@ -988,6 +1001,21 @@ try {
     console.log(`     25 rows in a 1200px window: grid ${short.grid}px, header ${short.header}px, holder ${short.client}/${short.scroll}px`)
     check('a short page shrinks the grid to its rows: no empty box, nothing to scroll', Math.abs(short.grid - short.borders - (short.header + 25 * 33 + 2)) <= 2 && short.scroll <= short.client + 1 && short.rowEls === 25 && short.doc <= short.window, JSON.stringify(short))
     await page.setViewportSize({ width: 1400, height: 800 })
+
+    // A viewer's page (no row to edit or delete, no row to add) wears the read-only pill, so the sheet says why nothing responds.
+    await fresh()
+    const pill = () => page.evaluate(() => getComputedStyle(document.querySelector('.ps-sheet-pill-readonly')).display !== 'none')
+    const pillBefore = await pill()
+    await page.evaluate(() => { const s = window.sheet(); s.creatable = false; s.applyPage({ ...window.__server.rows({ page: 1, perPage: 100 }), rows: window.__server.rows({ page: 1, perPage: 100 }).rows.map((r) => ({ ...r, readOnly: true, deletable: false })) }) })
+    await page.waitForTimeout(100)
+    const pillLocked = await pill()
+    await page.evaluate(() => { const s = window.sheet(); s.applyPage(window.__server.rows({ page: 1, perPage: 100 })) })
+    await page.waitForTimeout(100)
+    const pillAfter = await pill()
+    check('a page with no row the user may edit or delete and no row to add wears the read-only pill', ! pillBefore && pillLocked && ! pillAfter, JSON.stringify({ pillBefore, pillLocked, pillAfter }))
+    // The pinned columns' width is written on the grid for the holder's scroll-padding (a focused cell scrolls clear of them).
+    const frozenVar = await page.evaluate(() => { const grid = document.querySelector('.ps-sheet-grid'); const width = [...grid.querySelectorAll('.tabulator-header .tabulator-frozen-left')].reduce((sum, el) => sum + el.offsetWidth, 0); return { variable: grid.style.getPropertyValue('--ps-sheet-frozen'), width, padding: getComputedStyle(grid.querySelector('.tabulator-tableholder')).scrollPaddingInlineStart } })
+    check('the pinned columns\' width is on the grid and the holder scroll-pads by it', frozenVar.width > 50 && frozenVar.variable === `${frozenVar.width}px` && frozenVar.padding === `${frozenVar.width}px`, JSON.stringify(frozenVar))
 
     // aria-sort follows the sort; the tooltips read the configured shortcut for the platform
     await fresh()

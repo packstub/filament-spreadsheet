@@ -56,6 +56,8 @@ Copy a block in your spreadsheet, select the top-left cell in the sheet, Ctrl+V.
 - A cell that cannot be read (`abc` in a number) is pasted as it is and painted red at once, with the reason on hover and, when it is the active cell, in the line under the grid, in a new row too; the server would refuse it too. Fix it or undo.
 - A cell that cannot be edited (a read-only column, a locked cell, a row you may not update) is skipped; the toolbar says how many were.
 - Columns past the last one are ignored; rows past the last one become **new rows** when the sheet is `creatable()`, starting from the columns' defaults. New rows stop at the config's `max_rows_per_save` (2,000 by default, counting the changed and deleted rows too), and the toolbar says how many lines were left out: save, then paste the rest.
+- A line with nothing on it past the last row makes no new row (a blank row copied along would only be refused by a `required` rule); inside the existing rows it clears the cells it lands on.
+- The block lands column by column from the anchor, computed and read-only columns included: a block copied from a sheet that has no `Margin` column, pasted over a sheet whose `Margin` sits between `Cost` and `Stock`, puts its sixth column on `Margin` (skipped, counted in the toolbar) and the rest one column to the right. Paste in two blocks around a computed column, or keep the computed columns at the end of the sheet.
 - One copied cell pasted over a selection fills the whole selection, as in Excel.
 - A paste is one step for undo: Ctrl+Z takes the whole block back, the rows it created included.
 

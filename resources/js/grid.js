@@ -838,6 +838,11 @@ export function createGrid(element, options) {
             return row ? String(row.getIndex()) : null
         },
 
+        /** Measure the columns again and redraw: the stylesheet arrived after the first page was rendered. */
+        relayout() {
+            ready.then(() => { if (! destroyed) { table.redraw(true); frozenWidth() } })
+        },
+
         /** Refresh the sort arrows in the header (title formatters run once, at column creation). */
         redrawHeader() {
             const s = sortState()
@@ -867,7 +872,15 @@ export function createGrid(element, options) {
     }
 
     // The default sort's arrow is drawn by the title formatter at creation; its aria-sort needs the header elements.
-    ready.then(() => { if (! destroyed) api.redrawHeader() })
+    // The pinned columns' width, for the holder's scroll-padding (a focused cell scrolled into view stays clear of them).
+    const frozenWidth = () => {
+        if (destroyed) return
+        const width = [...element.querySelectorAll('.tabulator-header .tabulator-frozen-left')].reduce((sum, el) => sum + el.offsetWidth, 0)
+        element.style.setProperty('--ps-sheet-frozen', `${width}px`)
+    }
+    table.on('columnResized', frozenWidth)
+    table.on('renderComplete', frozenWidth)
+    ready.then(() => { if (! destroyed) { api.redrawHeader(); frozenWidth() } })
 
     return api
 }

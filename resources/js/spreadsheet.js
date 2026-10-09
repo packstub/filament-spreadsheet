@@ -41,6 +41,8 @@ export default function packstubSpreadsheet(config) {
         creatable: !! config.creatable,
         deletable: !! config.deletable,
         readOnly: !! config.readOnly,
+        // The page holds no row the user may edit or delete and no row can be added (a viewer): the read-only pill says why nothing responds.
+        lockedPage: false,
         confirmLeave: config.confirmLeave !== false,
         loading: false,
         saving: false,
@@ -89,7 +91,10 @@ export default function packstubSpreadsheet(config) {
             // and until it is in the toolbar's icons, sized by nothing, fill the page. Shown as soon as the
             // stylesheet is seen (now, when it was cached; on the event x-load-css dispatches once it is loaded,
             // `data-dispatch` on the root; or after a while regardless, a sheet is never left invisible).
-            this._onCss = () => this.reveal()
+            // The first page is rendered as the grid is built (config.state), so when the stylesheet lands after that
+            // the columns were measured on unstyled cells (every auto-width column as wide as the grid, the sheet looking
+            // collapsed to its pinned column: a slow first load of the script on a panel): the event re-measures them.
+            this._onCss = () => { this.reveal(); this.grid?.relayout() }
             window.addEventListener('packstub-spreadsheet-css', this._onCss)
             this._revealTimer = setTimeout(() => this.reveal(true), 3000)
             this.reveal()
@@ -152,13 +157,13 @@ export default function packstubSpreadsheet(config) {
         /**
          * Show the sheet once its stylesheet applies (the `--ps-sheet-bg` variable it sets reads '' before
          * that; not `--ps-sheet-height`, which a configured height binds on the root before any stylesheet), or regardless when `force`: the inline visibility the view renders is cleared, once.
+         * The stylesheet's event stays listened to (see init(): it re-measures the columns), until destroy().
          */
         reveal(force = false) {
             if (this._revealed) return
             if (! force && getComputedStyle(this.$root).getPropertyValue('--ps-sheet-bg').trim() === '') return
             this._revealed = true
             this.$root.style.visibility = ''
-            window.removeEventListener('packstub-spreadsheet-css', this._onCss)
             clearTimeout(this._revealTimer)
         },
 
@@ -515,6 +520,7 @@ export default function packstubSpreadsheet(config) {
             this.total = r.total ?? this.rows.length
             if (r.perPage) this.perPage = r.perPage
             if (r.sort) this.sort = { ...r.sort }
+            this.lockedPage = ! this.readOnly && ! this.creatable && this.rows.length > 0 && this.rows.every((row) => row.readOnly && ! (this.deletable && row.deletable))
             this._applied = { page: this.page, perPage: this.perPage, sort: { ...this.sort }, query: request ? this.queryKey(request) : was.query }
             const a = this._applied
             const same = a.page === was.page && a.perPage === was.perPage && a.sort.column === was.sort.column && a.sort.direction === was.sort.direction && a.query === was.query
