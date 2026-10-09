@@ -107,12 +107,15 @@ function paint(cell, column, t) {
     else el.removeAttribute('aria-invalid')
 }
 
-function baseFormatter(column, locale) {
+function baseFormatter(column, locale, t = {}) {
     switch (column.type) {
         case 'boolean':
             return (cell) => {
                 const v = cell.getValue()
-                if (v === null || v === undefined || v === '') return ''
+                // The mark is a drawing: the cell's accessible name says what it means (a screen reader read an empty cell for both).
+                const el = cell.getElement()
+                if (v === null || v === undefined || v === '') { el?.removeAttribute('aria-label'); return '' }
+                el?.setAttribute('aria-label', v ? (t.yes ?? 'Yes') : (t.no ?? 'No'))
 
                 return v ? '<svg class="ps-sheet-tick" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 10 3.5 3.5L15 7"/></svg>' : '<svg class="ps-sheet-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"/></svg>'
             }
@@ -165,7 +168,7 @@ function textNode(text) {
     return el
 }
 
-function editorFor(column) {
+function editorFor(column, t = {}) {
     switch (column.type) {
         case 'boolean':
             // No editor: a double-click, Enter or Space flips the cell (see toggleBoolean).
@@ -178,6 +181,11 @@ function editorFor(column) {
                     autocomplete: true,
                     listOnEmpty: true,
                     allowEmpty: true,
+                    // Typed text is committed as typed (Tabulator cancels it otherwise, the exact label included): the
+                    // component's coerce() matches it to an option by label or key, case and spaces aside, as a paste is, and
+                    // paints the cell red when nothing matches. ↓ + Enter still pick from the list.
+                    freetext: true,
+                    placeholderEmpty: t.no_results ?? 'No results',
                     selectContents: true,
                     // Labels are data (a category's name, a related record's title): the list shows them as text, never as HTML.
                     itemFormatter: (label) => textNode(label),
@@ -213,6 +221,17 @@ function editorFor(column) {
  * editability check), never Tabulator's range clearing; a right-click is the
  * view's contextmenu handler with rowAt().
  */
+// Ctrl+Arrow jumps to the edge of the filled cells: Tabulator's findJumpItem() reads a cell as empty when its value is
+// falsy, so a 0 or an unticked boolean stopped the jump (and from one it did not move at all). Only null, undefined and
+// '' are empty here. Patched once, on the module's prototype (the resolver is the only thing the method reads).
+if (! SelectRangeModule.prototype.findJumpItem._psPatched) {
+    const original = SelectRangeModule.prototype.findJumpItem
+    SelectRangeModule.prototype.findJumpItem = function (emptyStart, emptySide, items, valueResolver) {
+        return original.call(this, emptyStart, emptySide, items, (item) => { const v = valueResolver(item); return ! (v === null || v === undefined || v === '') })
+    }
+    SelectRangeModule.prototype.findJumpItem._psPatched = true
+}
+
 export function createGrid(element, options) {
     const { columns, t, locale = 'en', readOnly = false, on = {} } = options
     const sortState = options.sortState ?? (() => ({ column: null, direction: 'asc' }))
@@ -229,7 +248,7 @@ export function createGrid(element, options) {
     }
 
     const defs = columns.map((column, i) => {
-        const base = baseFormatter(column, locale)
+        const base = baseFormatter(column, locale, t)
         const def = {
             title: column.label,
             field: column.name,
@@ -253,7 +272,7 @@ export function createGrid(element, options) {
             accessorClipboard: (value) => display(column, value, locale),
             editable: editableCell,
             editorEmptyValue: null,
-            ...editorFor(column),
+            ...editorFor(column, t),
         }
         if (column.sortable) def.cssClass += ' ps-sheet-col-sortable'
         if (! column.editable || column.readOnly) def.cssClass += ' ps-sheet-col-readonly'
@@ -415,7 +434,8 @@ export function createGrid(element, options) {
 
     table.on('rangeEdited', (range) => {
         const edits = []
-        for (const cell of range.getCells()) {
+        // Tabulator's range component answers its cells structured: one array per row.
+        for (const cell of range.getCells().flat()) {
             const field = cell.getField()
             if (! field || field === ROWNUM) continue
             const id = String(cell.getRow().getIndex())
@@ -799,6 +819,14 @@ export function createGrid(element, options) {
             }
 
             return ok
+        },
+
+        /** The active cell's element's box on screen (null when its row is not rendered), for a menu opened from the keyboard. */
+        activeBox() {
+            const a = api.activeCell()
+            const el = a ? table.getRow(a.id)?.getCell(a.col)?.getElement() : null
+
+            return el?.isConnected ? el.getBoundingClientRect() : null
         },
 
         /** Flip the active cell when it is a boolean (Enter or Space on it). True when it was one. */

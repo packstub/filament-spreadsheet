@@ -76,6 +76,8 @@ export default function packstubSpreadsheet(config) {
             this._keydown = (e) => this.onKeydown(e)
             this._beforeUnload = (e) => this.onBeforeUnload(e)
             this._navigate = (e) => this.onNavigate(e)
+            this._url = location.href
+            this._state = history.state
             this.$root.addEventListener('keydown', this._keydown, true)
             window.addEventListener('beforeunload', this._beforeUnload)
             document.addEventListener('livewire:navigate', this._navigate)
@@ -325,7 +327,12 @@ export default function packstubSpreadsheet(config) {
             const m = a ? this.marks(a.id) : null
             let next = null
             if (m?.errors[a.col]) next = { kind: 'error', text: m.errors[a.col] }
-            else if (m && Object.prototype.hasOwnProperty.call(m.conflicts, a.col)) next = { kind: 'conflict', text: `${t.conflict} ${t.their_value}: ${this.plain(a.col, m.conflicts[a.col])} · ${t.your_value}: ${this.plain(a.col, this.grid.value(a.id, a.col))}` }
+            else if (m && Object.prototype.hasOwnProperty.call(m.conflicts, a.col)) {
+                // The row's version moved, but this cell's value on the server is still the one the user loaded: someone
+                // changed another cell of the row, and "their value" would only blame this one.
+                const unchanged = Object.prototype.hasOwnProperty.call(this.buffer.originals[a.id] ?? {}, a.col) && S.same(this.buffer.originals[a.id][a.col], m.conflicts[a.col])
+                next = { kind: 'conflict', text: unchanged ? `${t.conflict} ${t.conflict_elsewhere}` : `${t.conflict} ${t.their_value}: ${this.plain(a.col, m.conflicts[a.col])} · ${t.your_value}: ${this.plain(a.col, this.grid.value(a.id, a.col))}` }
+            }
             else if (m?.rowError) next = { kind: 'error', text: m.rowError }
             if ((next?.text ?? null) !== (this.status?.text ?? null)) this.status = next
         },
@@ -406,6 +413,7 @@ export default function packstubSpreadsheet(config) {
                 fixed(t.shortcut_select, 'shift+arrowdown'),
                 fixed(t.shortcut_jump, 'mod+arrowdown'),
                 fixed(t.shortcut_toggle, 'space'),
+                fixed(t.shortcut_menu, 'shift+f10'),
             ]
         },
 
@@ -899,6 +907,9 @@ export default function packstubSpreadsheet(config) {
             const field = e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
             if (field && ! this.$refs.grid?.contains(field)) return
 
+            // The row menu from the keyboard, on the active cell's row (not in an open editor: Shift+F10 is the field's there).
+            if ((e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) && ! editing && ! this.menu) { if (this.openMenuAtActive()) own(); return }
+
             if (S.matchesKey(e, keys.undo) && ! editing) { own(); this.undo(); return }
             if ((S.matchesKey(e, keys.redo) || S.matchesKey(e, S.parseKeybinding('mod+shift+z'))) && ! editing) { own(); this.redo(); return }
             if (S.matchesKey(e, keys.fill_down) && ! editing) { own(); this.fillDown(); return }
@@ -958,7 +969,10 @@ export default function packstubSpreadsheet(config) {
         },
 
         onEscape() {
+            if (! this.menu) return
             this.closeMenu()
+            // The menu's button held the focus: without this Escape left it on the body and the arrows did nothing.
+            this.refocus()
         },
 
         /* ------------------------------------------------------------ leaving */
@@ -976,14 +990,32 @@ export default function packstubSpreadsheet(config) {
 
         onNavigate(e) {
             if (! this.confirmLeave || ! this.unsaved()) return
-            if (! window.confirm(t.confirm_leave)) e.preventDefault()
+            if (window.confirm(t.confirm_leave)) return
+            e.preventDefault()
+            // Back / Forward: the browser has moved the address bar already (popstate), and a prevented navigation leaves
+            // the sheet under the other page's URL. The sheet's own URL is put back as a new entry (its state is this
+            // page's); the one the user left for is one more Back away.
+            if (e.detail?.history && this._url && location.href !== this._url) history.pushState(this._state, '', this._url)
         },
 
         /* ------------------------------------------------------------ menu */
 
         /** The view's contextmenu handler on the grid element (the one path: Tabulator's rowContext would open it a second time). */
         openMenu(e) {
-            const id = this.grid?.rowAt(e)
+            this.openMenuFor(this.grid?.rowAt(e), e.clientX, e.clientY)
+        },
+
+        /** The menu from the keyboard (Shift+F10, the ContextMenu key): on the active cell's row, at its cell. */
+        openMenuAtActive() {
+            const a = this.grid?.activeCell()
+            const box = this.grid?.activeBox()
+            if (! a || ! box) return false
+            this.openMenuFor(a.id, box.left + Math.min(box.width, 24), box.top + box.height / 2)
+
+            return !! this.menu
+        },
+
+        openMenuFor(id, clientX, clientY) {
             if (! id || this.readOnly || ! this.deletable || this.saving) return
             const created = S.isCreated(this.buffer, id)
             const row = this.rows.find((r) => r.id === id)
@@ -992,7 +1024,7 @@ export default function packstubSpreadsheet(config) {
                 ? [{ name: 'keep', label: t.restore_row }]
                 : [{ name: 'delete', label: t.delete_row, color: 'danger' }]
             const box = this.$root.getBoundingClientRect()
-            this.menu = { id, items, x: e.clientX - box.left, y: e.clientY - box.top }
+            this.menu = { id, items, x: clientX - box.left, y: clientY - box.top }
             this.$nextTick(() => this.$refs.menu?.querySelector('button')?.focus())
         },
 

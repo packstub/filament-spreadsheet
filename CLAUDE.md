@@ -221,15 +221,15 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   reads `''` with `validity.badInput` (a part missing: one segment cleared, a year not typed yet), so a blur, Enter or
   Ctrl+S on a half-typed date keeps the cell's value; every part cleared reads `''` without `badInput` and commits
   null (the harness clears parts until `badInput` is false: their number follows the locale).
-- Select editor (`grid.js`): Tabulator's list editor re-filters by the field's text on every `keyup` but the arrows,
+- `rangeEdited` (the fill handle) answers `range.getCells()` structured, one array per row: it is `.flat()`ed. `findJumpItem` of `SelectRangeModule` is patched on the prototype once (a falsy value counted as empty: 0 and false stopped Ctrl+Arrow). `openMenuFor(id, x, y)` is the menu's one path: the view's `contextmenu` through `openMenu(e)`, Shift+F10 / the ContextMenu key through `openMenuAtActive()` (`grid.activeBox()`); `onEscape()` closes it and `refocus()`es. `onNavigate()` on a cancelled Back / Forward (`e.detail.history`) puts `_url` back with `history.pushState(_state, '', _url)` (both read at init). The boolean formatter sets `aria-label` on the cell element. `updateStatus()` says `conflict_elsewhere` when their value equals the buffer's original for the cell.
+- Select editor (`grid.js`): `freetext: true`: typed text confirmed is committed as typed and `coerce()` matches it (Tabulator cancelled it otherwise, the exact label too); `placeholderEmpty` is `t.no_results`. Tabulator's list editor re-filters by the field's text on every `keyup` but the arrows,
   Enter and Escape, so `listKeyup`, a **capture-phase** `keyup` listener on the grid element (removed in `destroy()`),
   stops a deny-list of keys while a list editor is open (`listOpen()`): F2 (the key that opened it), Shift, Control,
   Alt, Meta, CapsLock, Home, End, PageUp, PageDown. A deny-list, not "anything that is not one character": an IME
   reports `Process`. `currentCell` is `false`, not null, when nothing is edited (`?.` does not guard it). The list
   editor ignores `selectContents` and leaves the caret after the label, so a `cellEditing` handler selects the
   label one tick later (the editor is built after that event) for F2 / Enter / a double-click; `api.edit(initial)`
-  sets `typedOpen` around `cell.edit(true)` and keeps its typed text. Tabulator's own rule stays: Enter after typed
-  text resolves the text (cancel when it is no option, null when it is empty, `allowEmpty`), it does not pick the one
+  sets `typedOpen` around `cell.edit(true)` and keeps its typed text. Enter after typed text commits the text (`freetext`; null when it is empty, `allowEmpty`), it does not pick the one
   option left; ArrowDown + Enter pick it.
 - A cell without an editor (boolean, computed: `editor: false`): Tabulator's `editCell` / `cell.edit()` throws there
   (`column.modules.edit` is undefined), and two paths reach it. Enter (`spreadsheet.js` `onKeydown`): Tabulator's range

@@ -8,7 +8,7 @@
 | --- | --- |
 | Click, arrows | Select a cell |
 | Shift + arrows, Shift + click, drag | Select a range |
-| Ctrl + ↓ / Ctrl + ↑ | Jump down / up the column to the edge of its filled cells (the last / first row of the page in a filled column), scrolled into view; with Shift the range extends there |
+| Ctrl + ↓ / Ctrl + ↑ | Jump down / up the column to the edge of its filled cells (a 0 or an unticked box is a filled cell; the last / first row of the page in a filled column), scrolled into view; with Shift the range extends there |
 | Click a row number | Select the row (for deletion) |
 | Enter, F2, double-click, or just typing | Edit the cell (typing replaces its content, Enter/F2 keep it) |
 | Enter while editing | Commit and move down |
@@ -47,7 +47,7 @@ Enter, Tab and ↑ / ↓ select the neighbouring cell without opening its editor
 
 A date or a date-time can be typed part by part (the order of the parts follows the browser's locale), after Enter or F2 or straight on the selected cell: the first digit opens the editor and goes into its first part, any other key just opens it. The editor stays open until Enter, Tab or a click elsewhere commits what it holds, and Escape leaves the cell as it was. A date picked from the browser's calendar is committed at once. An incomplete date (one part cleared, a year not typed yet) leaves the cell as it was: clear every part, or press Delete on the selected cell, to empty it.
 
-A select opened with Enter, F2 or a double-click lists every option, with the current label selected in the search field: ↑ / ↓ and Enter pick another option, a typed letter replaces the label and searches the list (then ↓ and Enter pick from what is left). Typing on the selected cell opens the list already searched by that letter. The list has no empty item: clearing the search field and confirming (Enter, Tab or a click elsewhere) empties the cell, as Delete on the selected cell does. Escape leaves the cell as it was, so clear the field to look at every option and press Escape if you only wanted to look.
+A select opened with Enter, F2 or a double-click lists every option, with the current label selected in the search field: ↑ / ↓ and Enter pick another option, a typed letter replaces the label and searches the list (then ↓ and Enter pick from what is left). Typed text confirmed with Enter, Tab or a click elsewhere is matched to an option by its label or its key, case and spaces aside, as a pasted value is: "kitchen" picks Kitchen; text that matches nothing stays on the cell, painted red, until it is fixed or undone. Typing on the selected cell opens the list already searched by that letter. The list has no empty item: clearing the search field and confirming (Enter, Tab or a click elsewhere) empties the cell, as Delete on the selected cell does. Escape leaves the cell as it was, so clear the field to look at every option and press Escape if you only wanted to look.
 
 ## Paste from Excel, Google Sheets or Numbers
 

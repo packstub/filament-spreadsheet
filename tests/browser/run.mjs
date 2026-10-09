@@ -1017,6 +1017,93 @@ try {
     const frozenVar = await page.evaluate(() => { const grid = document.querySelector('.ps-sheet-grid'); const width = [...grid.querySelectorAll('.tabulator-header .tabulator-frozen-left')].reduce((sum, el) => sum + el.offsetWidth, 0); return { variable: grid.style.getPropertyValue('--ps-sheet-frozen'), width, padding: getComputedStyle(grid.querySelector('.tabulator-tableholder')).scrollPaddingInlineStart } })
     check('the pinned columns\' width is on the grid and the holder scroll-pads by it', frozenVar.width > 50 && frozenVar.variable === `${frozenVar.width}px` && frozenVar.padding === `${frozenVar.width}px`, JSON.stringify(frozenVar))
 
+    // The fill handle dragged with the mouse: Tabulator's rangeEdited answers its cells one array per row, and the
+    // values it wrote are recorded as edits (nothing was, and a save said there was nothing to save).
+    await fresh()
+    await cell(0, 'price').click()
+    await page.waitForTimeout(150)
+    const handleBox = await page.locator('.ps-sheet .tabulator-range-fill-handle').boundingBox()
+    const targetBox = await cell(2, 'price').boundingBox()
+    const priceTop = await page.evaluate(() => window.sheet().grid.value('1', 'price'))
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 })
+    await page.mouse.up()
+    await page.waitForTimeout(250)
+    s = await state()
+    const dragged = await page.evaluate(() => [window.sheet().grid.value('2', 'price'), window.sheet().grid.value('3', 'price')])
+    check('the fill handle dragged two rows down writes the value into both and records two changes', s.dirty.cells === 2 && dragged[0] === priceTop && dragged[1] === priceTop, JSON.stringify({ dirty: s.dirty, priceTop, dragged }))
+    await discardAll()
+
+    // Typed text in a select is committed as typed and matched by label: "tools" + Enter picks Tools (Tabulator cancelled
+    // typed text, the exact label included); text that is no option is painted red, as a pasted one is.
+    await cell(0, 'category_id').click()
+    await page.keyboard.type('tools')
+    await page.waitForTimeout(150)
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(150)
+    s = await state()
+    const typedLabel = await page.evaluate(() => window.sheet().grid.value('1', 'category_id'))
+    check('a label typed in a select and Enter pick that option', ! s.editing && typedLabel === '1' && s.dirty.cells === 1, JSON.stringify({ typedLabel, dirty: s.dirty, editing: s.editing }))
+    await cell(1, 'category_id').click()
+    await page.keyboard.type('zzz')
+    await page.waitForTimeout(150)
+    const noResults = await page.evaluate(() => document.querySelector('.tabulator-popup-container')?.textContent.trim())
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(150)
+    const typedNone = await page.evaluate(() => ({ value: window.sheet().grid.value('2', 'category_id'), error: window.sheet().buffer.errors['2']?.category_id ?? null }))
+    check('text that is no option is kept and painted red, and the empty list says so in the sheet\'s words', noResults === 'No results' && typedNone.value === 'zzz' && !! typedNone.error && (await cellClasses(1, 'category_id')).includes('ps-sheet-cell-error'), JSON.stringify({ noResults, typedNone }))
+    await discardAll()
+
+    // Ctrl+ArrowDown counts a 0 as a filled cell (Tabulator read a falsy value as empty: the jump stopped at the row before the first 0, and from a 0 it did not move).
+    await cell(0, 'stock').click()
+    await page.keyboard.press('Control+ArrowDown')
+    await page.waitForTimeout(300)
+    s = await state()
+    check('Ctrl+ArrowDown jumps over cells holding 0 to the last row of the page', s.active?.id === '100' && s.active?.col === 'stock', JSON.stringify(s.active))
+    await page.evaluate(() => window.sheet().grid.select('17', 'stock'))
+    await page.waitForTimeout(100)
+    await page.keyboard.press('Control+ArrowUp')
+    await page.waitForTimeout(300)
+    s = await state()
+    check('Ctrl+ArrowUp from a cell holding 0 moves', s.active?.id === '1', JSON.stringify(s.active))
+
+    // The row menu from the keyboard: Shift+F10 opens it on the active cell's row, Escape closes it and the keyboard is back on the grid.
+    await cell(0, 'name').click()
+    await page.keyboard.press('Shift+F10')
+    await page.waitForTimeout(150)
+    const menuOpen = await page.locator('.ps-sheet-menu').isVisible()
+    const menuFocus = await page.evaluate(() => document.activeElement?.className ?? '')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(150)
+    const menuClosed = ! (await page.locator('.ps-sheet-menu').isVisible())
+    const afterEscape = await page.evaluate(() => document.activeElement?.className ?? '')
+    await page.keyboard.press('ArrowDown')
+    await page.waitForTimeout(100)
+    s = await state()
+    check('Shift+F10 opens the row menu with its first item focused, Escape closes it and the arrows move the active cell again', menuOpen && menuFocus.includes('ps-sheet-menu-item') && menuClosed && afterEscape.includes('tabulator-tableholder') && s.active?.id === '2', JSON.stringify({ menuOpen, menuFocus, menuClosed, afterEscape, active: s.active }))
+
+    // A boolean cell has an accessible name.
+    const boolNames = await page.evaluate(() => [1, 4].map((i) => window.sheet().grid.table.getRow(String(i)).getCell('is_active').getElement().getAttribute('aria-label')))
+    check('a boolean cell is named Yes or No for a screen reader', boolNames[0] === 'Yes' && boolNames[1] === 'No', JSON.stringify(boolNames))
+
+    // A conflict on a row whose other cell changed: this cell's server value is the one the user loaded, so the line says so instead of blaming it.
+    await server_(() => { window.__server.state.conflictOn = '3' })
+    await cell(2, 'name').click()
+    await page.keyboard.type('Mine')
+    await page.keyboard.press('Enter')
+    const savesBeforeConflict = await page.evaluate(() => window.__server.calls.save.length)
+    await page.keyboard.press('Control+s')
+    await page.waitForFunction((n) => window.__server.calls.save.length === n + 1, savesBeforeConflict)
+    await page.waitForTimeout(100)
+    // The save's flash sits on the line first: cleared, the line shows the active cell's status.
+    await page.evaluate(() => { const sh = window.sheet(); sh.grid.select('3', 'name'); sh.hint = null; sh.updateStatus() })
+    await page.waitForTimeout(100)
+    const elsewhere = await page.evaluate(() => document.querySelector('.ps-sheet-hint')?.textContent.trim())
+    check('a conflict whose server value is the one the user loaded says another cell of the row changed', elsewhere.includes('another cell of the row was changed') && ! elsewhere.includes('Their value'), JSON.stringify(elsewhere))
+    await server_(() => { window.__server.state.conflictOn = null })
+    await discardAll()
+
     // aria-sort follows the sort; the tooltips read the configured shortcut for the platform
     await fresh()
     const sortAttrs = () => page.evaluate(() => ({ sku: document.querySelector('.ps-sheet .tabulator-col[tabulator-field="sku"]').getAttribute('aria-sort'), price: document.querySelector('.ps-sheet .tabulator-col[tabulator-field="price"]').getAttribute('aria-sort') }))
@@ -2344,7 +2431,7 @@ try {
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
     const helpClosed = await page.evaluate(() => ({ open: document.querySelector('.ps-sheet-help').classList.contains('fi-modal-open'), focus: !! document.activeElement?.closest('.ps-sheet-grid') }))
-    check('the help button opens the shortcuts modal with the bound keys; Escape closes it and the grid has the keyboard again', help.open && help.items === 13 && help.first === help.expected && ! helpClosed.open && helpClosed.focus, JSON.stringify({ help, helpClosed }))
+    check('the help button opens the shortcuts modal with the bound keys; Escape closes it and the grid has the keyboard again', help.open && help.items === 14 && help.first === help.expected && ! helpClosed.open && helpClosed.focus, JSON.stringify({ help, helpClosed }))
 
     // read-only
     await page.goto(`http://127.0.0.1:${port}/?readonly`)
