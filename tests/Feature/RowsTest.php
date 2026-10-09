@@ -98,11 +98,12 @@ it('escapes the search with an escape character every database parses', function
     DB::enableQueryLog();
 
     sheet()->rows(['search' => '100%_!x']);
-    $query = collect(DB::getQueryLog())->first(fn (array $q) => str_contains($q['query'], ' like '));
+    $operator = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
+    $query = collect(DB::getQueryLog())->first(fn (array $q) => str_contains($q['query'], " {$operator} "));
     DB::disableQueryLog();
 
     // A backslash escape (`escape '\'`) is a parse error on MySQL: `\'` is an escaped quote there.
-    expect($query['query'])->toContain("like ? escape '!'")
+    expect($query['query'])->toContain("{$operator} ? escape '!'")
         ->not->toContain('\\')
         ->and($query['bindings'])->toContain('%100!%!_!!x%');
 });

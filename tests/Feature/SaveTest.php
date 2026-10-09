@@ -500,7 +500,8 @@ it('marks the row the database refuses in AllOrNothing mode and rolls the batch 
         ->and($result->errors)->toBe([(string) $c->id => ['name' => 'The Name field is required.']])
         ->and($b->fresh())->toMatchArray(['cost' => '5.00', 'name' => 'Product']);
 
-    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'NOT NULL'));
+    // "NOT NULL constraint failed: products.cost" (SQLite), "Column 'cost' cannot be null" (MySQL), 'null value in column "cost"' (Postgres).
+    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'cost'));
     Event::assertDispatchedTimes(RowSaveFailed::class, 3);
     Event::assertDispatched(RowSaveFailed::class, fn (RowSaveFailed $e) => $e->record?->is($b) && $e->reason === 'This row could not be saved.');
     Event::assertDispatched(RowSaveFailed::class, fn (RowSaveFailed $e) => $e->record?->is($c) && $e->errors === ['name' => 'The Name field is required.']);
@@ -533,12 +534,15 @@ it('keeps checking the rows after one the database refused in AllOrNothing mode,
         ->and($a->fresh()->cost)->toBe('5.00')
         ->and($b->fresh())->toMatchArray(['sku' => 'B-2', 'name' => 'Product']);
 
-    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'NOT NULL'));
+    // "NOT NULL constraint failed: products.cost" (SQLite), "Column 'cost' cannot be null" (MySQL), 'null value in column "cost"' (Postgres).
+    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'cost'));
 });
 
 it('answers a delete the database refuses on its row, in both modes', function (SaveMode $mode) {
     Exceptions::fake();
-    DB::statement('PRAGMA foreign_keys = ON');
+    if (DB::getDriverName() === 'sqlite') {
+        DB::statement('PRAGMA foreign_keys = ON');
+    }
     Schema::create('order_items', function (Blueprint $table): void {
         $table->id();
         $table->foreignId('product_id')->constrained('products');
@@ -565,7 +569,8 @@ it('answers a delete the database refuses on its row, in both modes', function (
             ->and($b->fresh()->name)->toBe('Product');
     }
 
-    Exceptions::assertReported(fn (QueryException $e) => str_contains($e->getMessage(), 'FOREIGN KEY'));
+    // "FOREIGN KEY constraint failed" (SQLite), "a foreign key constraint fails" (MySQL), "violates foreign key constraint" (Postgres).
+    Exceptions::assertReported(fn (QueryException $e) => stripos($e->getMessage(), 'foreign key') !== false);
 })->with([SaveMode::AllOrNothing, SaveMode::PerRow]);
 
 it('deletes through the same checks with delete()', function () {
@@ -586,7 +591,7 @@ it('reports a database failure on one row in PerRow mode and keeps the others', 
     $b = product('b-2');
     ProductSheet::$saveMode = SaveMode::PerRow;
 
-    // A column the sheet writes but the schema refuses: sqlite enforces the SKU's unique index below the validator's radar.
+    // A column the sheet writes but the schema refuses: the database enforces the SKU's unique index below the validator's radar.
     $definition = sheet()->mutateRowBeforeSave(fn (array $data, ?Product $record) => $record?->is($b) ? ['sku' => 'A-1'] : $data);
     $result = $definition->save(SavePayload::fromArray(['changed' => [$a->id => ['name' => 'Fine'], $b->id => ['name' => 'Boom']]]));
 
@@ -594,7 +599,8 @@ it('reports a database failure on one row in PerRow mode and keeps the others', 
         ->and($result->rowErrors)->toBe([(string) $b->id => 'This row could not be saved.'])
         ->and($b->fresh()->name)->toBe('Product');
 
-    Exceptions::assertReported(fn (UniqueConstraintViolationException $e) => str_contains($e->getMessage(), 'UNIQUE'));
+    // "UNIQUE constraint failed: products.sku" (SQLite), "Duplicate entry 'A-1' for key 'products_sku_unique'" (MySQL), 'duplicate key value violates unique constraint "products_sku_unique"' (Postgres).
+    Exceptions::assertReported(fn (UniqueConstraintViolationException $e) => str_contains($e->getMessage(), 'sku'));
 });
 
 it('answers a committed save as saved when a RowsSaved listener throws, and reports the exception', function () {
