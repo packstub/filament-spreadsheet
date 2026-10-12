@@ -181,7 +181,8 @@ button.ps-sheet-pill { cursor: pointer; }
 .ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-col-readonly .tabulator-col-title { color: var(--ps-sheet-muted); font-weight: 500; }
 .ps-sheet .tabulator .tabulator-header .tabulator-col.ps-sheet-rownum { background: linear-gradient(var(--ps-sheet-head), var(--ps-sheet-head)), var(--ps-sheet-bg); }
 
-.ps-sheet .tabulator .tabulator-tableholder { background: var(--ps-sheet-bg); }
+/* A click on a cell focuses it (Tabulator's tabindex) and the browser scrolls it into view: without the padding a wide cell on a narrow screen slides under the pinned columns (grid.js writes their width on the grid). */
+.ps-sheet .tabulator .tabulator-tableholder { background: var(--ps-sheet-bg); scroll-padding-inline-start: var(--ps-sheet-frozen, 0px); }
 .ps-sheet .tabulator .tabulator-tableholder:focus-visible { outline: none; }
 .ps-sheet .tabulator .tabulator-tableholder .tabulator-table { background: var(--ps-sheet-bg); color: var(--ps-sheet-text); }
 .ps-sheet .tabulator .tabulator-tableholder .tabulator-placeholder .tabulator-placeholder-contents {

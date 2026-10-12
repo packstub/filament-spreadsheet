@@ -27,7 +27,7 @@ Creating needs `creatable()` **and** the policy's `create` (or `authorizeCreate(
 ->deletable()
 ```
 
-shows the **Delete rows** button and the row menu's **Delete row**. Click a row's number (Shift for several), then Delete rows; or right-click the row. The row is struck through and marked for deletion, and deleted with the next Save — until then Ctrl+Z or the menu's **Keep row** takes the mark away. A new row that was never saved is simply dropped.
+shows the **Delete rows** button and the row menu's **Delete row**. Click a row's number (Shift for several), then Delete rows; or right-click the row (Shift+F10 or the menu key opens the same menu on the active cell's row). Delete on a selected row clears its cells, it does not mark the row. The row is struck through and marked for deletion, and deleted with the next Save — until then Ctrl+Z or the menu's **Keep row** takes the mark away. A new row that was never saved is simply dropped.
 
 Deleting needs `deletable()` **and** the policy's `delete($record)` (or `authorizeDelete()`) for each record; a row the user may not delete cannot be marked, and the server refuses it again ("You cannot delete this row."). The record's `delete()` is called, so soft deletes and `deleting` observers apply. `RowsSaved::$deleted` lists the keys.
 

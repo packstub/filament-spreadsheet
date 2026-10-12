@@ -107,12 +107,15 @@ function paint(cell, column, t) {
     else el.removeAttribute('aria-invalid')
 }
 
-function baseFormatter(column, locale) {
+function baseFormatter(column, locale, t = {}) {
     switch (column.type) {
         case 'boolean':
             return (cell) => {
                 const v = cell.getValue()
-                if (v === null || v === undefined || v === '') return ''
+                // The mark is a drawing: the cell's accessible name says what it means (a screen reader read an empty cell for both).
+                const el = cell.getElement()
+                if (v === null || v === undefined || v === '') { el?.removeAttribute('aria-label'); return '' }
+                el?.setAttribute('aria-label', v ? (t.yes ?? 'Yes') : (t.no ?? 'No'))
 
                 return v ? '<svg class="ps-sheet-tick" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 10 3.5 3.5L15 7"/></svg>' : '<svg class="ps-sheet-cross" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"/></svg>'
             }
@@ -165,7 +168,7 @@ function textNode(text) {
     return el
 }
 
-function editorFor(column) {
+function editorFor(column, t = {}) {
     switch (column.type) {
         case 'boolean':
             // No editor: a double-click, Enter or Space flips the cell (see toggleBoolean).
@@ -178,6 +181,11 @@ function editorFor(column) {
                     autocomplete: true,
                     listOnEmpty: true,
                     allowEmpty: true,
+                    // Typed text is committed as typed (Tabulator cancels it otherwise, the exact label included): the
+                    // component's coerce() matches it to an option by label or key, case and spaces aside, as a paste is, and
+                    // paints the cell red when nothing matches. ↓ + Enter still pick from the list.
+                    freetext: true,
+                    placeholderEmpty: t.no_results ?? 'No results',
                     selectContents: true,
                     // Labels are data (a category's name, a related record's title): the list shows them as text, never as HTML.
                     itemFormatter: (label) => textNode(label),
@@ -213,6 +221,17 @@ function editorFor(column) {
  * editability check), never Tabulator's range clearing; a right-click is the
  * view's contextmenu handler with rowAt().
  */
+// Ctrl+Arrow jumps to the edge of the filled cells: Tabulator's findJumpItem() reads a cell as empty when its value is
+// falsy, so a 0 or an unticked boolean stopped the jump (and from one it did not move at all). Only null, undefined and
+// '' are empty here. Patched once, on the module's prototype (the resolver is the only thing the method reads).
+if (! SelectRangeModule.prototype.findJumpItem._psPatched) {
+    const original = SelectRangeModule.prototype.findJumpItem
+    SelectRangeModule.prototype.findJumpItem = function (emptyStart, emptySide, items, valueResolver) {
+        return original.call(this, emptyStart, emptySide, items, (item) => { const v = valueResolver(item); return ! (v === null || v === undefined || v === '') })
+    }
+    SelectRangeModule.prototype.findJumpItem._psPatched = true
+}
+
 export function createGrid(element, options) {
     const { columns, t, locale = 'en', readOnly = false, on = {} } = options
     const sortState = options.sortState ?? (() => ({ column: null, direction: 'asc' }))
@@ -229,7 +248,7 @@ export function createGrid(element, options) {
     }
 
     const defs = columns.map((column, i) => {
-        const base = baseFormatter(column, locale)
+        const base = baseFormatter(column, locale, t)
         const def = {
             title: column.label,
             field: column.name,
@@ -253,7 +272,7 @@ export function createGrid(element, options) {
             accessorClipboard: (value) => display(column, value, locale),
             editable: editableCell,
             editorEmptyValue: null,
-            ...editorFor(column),
+            ...editorFor(column, t),
         }
         if (column.sortable) def.cssClass += ' ps-sheet-col-sortable'
         if (! column.editable || column.readOnly) def.cssClass += ' ps-sheet-col-readonly'
@@ -351,6 +370,7 @@ export function createGrid(element, options) {
     const focusHolder = holder ? holder.focus.bind(holder) : () => {}
     let outside = false
     const pointerDown = (e) => {
+        if (! e.target?.closest?.('.tabulator-popup-container, .tabulator-editing')) pickHighlighted()
         outside = ! element.contains(e.target) && ! e.target?.closest?.('.tabulator-popup-container')
         const was = outside
         setTimeout(() => {
@@ -415,7 +435,8 @@ export function createGrid(element, options) {
 
     table.on('rangeEdited', (range) => {
         const edits = []
-        for (const cell of range.getCells()) {
+        // Tabulator's range component answers its cells structured: one array per row.
+        for (const cell of range.getCells().flat()) {
             const field = cell.getField()
             if (! field || field === ROWNUM) continue
             const id = String(cell.getRow().getIndex())
@@ -470,6 +491,10 @@ export function createGrid(element, options) {
     // editor stops them itself (see isoEditor: they step the focused segment).
     const editorKeys = (e) => {
         if (! api.isEditing()) return
+        if (listOpen()) {
+            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && ! (e.altKey || e.ctrlKey || e.metaKey)) listNav = true
+            else if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Process') listNav = false
+        }
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             if (e.shiftKey || e.ctrlKey || e.metaKey || e.target?.tagName !== 'INPUT') return
             if (table.modules.edit.currentCell?.column.definition.editor !== 'input') return
@@ -518,6 +543,22 @@ export function createGrid(element, options) {
     // currentCell is false, not null, while nothing is edited.
     const listOpen = () => { const c = table.modules.edit.currentCell; return !! c && c.column.definition.editor === 'list' }
 
+    // A select's typed text is committed as typed (freetext), and Tabulator resolves every blur from that text, also
+    // after ↓ / ↑ highlighted an option: "to", ↓ onto Tools, then Tab or a click elsewhere wrote "to" (red) where Enter
+    // would have picked Tools. Once the arrows moved the highlight (listNav, set in editorKeys, cleared by the next
+    // character), the ways an editor is left without Enter pick the highlighted option first, as a click on it would:
+    // the editor's blur (Tab, Ctrl+S, the component's grid.focus()), a pointer-down anywhere but the list and the
+    // field (Tabulator's popup resolves on the body's mousedown, before the blur) and a scroll of the grid.
+    let listNav = false
+    const pickHighlighted = () => {
+        if (! listNav) return
+        listNav = false
+        if (! listOpen()) return
+        document.querySelector('.tabulator-popup-container .tabulator-edit-list-item.focused')?.click()
+    }
+    element.addEventListener('blur', pickHighlighted, true)
+    holder?.addEventListener('scroll', pickHighlighted, true)
+
     // Tabulator's list editor filters its options by the field's text on every keyup but the arrows, Enter and
     // Escape: the keyup of F2 itself (the key that opened it), of a modifier, of Home / End / PageUp / PageDown
     // would shrink the list to the current label. Those never reach it. A deny-list: any other key may have
@@ -533,6 +574,7 @@ export function createGrid(element, options) {
     // the letter replaces it and filters. Not when the cell was opened by typing (api.edit(initial)): that text stays.
     let typedOpen = false
     table.on('cellEditing', (cell) => {
+        listNav = false
         if (typedOpen || cell.getColumn().getDefinition().editor !== 'list') return
         setTimeout(() => {
             const input = document.activeElement
@@ -801,6 +843,14 @@ export function createGrid(element, options) {
             return ok
         },
 
+        /** The active cell's element's box on screen (null when its row is not rendered), for a menu opened from the keyboard. */
+        activeBox() {
+            const a = api.activeCell()
+            const el = a ? table.getRow(a.id)?.getCell(a.col)?.getElement() : null
+
+            return el?.isConnected ? el.getBoundingClientRect() : null
+        },
+
         /** Flip the active cell when it is a boolean (Enter or Space on it). True when it was one. */
         toggleActive() {
             const a = api.activeCell()
@@ -838,6 +888,27 @@ export function createGrid(element, options) {
             return row ? String(row.getIndex()) : null
         },
 
+        /**
+         * Measure the columns again: the stylesheet arrived after the first page was rendered on unstyled cells. A
+         * forced redraw scrolls the holder to the top and rebuilds every row, so it waits for an open editor to close
+         * (a rebuild under it would lose the text), then brings the place back: the row at the top of the window when
+         * the holder was scrolling, else the active cell's row (before the stylesheet the holder has no overflow and the
+         * page scrolls instead), and the range. The range goes back once its rows are rendered again: a row the
+         * redraw left out of the window has no cells yet.
+         */
+        async relayout() {
+            await ready
+            while (! destroyed && api.isEditing()) await new Promise((resolve) => setTimeout(resolve, 50))
+            if (destroyed) return
+            const anchor = topRow()
+            const kept = api.selection()
+            table.redraw(true)
+            frozenWidth()
+            if (anchor) await restoreTop(anchor)
+            else if (kept?.rows.length) await api.scrollTo(kept.rows[0], 'center')
+            restoreRange(kept)
+        },
+
         /** Refresh the sort arrows in the header (title formatters run once, at column creation). */
         redrawHeader() {
             const s = sortState()
@@ -860,6 +931,8 @@ export function createGrid(element, options) {
             element.removeEventListener('keydown', editorKeys, true)
             element.removeEventListener('keydown', altArrows, true)
             element.removeEventListener('keyup', listKeyup, true)
+            element.removeEventListener('blur', pickHighlighted, true)
+            holder?.removeEventListener('scroll', pickHighlighted, true)
             holder?.removeEventListener('keydown', characterKeys)
             document.removeEventListener('mousedown', pointerDown, true)
             table.destroy()
@@ -867,7 +940,15 @@ export function createGrid(element, options) {
     }
 
     // The default sort's arrow is drawn by the title formatter at creation; its aria-sort needs the header elements.
-    ready.then(() => { if (! destroyed) api.redrawHeader() })
+    // The pinned columns' width, for the holder's scroll-padding (a focused cell scrolled into view stays clear of them).
+    const frozenWidth = () => {
+        if (destroyed) return
+        const width = [...element.querySelectorAll('.tabulator-header .tabulator-frozen-left')].reduce((sum, el) => sum + el.offsetWidth, 0)
+        element.style.setProperty('--ps-sheet-frozen', `${width}px`)
+    }
+    table.on('columnResized', frozenWidth)
+    table.on('renderComplete', frozenWidth)
+    ready.then(() => { if (! destroyed) { api.redrawHeader(); frozenWidth() } })
 
     return api
 }

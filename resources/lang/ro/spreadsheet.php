@@ -39,6 +39,7 @@ return [
     'shortcut_select' => 'Extinde selecția',
     'shortcut_jump' => 'Sari la marginea celulelor completate',
     'shortcut_toggle' => 'Comută o celulă da/nu',
+    'shortcut_menu' => 'Meniul rândului',
     'shortcut_fill_down' => 'Completează selecția în jos de la primul rând',
     'shortcut_cut' => 'Taie celulele selectate',
 
@@ -56,6 +57,7 @@ return [
     'offline' => 'Serverul nu a putut fi contactat. Modificările tale sunt încă aici.',
     'paste_skipped' => '{1} :count celulă nu a putut fi lipită (doar citire sau în afara foii).|[2,*] :count celule nu au putut fi lipite (doar citire sau în afara foii).',
     'paste_capped' => '{1} :count rând nu a fost adăugat: o salvare poate avea cel mult :max rânduri.|[2,*] :count rânduri nu au fost adăugate: o salvare poate avea cel mult :max rânduri.',
+    'paste_blank' => '{1} :count linie goală nu a fost adăugată ca rând.|[2,*] :count linii goale nu au fost adăugate ca rânduri.',
     'failed' => 'Salvarea nu a reușit.',
     'load_failed' => 'Rândurile nu au putut fi încărcate.',
 
@@ -77,6 +79,8 @@ return [
     'conflict' => 'Modificat de altcineva după ce l-ai încărcat.',
     'their_value' => 'Valoarea lor',
     'your_value' => 'Valoarea ta',
+    'conflict_elsewhere' => 'Celula are încă valoarea încărcată de tine; a fost modificată altă celulă a rândului.',
+    'no_results' => 'Niciun rezultat',
     'row_failed' => 'Rândul nu a putut fi salvat.',
     'row_delete_failed' => 'Rândul nu a putut fi șters.',
     'too_many_cells' => 'Acest rând conține mai multe celule decât are foaia coloane.',

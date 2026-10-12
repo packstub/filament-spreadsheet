@@ -39,6 +39,7 @@ return [
     'shortcut_select' => 'Extend the selection',
     'shortcut_jump' => 'Jump to the edge of the filled cells',
     'shortcut_toggle' => 'Flip a yes/no cell',
+    'shortcut_menu' => 'Row menu',
     'shortcut_fill_down' => 'Fill the selection down from its first row',
     'shortcut_cut' => 'Cut the selected cells',
 
@@ -56,6 +57,7 @@ return [
     'offline' => 'Could not reach the server. Your changes are still here.',
     'paste_skipped' => '{1} :count cell could not be pasted (read-only or outside the sheet).|[2,*] :count cells could not be pasted (read-only or outside the sheet).',
     'paste_capped' => '{1} :count row was not added: a save takes at most :max rows.|[2,*] :count rows were not added: a save takes at most :max rows.',
+    'paste_blank' => '{1} :count empty line was not added as a row.|[2,*] :count empty lines were not added as rows.',
     'failed' => 'The save did not go through.',
     'load_failed' => 'The rows could not be loaded.',
 
@@ -77,6 +79,8 @@ return [
     'conflict' => 'Changed by someone else since you loaded it.',
     'their_value' => 'Their value',
     'your_value' => 'Your value',
+    'conflict_elsewhere' => 'This cell still holds the value you loaded; another cell of the row was changed.',
+    'no_results' => 'No results',
     'row_failed' => 'This row could not be saved.',
     'row_delete_failed' => 'This row could not be deleted.',
     'too_many_cells' => 'This row carries more cells than the sheet has columns.',

@@ -116,6 +116,13 @@ test('matchOption finds by value, then by label, case and spaces aside', () => {
     assert.equal(S.matchOption(options, 'glue'), undefined)
 })
 
+test('matchOption prefers a label to another option\'s key', () => {
+    const sizes = [{ value: '1', label: '5' }, { value: '5', label: '50' }]
+    assert.equal(S.matchOption(sizes, '5'), '1')
+    assert.equal(S.matchOption(sizes, '50'), '5')
+    assert.equal(S.matchOption(sizes, '1'), '1')
+})
+
 test('coerce applies the column type and answers with the cell message when it cannot', () => {
     const c = (name, raw) => S.coerce(columns.find((x) => x.name === name), raw, T)
     assert.deepEqual(c('price', '1 234,5551'), { ok: true, value: 1234.56 })
@@ -339,6 +346,29 @@ test('overlay lays the buffer over a server row', () => {
 })
 
 /* ------------------------------------------------------------------ paste and fill */
+
+test('a blank line past the last row makes no new row; inside the rows it clears the cells', () => {
+    const rows = [row(1), row(2)]
+    const plan = S.pastePlan({ matrix: [['5', 'Paint'], ['', ''], ['', ' '], ['7', 'Tools'], ['', '']], startRow: 1, startCol: 1, rows, columns, creatable: true, defaults: { stock: 0 }, t: T })
+
+    // Row 2 takes the first line; the blank lines past the end are dropped, the filled one is created.
+    assert.equal(plan.edits.length, 2)
+    assert.equal(plan.created.length, 1)
+    assert.equal(plan.created[0].values.price, 7)
+    assert.equal(plan.blank, 3)
+    assert.equal(plan.skipped, 0)
+
+    // The same blank line over an existing row clears its cells.
+    const over = S.pastePlan({ matrix: [['', '']], startRow: 0, startCol: 1, rows, columns, creatable: true, t: T })
+    assert.deepEqual(over.edits.map((e) => [e.col, e.to]), [['price', null], ['stock', null]])
+    assert.equal(over.blank, 0)
+
+    // Text only on a computed column or past the last one is nothing a new row takes: still a blank line.
+    const edge = S.pastePlan({ matrix: [['', '4', 'note'], ['', '', '']], startRow: 2, startCol: 6, rows, columns, creatable: true, t: T })
+    assert.equal(edge.created.length, 0)
+    assert.equal(edge.blank, 2)
+    assert.equal(edge.skipped, 4)
+})
 
 test('a paste lands at the anchor, coerces per column, skips what cannot be edited and adds rows past the end', () => {
     const rows = [row(1), row(2, {}, { locked: ['price'] }), row(3, {}, { readOnly: true })]

@@ -208,12 +208,13 @@ export function viewHtml() {
     return html
 }
 
-export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false, hidden = false, addRowKey = null, lateCss = false, filters = null } = {}) {
+export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeight = false, hidden = false, addRowKey = null, lateCss = false, filters = null, inline = false } = {}) {
     // The server sends creatable/deletable false on a read-only sheet (Spreadsheet::canCreate()/isDeletable()).
     // autoHeight is what getSpreadsheetHeight() answers by default (null): the stylesheet's --ps-sheet-height applies.
     // hidden builds the sheet inside a display:none wrapper (#harness-wrap), as in a tab that is not the open one.
     // addRowKey rebinds the add-row shortcut (?addrow=mod+shift+a), which leaves Ctrl+Enter to nobody.
-    // lateCss adds the stylesheet 300 ms after the component started, as Filament's x-load-css does in a panel.
+    // lateCss adds the stylesheet after the component started, as Filament's x-load-css does in a panel: 300 ms, the number given, or when the case calls window.__loadCss() (`manual`).
+    // inline sends the first page in the config (`state`), as the real view does: the grid renders it as it is built, before tableBuilt.
     const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height, keybindings: addRowKey ? { add_row: addRowKey } : config.keybindings, filtersLayout: filters ?? config.filtersLayout }
     return `<!doctype html>
 <html lang="en"${rtl ? ' dir="rtl"' : ''} class="${dark ? 'dark' : ''}">
@@ -231,6 +232,7 @@ ${lateCss ? '' : '<link rel="stylesheet" href="/resources/dist/spreadsheet.css">
 <h1 style="font-size:1.25rem;margin:0 0 .75rem">Products</h1>
 <script>window.__config = ${JSON.stringify(cfg)}; window.__ready = false;</script>
 <script>${serverSource}</script>
+${inline ? '<script>window.__config.state = window.__server.rows({ page: 1, perPage: window.__config.perPage })</script>' : ''}
 <div id="harness-wrap"${hidden ? ' style="display:none"' : ''}>
 ${viewHtml()}
 </div>
@@ -245,7 +247,7 @@ window.Alpine = Alpine
 window.sheet = () => Alpine.$data(document.querySelector('.ps-sheet'))
 Alpine.start()
 window.__ready = true
-${lateCss ? "setTimeout(() => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/resources/dist/spreadsheet.css'; l.onload = () => window.dispatchEvent(new Event('packstub-spreadsheet-css')); document.head.append(l) }, 300)" : ''}
+${lateCss ? "window.__loadCss = () => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/resources/dist/spreadsheet.css'; l.onload = () => window.dispatchEvent(new Event('packstub-spreadsheet-css')); document.head.append(l) }; " + (lateCss === 'manual' ? '' : 'setTimeout(window.__loadCss, ' + (Number(lateCss) || 300) + ')') : ''}
 </script>
 </body>
 </html>`
@@ -259,7 +261,7 @@ export function serve(port = 0) {
         const url = new URL(req.url, 'http://localhost')
         if (url.pathname === '/' || url.pathname === '/index.html') {
             res.writeHead(200, { 'content-type': 'text/html' })
-            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight'), hidden: url.searchParams.has('hidden'), addRowKey: url.searchParams.get('addrow'), lateCss: url.searchParams.has('latecss'), filters: url.searchParams.get('filters') }))
+            res.end(pageHtml({ dark: url.searchParams.has('dark'), rtl: url.searchParams.has('rtl'), readOnly: url.searchParams.has('readonly'), autoHeight: url.searchParams.has('autoheight'), hidden: url.searchParams.has('hidden'), addRowKey: url.searchParams.get('addrow'), lateCss: url.searchParams.has('latecss') ? (url.searchParams.get('latecss') || 'default') : false, filters: url.searchParams.get('filters'), inline: url.searchParams.has('inline') }))
 
             return
         }
@@ -275,5 +277,5 @@ export function serve(port = 0) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     writeFileSync(join(root, 'tests/browser/.harness.html'), pageHtml())
     const { port } = await serve(4177)
-    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight, ?hidden, ?addrow=<key>, ?latecss, ?filters=dropdown|above|toolbar)`)
+    console.log(`harness at http://127.0.0.1:${port}/  (?dark, ?rtl, ?readonly, ?autoheight, ?hidden, ?addrow=<key>, ?latecss[=ms|manual], ?inline, ?filters=dropdown|above|toolbar)`)
 }
