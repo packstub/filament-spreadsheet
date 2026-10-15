@@ -16,16 +16,16 @@ An **inline-editable table** for bulk editing Eloquent records in Filament: a sh
 
 ## Features
 
-- **[One Save for hundreds of cells](#saving)**: edits wait in the browser across pages, then one transaction writes them all.
-- **[Rules, policies and conflicts on the server](#saving)**: your validation rules, the model's policy per row, and a refused row when someone else changed it.
-- **[A keyboard grid](#editing)**: arrows and ranges, type to edit, fill down with Ctrl+D or the handle, undo and redo.
-- **[Paste from Excel or Sheets](#editing)**: a block lands at the selection, each column reading it its own way; extra rows become records.
-- **[Seven column types](#columns)**: text, number, boolean, select (options, enum or relationship), date, date-time and computed formulas.
-- **[Add and delete rows](#adding-and-deleting-rows)**: new rows start from your defaults, deletions go with the next Save, both behind the policy.
-- **[Search, sort, filters and pages](#search-sort-filters-pagination)**: on the server, with Filament's own filter fields, and unsaved cells kept across pages.
-- **[A resource page or your own](#installation)**: a sheet next to any resource with an Edit as sheet button, or a standalone page over your query.
-- **[Events and hooks](https://packstub.dev/docs/filament-spreadsheet/events)**: `RowsSaved`, `RowSaveFailed`, `beforeSave()`, `afterSave()` and `mutateRowBeforeSave()`.
-- **[Dark mode, RTL and translations](#configuration)**: English, Romanian, Russian and German; Tabulator (MIT) is bundled, nothing else to install.
+- **[One Save for hundreds of cells](#saving)**: edits wait across pages, one transaction writes them.
+- **[Rules, policies and conflicts on the server](#saving)**: every cell validated, every row authorized.
+- **[A keyboard grid](#editing)**: ranges, fill down, undo and redo.
+- **[Paste from Excel or Sheets](#editing)**: extra rows become new records.
+- **[Seven column types](#columns)**: text, number, boolean, select, dates and formulas.
+- **[Add and delete rows](#adding-and-deleting-rows)**: behind your policy, written with the next Save.
+- **[Search, sort, filters and pages](#search-sort-filters-pagination)**: on the server, unsaved cells kept.
+- **[A resource page or your own](#installation)**: an Edit as sheet button on any resource.
+- **[Events and hooks](https://packstub.dev/docs/filament-spreadsheet/events)**: `RowsSaved`, `RowSaveFailed`, before and after a save.
+- **[Dark mode, RTL and translations](#configuration)**: Tabulator bundled, nothing else to install.
 
 ## Compatibility
 

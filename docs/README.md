@@ -10,16 +10,16 @@ An inline-editable table for bulk editing Eloquent records in Filament v4 (4.13+
 
 ## Features
 
-- **[One Save for hundreds of cells](saving.md)**: edits wait in the browser across pages, then one transaction writes them all.
-- **[Rules, policies and conflicts on the server](saving.md)**: your validation rules, the model's policy per row, and a refused row when someone else changed it.
-- **[A keyboard grid](editing.md)**: arrows and ranges, type to edit, fill down with Ctrl+D or the handle, undo and redo.
-- **[Paste from Excel or Sheets](editing.md)**: a block lands at the selection, each column reading it its own way; extra rows become records.
-- **[Seven column types](columns.md)**: text, number, boolean, select (options, enum or relationship), date, date-time and computed formulas.
-- **[Add and delete rows](rows.md)**: new rows start from your defaults, deletions go with the next Save, both behind the policy.
-- **[Search, sort, filters and pages](browsing.md)**: on the server, with Filament's own filter fields, and unsaved cells kept across pages.
-- **[A resource page or your own](first-sheet.md)**: a sheet next to any resource with an Edit as sheet button, or a [standalone page](standalone.md) over your query.
-- **[Events and hooks](events.md)**: `RowsSaved`, `RowSaveFailed`, `beforeSave()`, `afterSave()` and `mutateRowBeforeSave()`.
-- **[Dark mode, RTL and translations](styling.md)**: English, Romanian, Russian and German; Tabulator (MIT) is bundled, nothing else to install.
+- **[One Save for hundreds of cells](saving.md)**: edits wait across pages, one transaction writes them.
+- **[Rules, policies and conflicts on the server](saving.md)**: every cell validated, every row authorized.
+- **[A keyboard grid](editing.md)**: ranges, fill down, undo and redo.
+- **[Paste from Excel or Sheets](editing.md)**: extra rows become new records.
+- **[Seven column types](columns.md)**: text, number, boolean, select, dates and formulas.
+- **[Add and delete rows](rows.md)**: behind your policy, written with the next Save.
+- **[Search, sort, filters and pages](browsing.md)**: on the server, unsaved cells kept.
+- **[A resource page or your own](first-sheet.md)**: an Edit as sheet button on any resource.
+- **[Events and hooks](events.md)**: `RowsSaved`, `RowSaveFailed`, before and after a save.
+- **[Dark mode, RTL and translations](styling.md)**: Tabulator bundled, nothing else to install.
 
 ## Guides
 
