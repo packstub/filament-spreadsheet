@@ -13,9 +13,9 @@ it('renders the toolbar, the footer, the dialog and the help modal with their ho
     $html = Livewire::mount(ProductSheet::class);
 
     foreach ([
-        'class="ps-sheet"', 'ps-sheet-toolbar', 'ps-sheet-add-row', 'ps-sheet-group', 'ps-sheet-btn-primary', 'ps-sheet-seg-btn',
-        'ps-sheet-btn-danger', 'ps-sheet-search', 'fi-input-wrp', 'fi-input-has-inline-prefix', 'ps-sheet-filter', 'fi-select-input',
-        'ps-sheet-filters-dropdown', 'ps-sheet-filters-btn', 'ps-sheet-filters-reset', 'ps-sheet-filters-above', 'ps-sheet-filters-inline',
+        'class="ps-sheet"', 'ps-sheet-toolbar', 'ps-sheet-toolbar-start', 'ps-sheet-toolbar-end', 'ps-sheet-add-row', 'ps-sheet-group', 'ps-sheet-btn-primary', 'ps-sheet-seg-btn',
+        'ps-sheet-btn-danger', 'ps-sheet-search', 'fi-input-wrp', 'fi-input-has-inline-prefix', 'ps-sheet-filter', 'fi-select-input', 'fi-fo-date-time-picker',
+        'ps-sheet-filters-dropdown', 'ps-sheet-filters-btn', 'ps-sheet-filters-header', 'ps-sheet-filters-reset',
         'ps-sheet-help-btn', 'ps-sheet-help', 'ps-sheet-shortcuts', 'ps-sheet-grid', 'ps-sheet-footer', 'ps-sheet-status', 'ps-sheet-pill-errors',
         'ps-sheet-hint', 'ps-sheet-pager', 'ps-sheet-per-page', 'ps-sheet-dialog', 'ps-sheet-dialog-ok', 'ps-sheet-dialog-text', 'ps-sheet-menu',
         'fi-btn', 'fi-icon-btn', 'fi-badge', 'fi-modal', 'fi-dropdown', 'fi-dropdown-panel', 'fi-dropdown-list-item', 'data-dispatch="packstub-spreadsheet"',

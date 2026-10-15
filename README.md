@@ -16,19 +16,16 @@ An **inline-editable table** for bulk editing Eloquent records in Filament: a sh
 
 ## Features
 
-- **[One Save for hundreds of cells](#saving)**: changed cells wait in the browser (across pages, sorting and search) until you press Save or Ctrl+S; the server writes them in one transaction and answers with the rows as saved. `AllOrNothing` (one bad cell, nothing written, every error shown) or `PerRow` (good rows commit, bad rows come back).
-- **[Rules, policies and conflicts on the server](#saving)**: Laravel validation rules per column (a `unique` rule ignores the record itself), the model's policy (`update`, `create`, `delete`) or your own closures for every row, and an `updated_at` (or version) check that refuses a row someone else changed since you loaded it. Errors land on the cell, in red, with the message.
-- **[Keyboard grid](#editing)**: arrows and Shift+arrows select ranges, Enter or F2 (or just typing) edits, Tab and Enter move, Delete clears, Ctrl+X cuts, **Ctrl+D fills down**, Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves. A drag handle fills too.
-- **[Paste from Excel or Sheets](#editing)**: a block of cells lands where the selection is, each column reading it its own way ("1 234,50" becomes a number, "yes" a boolean, "Paint" the option with that label, "28/02/2026" a date in your display format); rows past the last one become new records.
-- **[Column types](#columns)**: `TextColumn`, `NumberColumn` (integer or decimals, min, max), `BooleanColumn`, `SelectColumn` (options, an enum, or a `relationship()`), `DateColumn`, `DateTimeColumn`, `ComputedColumn` (read-only). Per-column `rules()`, `readOnly()` (for some records only), `default()` for new rows, `hidden()`.
-- **[Resource page or standalone page](#installation)**: `SpreadsheetResourcePage` (`/products/sheet`, rows from the resource's query, tenant-scoped, the resource's abilities per row) with a `SheetAction` for the list page, or `SpreadsheetPage` with your own `query()`.
-- **Search, sort, filters, pagination on the server** (default 100 rows per page, up to 1,000), with a badge that says "12 changes on 3 pages".
-- **Events and hooks**: `RowsSaved` and `RowSaveFailed` events, `beforeSave()`, `afterSave()`, `mutateRowBeforeSave()`.
-- **Built on [Tabulator](https://tabulator.info) (MIT)**, bundled: nothing to install beyond `filament:assets`. Dark mode, RTL, translatable (English, Romanian, Russian, German). MIT.
-
-## Editable columns or a sheet?
-
-Filament's editable table columns (`TextInputColumn`, `SelectColumn`, `ToggleColumn`) are perfect for flipping a toggle or fixing one price: one cell, saved as you leave it. This plugin is for the afternoon when you need to fix three hundred of them: the same cells, but edited like a spreadsheet, validated together, checked against your policies, and written in one go. Keep the editable columns on your list page; add a sheet page next to it for the bulk work.
+- **[One Save for hundreds of cells](#saving)**: edits wait in the browser across pages, then one transaction writes them all.
+- **[Rules, policies and conflicts on the server](#saving)**: your validation rules, the model's policy per row, and a refused row when someone else changed it.
+- **[A keyboard grid](#editing)**: arrows and ranges, type to edit, fill down with Ctrl+D or the handle, undo and redo.
+- **[Paste from Excel or Sheets](#editing)**: a block lands at the selection, each column reading it its own way; extra rows become records.
+- **[Seven column types](#columns)**: text, number, boolean, select (options, enum or relationship), date, date-time and computed formulas.
+- **[Add and delete rows](#adding-and-deleting-rows)**: new rows start from your defaults, deletions go with the next Save, both behind the policy.
+- **[Search, sort, filters and pages](#search-sort-filters-pagination)**: on the server, with Filament's own filter fields, and unsaved cells kept across pages.
+- **[A resource page or your own](#installation)**: a sheet next to any resource with an Edit as sheet button, or a standalone page over your query.
+- **[Events and hooks](https://packstub.dev/docs/filament-spreadsheet/events)**: `RowsSaved`, `RowSaveFailed`, `beforeSave()`, `afterSave()` and `mutateRowBeforeSave()`.
+- **[Dark mode, RTL and translations](#configuration)**: English, Romanian, Russian and German; Tabulator (MIT) is bundled, nothing else to install.
 
 ## Compatibility
 
@@ -81,13 +78,15 @@ class ProductsSheet extends SpreadsheetResourcePage
 }
 ```
 
+![The products list with Edit as sheet in its header](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/list-action.png)
+
 Register it in the resource's `getPages()`: `'sheet' => ProductsSheet::route('/sheet')`, and add `SheetAction::make()` to the list page's header actions to link to it. Rows come from `ProductResource::getEloquentQuery()` (tenant-scoped); each row's update, create and delete go through the resource's `canEdit()`, `canCreate()` and `canDelete()`.
 
 Read more: [Installation](https://packstub.dev/docs/filament-spreadsheet/installation) · [Your first sheet](https://packstub.dev/docs/filament-spreadsheet/first-sheet).
 
 ## Columns
 
-![A products sheet: text, select, number, computed, boolean and date columns](docs/images/sheet.png)
+![A products sheet: text, select, number, computed, boolean and date columns](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/sheet.png)
 
 A column names an attribute and says how to read and write it. Every write is coerced by its column, validated with its rules and the type's, and refused on the cell when it cannot be read:
 
@@ -110,13 +109,15 @@ Read more: [Columns](https://packstub.dev/docs/filament-spreadsheet/columns).
 
 ## Editing
 
-![After a save with two refused cells, red, the active cell's message under the grid](docs/images/errors.png)
+![Two prices typed in: amber corners on the changed cells, Save enabled with the count](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/edits.png)
 
 Click a cell to select it, type to replace it, double-click, Enter or F2 to edit it in place. Enter moves down, Tab moves right, Escape cancels. Shift+arrows select a range; Ctrl+C copies it as tab-separated text (labels for selects, ISO dates), Ctrl+X cuts it, Ctrl+V pastes whatever is on the clipboard, Delete clears it (the cells you may edit), Ctrl+D fills the first row down, and the small handle at the corner of the selection drags to fill. Ctrl+Z and Ctrl+Y walk the history, across pages. Changed cells get an amber corner; a cell the column cannot read ("abc" in a number) is red at once, before you even save.
 
 Read more: [Editing](https://packstub.dev/docs/filament-spreadsheet/editing).
 
 ## Saving
+
+![After a save with two refused cells, red, the active cell's message under the grid](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/errors.png)
 
 Save (or Ctrl+S) sends every changed cell, the new rows and the deletions in one call. The server loads each record through the sheet's query, checks the policy, compares the version, coerces and validates, and writes:
 
@@ -134,13 +135,17 @@ Read more: [Saving](https://packstub.dev/docs/filament-spreadsheet/saving) · [A
 
 ## Adding and deleting rows
 
+![A new row at the bottom marked with a plus, a row struck through for deletion](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/rows.png)
+
 `->creatable()` shows an Add row button (Ctrl+Enter) and lets a paste past the last row create records; new rows start with the columns' `default()` values and are validated over every column. `->deletable()` lets a row selection (click its number) or the row's context menu mark rows for deletion; they go with the next Save. Both are gated by the policy (`create`, `delete`) or your `authorizeCreate()` / `authorizeDelete()` closures.
 
 Read more: [Adding and deleting rows](https://packstub.dev/docs/filament-spreadsheet/rows).
 
 ## Search, sort, filters, pagination
 
-Everything the toolbar does happens on the server: the search box looks in `searchable([...])`, a header click sorts by that column, `filters([...])` are small selects (or date ranges) applied to the query, and the page size runs from 25 to 1,000 rows. Unsaved cells stay in the browser through all of it: the badge says how many and on how many pages.
+![The toolbar with a search term, a filter set and the unsaved changes counted](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/browsing.png)
+
+Everything the toolbar does happens on the server: the search box looks in `searchable([...])`, a header click sorts by that column, `filters([...])` are Filament's own fields applied to the query (a select, also `multiple()` or `searchable()`, a yes/no select, a toggle, a date range with Filament's date picker; the same `Filter` as Kanban and Gantt), and the page size runs from 25 to 1,000 rows. Unsaved cells stay in the browser through all of it: the badge says how many and on how many pages.
 
 ```php
 ->searchable(['sku', 'name', 'category.name'])
@@ -148,22 +153,42 @@ Everything the toolbar does happens on the server: the search box looks in `sear
 ->perPage(200)
 ->filters([
     Filter::select('category_id')->options(fn () => Category::pluck('name', 'id')->all()),
+    Filter::select('supplier_id')->searchable()->options(fn () => Supplier::pluck('name', 'id')->all()),
     Filter::boolean('is_active'),
+    Filter::toggle('low_stock')->query(fn (Builder $query) => $query->where('stock', '<', 5)),
     Filter::dateRange('available_on'),
 ])
+->filtersLayout(FiltersLayout::Dropdown) // the funnel button (default), Toolbar, AboveContent
 ```
 
 Read more: [Search, sort, filters, pagination](https://packstub.dev/docs/filament-spreadsheet/browsing).
 
 ## Configuration
 
-`config/packstub-spreadsheet.php` holds the defaults: rows per page and the maximum, the most rows one Save may carry, the save mode, the version column, whether leaving with unsaved changes asks first, a pinned first column (off by default), where the filters are (a dropdown, the toolbar or a row above the grid), the row height, the keyboard shortcuts and the date formats.
+```php
+$spreadsheet
+    ->perPage(200)                       // rows per page (25 to 1,000)
+    ->searchable(['sku', 'name'])        // what the search box looks in
+    ->defaultSort('sku')                 // a header click sorts by any column
+    ->creatable()->deletable()           // Add row, paste past the end, mark rows for deletion
+    ->saveMode(SaveMode::PerRow)         // or AllOrNothing, the default
+    ->versionColumn('updated_at')        // the conflict check; false to skip it
+    ->filtersLayout(FiltersLayout::Dropdown)
+    ->readOnly(fn () => ! auth()->user()->isAdmin())
+    ->key('products');                   // the sheet's name in RowsSaved / RowSaveFailed
+```
 
-![The sheet in dark mode](docs/images/dark.png)
+`config/packstub-spreadsheet.php` holds the defaults: rows per page and the maximum, the most rows one Save may carry, the save mode, the version column, whether leaving with unsaved changes asks first, a pinned first column (off by default), where the filters are (a dropdown, the toolbar or a row above the grid), the row height, the keyboard shortcuts, the date formats and the first day of the week in the filters' calendars.
 
-The stylesheet maps Tabulator's surfaces to Filament's colour variables, follows dark mode and reads right-to-left with the panel. Restyle it with the `--ps-sheet-*` variables on `.ps-sheet`.
+![The sheet in dark mode](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/dark.png)
+
+The sheet is a table-style container, the same shell as a Filament table and as Kanban and Gantt, its controls Filament's own components; the stylesheet maps Tabulator's surfaces to Filament's colour variables, follows dark mode and reads right-to-left with the panel. Restyle it with the `--ps-sheet-*` variables on `.ps-sheet` (`--ps-sheet-bg`, `-border`, `-ring`, `-radius`… the names Kanban and Gantt use with their own prefix).
 
 Read more: [Styling](https://packstub.dev/docs/filament-spreadsheet/styling).
+
+## Editable columns or a sheet?
+
+Filament's editable table columns (`TextInputColumn`, `SelectColumn`, `ToggleColumn`) are perfect for flipping a toggle or fixing one price: one cell, saved as you leave it. This plugin is for the afternoon when you need to fix three hundred of them: the same cells, but edited like a spreadsheet, validated together, checked against your policies, and written in one go. Keep the editable columns on your list page; add a sheet page next to it for the bulk work.
 
 ## Documentation
 

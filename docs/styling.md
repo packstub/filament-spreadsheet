@@ -1,15 +1,28 @@
 # Styling
 
-![The sheet in dark mode](images/dark.png)
+![The sheet in dark mode](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/dark.png)
 
-The stylesheet bundles Tabulator's base CSS and lays Filament's colour variables (`--gray-*`, `--primary-*`, `--danger-*`, `--warning-*`, `--success-*`) over every coloured surface, so the sheet follows your panel's theme and dark mode without compiling the plugin's views. The toolbar, the filters, the badges, the row menu and the Discard / Delete rows dialog are Filament's own Blade components (`x-filament::button`, `x-filament::input.wrapper`, `x-filament::badge`, `x-filament::modal`, the dropdown's classes), styled by the panel's stylesheet like any Filament page, so a theme that restyles Filament's buttons or inputs restyles the sheet's. The toolbar uses logical properties: it reads right-to-left with the panel.
+The stylesheet bundles Tabulator's base CSS and lays Filament's colour variables (`--gray-*`, `--primary-*`, `--danger-*`, `--warning-*`, `--success-*`) over every coloured surface, so the sheet follows your panel's theme and dark mode without compiling the plugin's views. The sheet is a table-style container, the same shell as Filament's own tables and as Kanban and Gantt (the ring and the rounded corners, the toolbar with a line under it, the grid, the footer with a line over it), and the toolbar, the filters, the badges, the row menu and the Discard / Delete rows dialog are Filament's own Blade components (`x-filament::button`, `x-filament::input.wrapper`, the searchable select and the date picker behind `Select` and `DatePicker`, `x-filament::input.checkbox`, `x-filament::badge`, `x-filament::dropdown`, `x-filament::modal`, the dropdown's list classes for the row menu), styled by the panel's stylesheet like any Filament page, so a theme that restyles Filament's buttons or inputs restyles the sheet's. The toolbar uses logical properties: it reads right-to-left with the panel.
 
 ## Variables
 
-Restyle it by overriding the `--ps-sheet-*` variables on `.ps-sheet` in your theme:
+Restyle it by overriding the `--ps-sheet-*` variables on `.ps-sheet` in your theme. The first group is the shell's, the same names (with their own prefix) in Kanban (`--ps-kanban-*`) and Gantt (`--ps-gantt-*`), so one theme rule per plugin restyles the three alike; the rest are the sheet's own:
 
 ```css
 .ps-sheet {
+    /* the shell, shared with Kanban and Gantt */
+    --ps-sheet-bg: #fff;                        /* the container (gray-900 in dark mode) */
+    --ps-sheet-surface: var(--gray-50);         /* a raised surface: a key cap */
+    --ps-sheet-border: var(--gray-200);         /* the lines under the toolbar and over the footer */
+    --ps-sheet-line: ...;                       /* the grid's cell lines */
+    --ps-sheet-text / -muted / -soft;           /* text, the status line, read-only cells */
+    --ps-sheet-ring: var(--primary-500);        /* the active cell's border, the fill handle, an active filter's ring */
+    --ps-sheet-radius: 0.75rem;                 /* the container's corners, as a table's */
+    --ps-sheet-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --ps-sheet-outline: rgb(9 9 11 / 0.05);     /* the container's 1px ring */
+    --ps-sheet-mono: ui-monospace, ...;
+
+    /* the sheet's own */
     --ps-sheet-height: auto;                    /* the grid's height: auto is measured by the sheet, a length fixes it */
     --ps-sheet-dirty: var(--warning-500);       /* the amber corner */
     --ps-sheet-dirty-bg: ...;
@@ -20,8 +33,8 @@ Restyle it by overriding the `--ps-sheet-*` variables on `.ps-sheet` in your the
     --ps-sheet-locked: ...;                     /* read-only cells */
     --ps-sheet-created-bg: ...;                 /* the number cell of a new row */
     --ps-sheet-range: ...;                      /* the selection */
-    --ps-sheet-ring: var(--primary-500);        /* the active cell's border, the fill handle */
-    --ps-sheet-bg / -surface / -border / -line / -text / -muted / -soft / -head / -head-text / -hover / -radius / -font
+    --ps-sheet-head / -head-text / -hover;      /* the grid's header and a hovered row */
+    --ps-sheet-font: inherit;
 }
 ```
 
@@ -32,7 +45,8 @@ The dark palette is set under `.dark .ps-sheet`. The grid's height is measured b
 | Class | On |
 | --- | --- |
 | `.ps-sheet`, `.ps-sheet-is-dirty`, `.ps-sheet-is-saving`, `.ps-sheet-is-loading`, `.ps-sheet-is-readonly` | the root |
-| `.ps-sheet-toolbar`, `.ps-sheet-btn`, `.ps-sheet-btn-primary`, `.ps-sheet-btn-danger`, `.ps-sheet-search`, `.ps-sheet-filter`, `.ps-sheet-filters-btn`, `.ps-sheet-pill-dirty` | the toolbar |
+| `.ps-sheet-toolbar`, `.ps-sheet-toolbar-start`, `.ps-sheet-toolbar-end`, `.ps-sheet-btn`, `.ps-sheet-btn-primary`, `.ps-sheet-btn-danger`, `.ps-sheet-search`, `.ps-sheet-filters-btn`, `.ps-sheet-pill-dirty` | the toolbar |
+| `.ps-sheet-filter`, `.ps-sheet-filter-on`, `.ps-sheet-filter-stacked`, `.ps-sheet-range`, `.ps-sheet-toggle`, `.ps-sheet-filters-panel`, `.ps-sheet-filters-above`, `.ps-sheet-filters-inline`, `.ps-sheet-filters-header` | a filter (active, stacked), the date range, the toggle, where they are |
 | `.ps-sheet-footer`, `.ps-sheet-status`, `.ps-sheet-hint`, `.ps-sheet-pill-errors`, `.ps-sheet-pager` | the footer under the grid |
 | `.ps-sheet-cell-dirty`, `.ps-sheet-cell-error`, `.ps-sheet-cell-conflict`, `.ps-sheet-cell-locked` | a cell |
 | `.ps-sheet-row-created`, `.ps-sheet-row-deleted`, `.ps-sheet-row-readonly`, `.ps-sheet-row-error` | a row |

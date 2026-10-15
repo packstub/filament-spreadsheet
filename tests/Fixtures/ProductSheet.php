@@ -41,6 +41,9 @@ class ProductSheet extends Component
 
     public static ?string $height = null;
 
+    /** The filters instead of the fixture's three (null: the fixture's). @var list<Filter>|null */
+    public static ?array $filters = null;
+
     /** sku gets validationMessages() and validationAttribute(). */
     public static bool $ownMessages = false;
 
@@ -61,6 +64,7 @@ class ProductSheet extends Component
         static::$failInAfterSave = false;
         static::$brokenQuery = false;
         static::$height = null;
+        static::$filters = null;
         static::$ownMessages = false;
         static::$afterSave = [];
         static::$beforeSave = [];
@@ -88,7 +92,7 @@ class ProductSheet extends Component
             ->searchable(['sku', 'name', 'category.name'])
             ->defaultSort('sku')
             ->perPage(static::$perPage)
-            ->filters([
+            ->filters(static::$filters ?? [
                 Filter::select('category_id')->options(fn () => Category::query()->pluck('name', 'id')->all()),
                 Filter::boolean('is_active'),
                 Filter::dateRange('available_on'),

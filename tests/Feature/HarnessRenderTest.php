@@ -16,6 +16,11 @@ it('renders the sheet view for the browser harness', function (): void {
         $this->markTestSkipped('HARNESS_RENDER names no file.');
     }
 
+    // The filters are rendered where the layout says: the harness asks for each layout it drives.
+    if ($layout = getenv('HARNESS_FILTERS_LAYOUT')) {
+        config()->set('packstub-spreadsheet.filters_layout', $layout);
+    }
+
     $html = Livewire::mount(ProductSheet::class);
     $start = strpos($html, '<div', strpos($html, '<div') + 1); // the fixture wraps the sheet in one div
     $end = strrpos($html, '</div>', -7); // the last </div> is the wrapper's, the one before it the sheet root's

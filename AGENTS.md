@@ -33,8 +33,18 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   `numberText()` (ECMAScript Number::toString), text compares as UTF-16, numeric text allows ASCII blanks only.
 - `src/Spreadsheet.php` (definition; `rows()` reader; `save()` = authorise, conflict check, coerce, validate, write,
   answer; `delete()`), `SavePayload.php` (strict reader of what the browser sends), `SaveResult.php` (plain arrays,
-  never a model), `Filter.php`, `Enums/SaveMode.php`, `Events/{RowsSaved,RowSaveFailed}.php`,
+  never a model), `Filter.php` (the kit class shared with Kanban and Gantt: select / multiple / searchable, boolean,
+  toggle, dateRange; `state()` / `emptyState()` are the shapes the browser's `active[name]` holds; a toggle without
+  `query()` throws from `getSpreadsheetConfig()`), `Enums/{SaveMode,FiltersLayout}.php`, `Events/{RowsSaved,RowSaveFailed}.php`,
   `Exceptions/{SaveRejected,InvalidValue,RolledBack}.php`.
+- `resources/views/spreadsheet.blade.php` is the table-style container (`ps-sheet-toolbar` with `-start` / `-end`
+  groups, the grid, `ps-sheet-footer`); the filters are rendered once, in Blade, where `filtersLayout()` says (none
+  without filters): `filters.blade.php` (a row per filter, `$stacked` for the funnel panel and the "above" row) over
+  `partials/select.blade.php` (Filament's `selectFormComponent`, fed by the renderless `spreadsheetFilterOptions` /
+  `spreadsheetFilterOptionLabel` / `spreadsheetFilterOptionLabels`, a pick through `pickSelect()`) and
+  `partials/date-picker.blade.php` (Filament's `dateTimePickerFormComponent`, a pick through `pickFilter()`; the
+  config's `date_format` and `first_day_of_week`). The kit files and the shared `shared.css` block at the top of the
+  stylesheet are the same in Kanban and Gantt with their own prefix: change them there too.
 - `src/Columns/Column.php` + `Text|Number|Boolean|Select|Date|DateTime|ComputedColumn.php`: `present()` (record → wire),
   `coerce()` (wire → attribute, throws `InvalidValue` with the cell message), `getRules()` (own rules with `unique`
   ignoring the record + type rules), `toArray()` (what the grid needs). A `SelectColumn::relationship()` loads its
@@ -51,7 +61,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
   checks it is there, `LICENSE.md` has the third-party section).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
-  (`harness.mjs` turns the real Blade view into a static page with a fake `$wire` and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `?autoheight` sends `height: null`, the real default; `?hidden` builds the sheet inside `#harness-wrap` with `display:none`, shown by the case; `run.mjs` drives it in Chromium
+  (`harness.mjs` turns the real Blade view into a static page, rendered once per filters layout (`?filters=dropdown|above|toolbar`, `HARNESS_FILTERS_LAYOUT` into `HarnessRenderTest`) with the filters' `x-load-src` pointed at `vendor/filament/forms/dist/components/`, so Filament's real select and date picker run (`pickOption()` in `run.mjs` opens one and clicks an option), with a fake `$wire` (the filter calls answered from the config) and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `?autoheight` sends `height: null`, the real default; `?hidden` builds the sheet inside `#harness-wrap` with `display:none`, shown by the case; `run.mjs` drives it in Chromium
   through a sibling project's `playwright-core`; screenshots in `tests/browser/screenshots`, ignored). The grid
   renders only the rows around its window: `cell(index, …)` counts the row elements in the DOM, so a case that
   addresses a row further down calls `scrollToRow(id)` and takes the cell with `cellOf(id, field)`; never work

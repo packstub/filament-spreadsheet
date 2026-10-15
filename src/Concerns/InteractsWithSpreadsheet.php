@@ -5,6 +5,7 @@ namespace Packstub\Spreadsheet\Concerns;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Renderless;
 use Packstub\Spreadsheet\Exceptions\SaveRejected;
+use Packstub\Spreadsheet\Filter;
 use Packstub\Spreadsheet\SavePayload;
 use Packstub\Spreadsheet\SaveResult;
 use Packstub\Spreadsheet\Spreadsheet;
@@ -86,6 +87,79 @@ trait InteractsWithSpreadsheet
         return $this->spreadsheetAnswer(fn (): SaveResult => $this->getSpreadsheet()->delete(array_values($ids)));
     }
 
+    /**
+     * A select filter's options (`{value, label}`, at most its limit), or the ones matching a
+     * search: what Filament's select asks for when it opens or when the user types.
+     *
+     * @return list<array{value: string, label: string}>
+     */
+    #[Renderless]
+    public function spreadsheetFilterOptions(mixed $name, mixed $search = null): array
+    {
+        $filter = is_string($name) ? $this->spreadsheetFilter($name) : null;
+
+        if ($filter === null || ! ($filter->isSelect() || $filter->isBoolean()) || ($search !== null && ! is_string($search))) {
+            return [];
+        }
+
+        $options = $search === null || $search === ''
+            ? array_slice($filter->getOptions(), 0, $filter->getOptionsLimit(), preserve_keys: true)
+            : $filter->getSearchResults($search);
+
+        return collect($options)->map(fn ($label, $value) => ['value' => (string) $value, 'label' => (string) $label])->values()->all();
+    }
+
+    /** The label of a select filter's value (one the listed options do not hold: a searchable filter's pick, a value from the URL). */
+    #[Renderless]
+    public function spreadsheetFilterOptionLabel(mixed $name, mixed $value = null): ?string
+    {
+        $filter = is_string($name) ? $this->spreadsheetFilter($name) : null;
+
+        return $filter === null || ! ($filter->isSelect() || $filter->isBoolean()) || ! is_string($value) || $value === '' ? null : $filter->getOptionLabel($value);
+    }
+
+    /**
+     * The labels of a multiple select filter's values, keyed by value; a value the filter does not know is left out.
+     *
+     * @return array<string, string>
+     */
+    #[Renderless]
+    public function spreadsheetFilterOptionLabels(mixed $name, mixed $values = []): array
+    {
+        $filter = is_string($name) ? $this->spreadsheetFilter($name) : null;
+
+        if ($filter === null || ! ($filter->isSelect() || $filter->isBoolean()) || ! is_array($values)) {
+            return [];
+        }
+
+        $labels = [];
+
+        foreach ($values as $value) {
+            if (! is_string($value) && ! is_int($value)) {
+                continue;
+            }
+
+            $label = $filter->getOptionLabel($value);
+
+            if ($label !== null) {
+                $labels[(string) $value] = $label;
+            }
+        }
+
+        return $labels;
+    }
+
+    protected function spreadsheetFilter(string $name): ?Filter
+    {
+        foreach ($this->getSpreadsheet()->getFilters() as $filter) {
+            if ($filter->getName() === $name) {
+                return $filter;
+            }
+        }
+
+        return null;
+    }
+
     /** @return array<string, mixed> */
     protected function spreadsheetAnswer(\Closure $operation): array
     {
@@ -141,7 +215,8 @@ trait InteractsWithSpreadsheet
 
         return [
             'columns' => array_map(fn ($column) => $column->toArray(), $sheet->getColumns()),
-            'filters' => array_map(fn ($filter) => $filter->toArray(), $sheet->getFilters()),
+            // A toggle without a query() throws here, at the first render, not the first time a user turns it on.
+            'filters' => array_map(fn (Filter $filter) => tap($filter)->assertUsable()->toArray(), $sheet->getFilters()),
             'filtersLayout' => $sheet->getFiltersLayout()->value,
             'perPage' => $sheet->getPerPage(),
             'pageSizes' => $sizes,

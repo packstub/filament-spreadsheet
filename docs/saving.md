@@ -1,6 +1,6 @@
 # Saving
 
-![After a save with two refused cells, red, the active cell's message under the grid](images/errors.png)
+![After a save with two refused cells, red, the active cell's message under the grid](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/errors.png)
 
 ## One batch
 

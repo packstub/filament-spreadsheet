@@ -31,6 +31,7 @@ return [
     'open_sheet' => 'Editează ca foaie de calcul',
     'filters' => 'Filtre',
     'reset_filters' => 'Resetează filtrele',
+    'clear' => 'Șterge',
     'shortcuts' => 'Scurtături de tastatură',
     'shortcut_copy' => 'Copiază celulele selectate',
     'shortcut_paste' => 'Lipește la celula selectată',

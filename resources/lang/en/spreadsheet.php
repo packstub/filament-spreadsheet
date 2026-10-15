@@ -31,6 +31,7 @@ return [
     'open_sheet' => 'Edit as sheet',
     'filters' => 'Filters',
     'reset_filters' => 'Reset filters',
+    'clear' => 'Clear',
     'shortcuts' => 'Keyboard shortcuts',
     'shortcut_copy' => 'Copy the selected cells',
     'shortcut_paste' => 'Paste at the selected cell',

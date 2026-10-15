@@ -1,6 +1,6 @@
 # Columns
 
-![A products sheet: text, select, number, computed, boolean and date columns](images/sheet.png)
+![A products sheet: text, select, number, computed, boolean and date columns](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/sheet.png)
 
 A column names an attribute of the model and says how it is read into the grid and written back. Every column lives in `Packstub\Spreadsheet\Columns`.
 

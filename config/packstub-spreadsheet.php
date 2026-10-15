@@ -69,15 +69,19 @@ return [
     |--------------------------------------------------------------------------
     |
     | PHP date formats for what a date and a date-time cell show (a column's
-    | format() wins). On the wire the values are always ISO. The decimal mark a
-    | typed or pasted number with one separator is read by (`0,125`): null
-    | follows the app locale, or set ',' or '.'.
+    | format() wins); `date_format` is also what a date-range filter's pickers
+    | show (null: `M j, Y`). On the wire the values are always ISO. The day a
+    | filter's calendar starts the week on (1 = Monday, 0 = Sunday). The decimal
+    | mark a typed or pasted number with one separator is read by (`0,125`):
+    | null follows the app locale, or set ',' or '.'.
     |
     */
 
     'date_format' => 'Y-m-d',
 
     'datetime_format' => 'Y-m-d H:i',
+
+    'first_day_of_week' => 1,
 
     'decimal_separator' => null,
 
