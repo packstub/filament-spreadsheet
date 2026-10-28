@@ -241,7 +241,7 @@ it('answers a select filter\'s options, a search, a value\'s label and several l
         ->call('spreadsheetFilterOptionLabel', 'available_on', '2026-10-05')
         ->assertReturned(null)
         ->call('spreadsheetFilterOptionLabels', 'category_id', [(string) $paint->id, '999', $tools->id, ['x']])
-        ->assertReturned([(string) $paint->id => 'Paint', (string) $tools->id => 'Tools'])
+        ->assertReturned([['value' => (string) $paint->id, 'label' => 'Paint'], ['value' => (string) $tools->id, 'label' => 'Tools']])
         ->call('spreadsheetFilterOptionLabels', 'category_id', 'not-a-list')
         ->assertReturned([])
         ->call('spreadsheetFilterOptionLabels', 'nope', ['1'])
@@ -267,6 +267,66 @@ it('renders the filters where the layout says, Filament\'s select and date picke
     try {
         $html = Livewire::mount(ProductSheet::class);
         expect($html)->toContain('ps-sheet-toolbar-start', 'ps-sheet-search')->not->toContain('ps-sheet-filters-btn', 'ps-sheet-filters-inline', 'ps-sheet-filters-above', 'ps-sheet-filter');
+    } finally {
+        ProductSheet::$filters = null;
+    }
+});
+
+/* ------------------------------------------------------------------ bounds and the schema route (Filament 4.16+ / 5.11+) */
+
+it('caps the values a searchable multiple filter, a label lookup and a search take', function (): void {
+    $lookups = 0;
+    ProductSheet::$filters = [
+        Filter::select('category_id')->multiple()->searchable()->optionsLimit(5)
+            ->options(['a' => 'A'])
+            ->getOptionLabelUsing(function (string $value) use (&$lookups) {
+                $lookups++;
+
+                return "L{$value}";
+            })
+            ->getSearchResultsUsing(fn (string $search) => collect(['s' => mb_strlen($search)])),
+    ];
+
+    try {
+        $filter = ProductSheet::$filters[0];
+        $applied = null;
+        $filter->query(function ($query, array $values) use (&$applied) {
+            $applied = $values;
+        });
+        $filter->apply(Product::query(), array_map('strval', range(1, 50)));
+
+        expect($applied)->toHaveCount(5)->and($applied)->toBe(['1', '2', '3', '4', '5']);
+
+        $filter->apply(Product::query(), [str_repeat('x', 256), 'ok']);
+        expect($applied)->toBe(['ok']);
+
+        Livewire::test(ProductSheet::class)
+            ->call('spreadsheetFilterOptionLabels', 'category_id', array_merge(array_map('strval', range(1, 40)), ['1', '1']))
+            ->assertReturned([['value' => '1', 'label' => 'L1'], ['value' => '2', 'label' => 'L2'], ['value' => '3', 'label' => 'L3'], ['value' => '4', 'label' => 'L4'], ['value' => '5', 'label' => 'L5']])
+            ->call('spreadsheetFilterOptions', 'category_id', str_repeat('q', 500))
+            ->assertReturned([['value' => 's', 'label' => '200']]);
+
+        expect($lookups)->toBe(5);
+    } finally {
+        ProductSheet::$filters = null;
+    }
+});
+
+it('answers Filament 4.16+ option requests through the spreadsheetFilters schema by key', function (): void {
+    $tools = category('Tools');
+    $paint = category('Paint');
+    ProductSheet::$filters = [Filter::select('category_id')->searchable()->options(fn () => Category::query()->orderBy('name')->pluck('name', 'id')->all())];
+
+    try {
+        Livewire::test(ProductSheet::class)
+            ->call('callSchemaComponentMethod', 'spreadsheetFilters.category_id', 'getOptionsForJs')
+            ->assertReturned([['value' => (string) $paint->id, 'label' => 'Paint'], ['value' => (string) $tools->id, 'label' => 'Tools']])
+            ->call('callSchemaComponentMethod', 'spreadsheetFilters.category_id', 'getSearchResultsForJs', ['search' => 'too'])
+            ->assertReturned([['value' => (string) $tools->id, 'label' => 'Tools']])
+            ->call('callSchemaComponentMethod', 'spreadsheetFilters.category_id', 'getOptionLabelsForJs')
+            ->assertReturned([])
+            ->call('callSchemaComponentMethod', 'spreadsheetFilters.nope', 'getOptionsForJs')
+            ->assertReturned(null);
     } finally {
         ProductSheet::$filters = null;
     }

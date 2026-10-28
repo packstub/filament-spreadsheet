@@ -64,7 +64,7 @@ class OrderLines extends Component
 }
 ```
 
-The component needs no Filament actions or schemas: the sheet is renderless on the server. `getSpreadsheetHeight()` returns a CSS height for the grid, which scrolls inside it (`null`, the default, measures it: the window below the grid, shrunk to the rows, see [Styling](styling.md)); `spreadsheetSaved(SaveResult $result)` is a hook after every save.
+The component needs no Filament actions, and no schemas unless it has select filters: on Filament 4.16+ and 5.11+ their select asks for its options through the component's `callSchemaComponentMethod`, so a component with `Filter::select()` or `Filter::boolean()` implements `Filament\Schemas\Contracts\HasSchemas` and uses `Filament\Schemas\Concerns\InteractsWithSchemas` (a panel page already does). Otherwise the sheet is renderless on the server. `getSpreadsheetHeight()` returns a CSS height for the grid, which scrolls inside it (`null`, the default, measures it: the window below the grid, shrunk to the rows, see [Styling](styling.md)); `spreadsheetSaved(SaveResult $result)` is a hook after every save.
 
 ## In a tab or a collapsed section
 

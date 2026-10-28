@@ -2,6 +2,7 @@
 
 namespace Packstub\Spreadsheet\Concerns;
 
+use Filament\Schemas\Schema;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Renderless;
 use Packstub\Spreadsheet\Exceptions\SaveRejected;
@@ -9,6 +10,7 @@ use Packstub\Spreadsheet\Filter;
 use Packstub\Spreadsheet\SavePayload;
 use Packstub\Spreadsheet\SaveResult;
 use Packstub\Spreadsheet\Spreadsheet;
+use Packstub\Spreadsheet\Support\FilterSelect;
 
 /**
  * The server side of a sheet, for any Livewire component (the plugin's pages use
@@ -102,7 +104,9 @@ trait InteractsWithSpreadsheet
             return [];
         }
 
-        $options = $search === null || $search === ''
+        $search = $search === null ? '' : mb_substr(trim($search), 0, 200);
+
+        $options = $search === ''
             ? array_slice($filter->getOptions(), 0, $filter->getOptionsLimit(), preserve_keys: true)
             : $filter->getSearchResults($search);
 
@@ -119,9 +123,10 @@ trait InteractsWithSpreadsheet
     }
 
     /**
-     * The labels of a multiple select filter's values, keyed by value; a value the filter does not know is left out.
+     * The labels of a multiple select filter's values (ones restored from the URL),
+     * as the browser's select expects them; a value with no label is left out.
      *
-     * @return array<string, string>
+     * @return list<array{value: string, label: string}>
      */
     #[Renderless]
     public function spreadsheetFilterOptionLabels(mixed $name, mixed $values = []): array
@@ -134,19 +139,37 @@ trait InteractsWithSpreadsheet
 
         $labels = [];
 
-        foreach ($values as $value) {
-            if (! is_string($value) && ! is_int($value)) {
-                continue;
-            }
+        // At most optionsLimit() distinct values: each one not among the options costs a getOptionLabelUsing() call.
+        $values = array_slice(array_values(array_unique(array_filter($values, fn ($value) => (is_string($value) && $value !== '' && mb_strlen($value) <= 255) || is_int($value)))), 0, $filter->getOptionsLimit());
 
+        foreach ($values as $value) {
             $label = $filter->getOptionLabel($value);
 
             if ($label !== null) {
-                $labels[(string) $value] = $label;
+                $labels[] = ['value' => (string) $value, 'label' => $label];
             }
         }
 
         return $labels;
+    }
+
+    /**
+     * A schema never rendered, one FilterSelect per select filter, keyed
+     * `spreadsheetFilters.<filter>`: Filament 4.16+ and 5.11+ ask a select's options
+     * through `callSchemaComponentMethod` with that key (see partials/select).
+     * Filament caches it by name on the first call.
+     */
+    public function spreadsheetFiltersSchema(Schema $schema): Schema
+    {
+        $components = [];
+
+        foreach ($this->getSpreadsheet()->getFilters() as $filter) {
+            if ($filter->isSelect() || $filter->isBoolean()) {
+                $components[] = FilterSelect::make($filter->getName())->key($filter->getName());
+            }
+        }
+
+        return $schema->components($components);
     }
 
     protected function spreadsheetFilter(string $name): ?Filter

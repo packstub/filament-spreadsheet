@@ -7,12 +7,32 @@
     with `active[filter.name]` holding '' (none), a value, or a list for a multiple.
 --}}
 <div
+    {{--
+        Filament 4.16+ and 5.11+ no longer take the four closures below: their select asks
+        one scope up for `$callSchemaComponentMethod` (5.11+) or `$getOptionLabel` /
+        `$getOptionLabelsForJs` (4.16+), and for its options through the component's
+        `callSchemaComponentMethod` with `key` (4.16+), answered by the FilterSelect
+        schema (spreadsheetFiltersSchema). Each resolves here, with the filter's name and value.
+    --}}
+    x-data="{
+        $callSchemaComponentMethod: (method, args = {}) => method === 'getOptionsForJs' ? $wire.spreadsheetFilterOptions(filter.name)
+            : method === 'getSearchResultsForJs' ? $wire.spreadsheetFilterOptions(filter.name, args.search ?? '')
+            : method === 'getOptionLabel' ? $wire.spreadsheetFilterOptionLabel(filter.name, active[filter.name] || null)
+            : method === 'getOptionLabelsForJs' ? $wire.spreadsheetFilterOptionLabels(filter.name, active[filter.name] || [])
+            : Promise.resolve(null),
+        $getOptionLabel: () => $wire.spreadsheetFilterOptionLabel(filter.name, active[filter.name] || null),
+        $getOptionLabelsForJs: () => $wire.spreadsheetFilterOptionLabels(filter.name, active[filter.name] || []),
+    }"
+    style="display: contents"
+>
+<div
     x-load
     x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('select', 'filament/forms') }}"
     x-data="selectFormComponent({
         canOptionLabelsWrap: false,
         canSelectPlaceholder: true,
         clearButtonLabel: @js(__('filament-forms::components.select.actions.clear.label')),
+        errorMessage: null,
         getOptionLabelUsing: async () => await $wire.spreadsheetFilterOptionLabel(filter.name, active[filter.name] || null),
         getOptionLabelsUsing: async () => await $wire.spreadsheetFilterOptionLabels(filter.name, active[filter.name] || []),
         getOptionsUsing: async () => await $wire.spreadsheetFilterOptions(filter.name),
@@ -21,6 +41,7 @@
         hasDynamicSearchResults: filter.searchable,
         hasInitialNoOptionsMessage: false,
         id: 'ps-sheet-filter-' + filter.name,
+        key: 'spreadsheetFilters.' + filter.name,
         initialOptionLabel: null,
         initialOptionLabels: [],
         initialState: filter.multiple ? (active[filter.name] || []) : (active[filter.name] || null),
@@ -58,4 +79,5 @@
     class="fi-select-input"
 >
     <div x-ref="select"></div>
+</div>
 </div>

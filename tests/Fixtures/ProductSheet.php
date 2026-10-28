@@ -2,6 +2,8 @@
 
 namespace Packstub\Spreadsheet\Tests\Fixtures;
 
+use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Contracts\HasSchemas;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Component;
 use Packstub\Spreadsheet\Columns\BooleanColumn;
@@ -18,9 +20,10 @@ use Packstub\Spreadsheet\Filter;
 use Packstub\Spreadsheet\SavePayload;
 use Packstub\Spreadsheet\Spreadsheet;
 
-/** A plain Livewire component holding a sheet, the way an app page would. Static flags shape it per test. */
-class ProductSheet extends Component
+/** A plain Livewire component holding a sheet, the way an app page would (with schemas, for the filters' selects on Filament 4.16+ / 5.11+). Static flags shape it per test. */
+class ProductSheet extends Component implements HasSchemas
 {
+    use InteractsWithSchemas;
     use InteractsWithSpreadsheet;
 
     public static bool $creatable = true;

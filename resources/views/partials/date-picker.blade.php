@@ -74,24 +74,55 @@
         </div>
 
         <div role="grid" class="fi-fo-date-time-picker-calendar">
-            <template x-for="day in emptyDaysInFocusedMonth" x-bind:key="day">
-                <div></div>
+            {{-- Filament 5.10+ and 4.16+ lay the month out in rows of seven (null for a blank cell) --}}
+            <template x-if="typeof weeksInFocusedMonth !== 'undefined'">
+                <div style="display: contents">
+                    <template x-for="(week, weekIndex) in weeksInFocusedMonth" x-bind:key="weekIndex">
+                        <div role="row" class="fi-fo-date-time-picker-calendar-week">
+                            <template x-for="(day, dayIndex) in week" x-bind:key="day ?? ('empty-' + dayIndex)">
+                                <div
+                                    role="gridcell"
+                                    x-text="day"
+                                    x-on:click="day && ! dayIsDisabled(day) && (selectDate(day), $dispatch('ps-sheet-pick', state))"
+                                    x-on:mouseenter="day && setFocusedDay(day)"
+                                    x-bind:aria-selected="day && dayIsSelected(day) ? 'true' : 'false'"
+                                    x-bind:aria-disabled="day && dayIsDisabled(day) ? 'true' : 'false'"
+                                    x-bind:class="{
+                                        'fi-fo-date-time-picker-calendar-day': day,
+                                        'fi-fo-date-time-picker-calendar-day-today': day && dayIsToday(day),
+                                        'fi-focused': day && focusedDate.date() === day,
+                                        'fi-selected': day && dayIsSelected(day),
+                                        'fi-disabled': day && dayIsDisabled(day),
+                                    }"
+                                ></div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
             </template>
-            <template x-for="day in daysInFocusedMonth" x-bind:key="day">
-                <div
-                    x-text="day"
-                    x-on:click="dayIsDisabled(day) || (selectDate(day), $dispatch('ps-sheet-pick', state))"
-                    x-on:mouseenter="setFocusedDay(day)"
-                    role="option"
-                    x-bind:aria-selected="focusedDate.date() === day"
-                    x-bind:class="{
-                        'fi-fo-date-time-picker-calendar-day-today': dayIsToday(day),
-                        'fi-focused': focusedDate.date() === day,
-                        'fi-selected': dayIsSelected(day),
-                        'fi-disabled': dayIsDisabled(day),
-                    }"
-                    class="fi-fo-date-time-picker-calendar-day"
-                ></div>
+            {{-- Filament up to 5.9 and 4.15: the month's leading blanks, then its days, on one grid --}}
+            <template x-if="typeof weeksInFocusedMonth === 'undefined'">
+                <div style="display: contents">
+                    <template x-for="day in emptyDaysInFocusedMonth" x-bind:key="day">
+                        <div></div>
+                    </template>
+                    <template x-for="day in daysInFocusedMonth" x-bind:key="day">
+                        <div
+                            x-text="day"
+                            x-on:click="dayIsDisabled(day) || (selectDate(day), $dispatch('ps-sheet-pick', state))"
+                            x-on:mouseenter="setFocusedDay(day)"
+                            role="option"
+                            x-bind:aria-selected="focusedDate.date() === day"
+                            x-bind:class="{
+                                'fi-fo-date-time-picker-calendar-day-today': dayIsToday(day),
+                                'fi-focused': focusedDate.date() === day,
+                                'fi-selected': dayIsSelected(day),
+                                'fi-disabled': dayIsDisabled(day),
+                            }"
+                            class="fi-fo-date-time-picker-calendar-day"
+                        ></div>
+                    </template>
+                </div>
             </template>
         </div>
     </div>

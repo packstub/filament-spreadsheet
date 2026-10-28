@@ -177,7 +177,7 @@ window.__wire = {
     // what Filament's select asks a filter for: its options, a search over their labels, a value's label
     spreadsheetFilterOptions: async (name, search = null) => { const f = window.__config.filters.find((x) => x.name === name); const q = (search ?? '').toLowerCase(); return f ? f.options.filter((o) => ! q || o.label.toLowerCase().includes(q)) : [] },
     spreadsheetFilterOptionLabel: async (name, value) => window.__config.filters.find((x) => x.name === name)?.options.find((o) => o.value === String(value))?.label ?? null,
-    spreadsheetFilterOptionLabels: async (name, values) => Object.fromEntries((values ?? []).map((v) => [String(v), window.__config.filters.find((x) => x.name === name)?.options.find((o) => o.value === String(v))?.label]).filter(([, l]) => l)),
+    spreadsheetFilterOptionLabels: async (name, values) => (values ?? []).map((v) => ({ value: String(v), label: window.__config.filters.find((x) => x.name === name)?.options.find((o) => o.value === String(v))?.label })).filter((o) => o.label),
     spreadsheetSave: async (payload) => JSON.parse(JSON.stringify(window.__server.save(payload))),
     spreadsheetDelete: async (ids) => JSON.parse(JSON.stringify(window.__server.save({ deleted: ids }))),
 }

@@ -270,7 +270,7 @@ class Filter
     public function getSearchResults(string $search): array
     {
         if ($this->searchResults) {
-            $results = ($this->searchResults)($search);
+            $results = collect(($this->searchResults)($search))->all();
         } else {
             $needle = mb_strtolower(trim($search));
             $results = array_filter($this->getOptions(), fn ($label) => $needle === '' || str_contains(mb_strtolower((string) $label), $needle));
@@ -398,14 +398,15 @@ class Filter
      */
     protected function known(array $values): array
     {
-        $values = array_values(array_unique(array_map('strval', array_filter($values, fn ($value) => (is_int($value) || is_string($value)) && ! blank($value)))));
+        $values = array_values(array_unique(array_map('strval', array_filter($values, fn ($value) => (is_int($value) || (is_string($value) && mb_strlen($value) <= 255)) && ! blank($value)))));
 
         if ($values === []) {
             return [];
         }
 
         if ($this->isSearchable()) {
-            return $values;
+            // A searchable select accepts any value, so the list is capped where a listed one is capped by its options.
+            return array_slice($values, 0, $this->optionsLimit);
         }
 
         return array_map('strval', array_keys(array_intersect_key($this->getOptions(), array_flip($values))));
