@@ -621,3 +621,42 @@ test('shortcutLabel reads a binding the way a tooltip shows it, per platform', (
     assert.equal(S.shortcutLabel('alt+f2'), 'Alt+F2')
     assert.equal(S.shortcutLabel('f2', true), 'F2')
 })
+
+test('filter state: the empty shapes, what counts as active, a picker\'s day and a select\'s pick', () => {
+    const select = { name: 'category_id', type: 'select', multiple: false }
+    const multiple = { name: 'tags', type: 'select', multiple: true }
+    const boolean = { name: 'is_active', type: 'boolean', multiple: false }
+    const toggle = { name: 'mine', type: 'toggle', multiple: false }
+    const range = { name: 'available_on', type: 'dateRange', multiple: false }
+
+    assert.equal(S.emptyFilterState(select), '')
+    assert.deepEqual(S.emptyFilterState(multiple), [])
+    assert.equal(S.emptyFilterState(boolean), '')
+    assert.equal(S.emptyFilterState(toggle), false)
+    assert.deepEqual(S.emptyFilterState(range), { from: null, until: null })
+
+    assert.equal(S.filterIsActive(select, ''), false)
+    assert.equal(S.filterIsActive(select, '3'), true)
+    assert.equal(S.filterIsActive(boolean, '0'), true) // "No" narrows
+    assert.equal(S.filterIsActive(multiple, []), false)
+    assert.equal(S.filterIsActive(multiple, ['1']), true)
+    assert.equal(S.filterIsActive(toggle, false), false)
+    assert.equal(S.filterIsActive(toggle, true), true)
+    assert.equal(S.filterIsActive(range, { from: null, until: null }), false)
+    assert.equal(S.filterIsActive(range, { from: null, until: '2026-10-05' }), true)
+
+    assert.equal(S.filterDay('2026-10-05 00:00:00'), '2026-10-05')
+    assert.equal(S.filterDay('2026-10-05'), '2026-10-05')
+    assert.equal(S.filterDay(null), null)
+    assert.equal(S.filterDay(''), null)
+    assert.equal(S.filterDay('10/05/2026'), null)
+
+    assert.equal(S.filterSelection(select, 3), '3')
+    assert.equal(S.filterSelection(select, null), '')
+    assert.equal(S.filterSelection(select, ['2']), '2')
+    assert.deepEqual(S.filterSelection(multiple, [1, '2']), ['1', '2'])
+    assert.deepEqual(S.filterSelection(multiple, null), [])
+    assert.deepEqual(S.filterSelection(multiple, '4'), ['4'])
+
+    assert.equal(S.activeFilterCount([select, multiple, toggle, range], { category_id: '1', tags: [], mine: true, available_on: { from: '2026-01-01', until: null } }), 3)
+})

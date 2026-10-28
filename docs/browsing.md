@@ -1,8 +1,8 @@
 # Search, sort, filters, pagination
 
-![The toolbar with a search term, a filter set and the unsaved changes counted](images/browsing.png)
+![The toolbar with a search term, a filter set and the unsaved changes counted](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/browsing.png)
 
-The toolbar is built from Filament's own components (its buttons, the search field a table has, selects and date inputs in Filament's input wrapper), so it looks like the rest of the panel; what does not apply is not shown: Save, Discard, Undo and Redo appear once something was changed, Delete rows once rows are selected, the errors badge once a save refused cells.
+The sheet sits in a table-style container, as a Filament table does: the toolbar on top with the sheet's own controls at the start and the search, the filters and the shortcuts button at the end, the grid under it, the status line and the pager in a footer. The controls are Filament's own components (its buttons, the search field a table has, its searchable select, its date picker, its checkbox, in Filament's input wrapper), so it looks like the rest of the panel and like Kanban and Gantt, which share the same shell; what does not apply is not shown: Save, Discard, Undo and Redo appear once something was changed, Delete rows once rows are selected, the errors badge once a save refused cells.
 
 Everything the toolbar does happens on the server, one renderless call per change (`spreadsheetRows`), and none of it touches the unsaved cells.
 
@@ -27,16 +27,37 @@ A sortable column must be a real database column: the sort is an `ORDER BY` on i
 ## Filters
 
 ```php
+use Packstub\Spreadsheet\Filter;
+
 ->filters([
     Filter::select('category_id')->options(fn () => Category::pluck('name', 'id')->all()),
     Filter::select('status')->options(['live' => 'Live', 'draft' => 'Draft'])->label('State'),
+    Filter::select('tags')->multiple()->options(Tag::pluck('name', 'id')->all())->query(fn (Builder $query, array $ids) => $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $ids))),
+    Filter::select('supplier_id')->searchable()->preload(false)
+        ->getSearchResultsUsing(fn (string $search) => Supplier::where('name', 'like', "%{$search}%")->limit(50)->pluck('name', 'id')->all())
+        ->getOptionLabelUsing(fn (string $value) => Supplier::find($value)?->name),
     Filter::boolean('is_active'),
+    Filter::toggle('low_stock')->label('Low stock')->query(fn (Builder $query) => $query->where('stock', '<', 5)),
     Filter::dateRange('available_on'),
-    Filter::select('warehouse')->options([...])->query(fn (Builder $query, string $value) => $query->whereHas('stocks', fn ($q) => $q->where('warehouse_id', $value))),
 ])
 ```
 
-A select is a Filament select (`Filter::select()`); `Filter::boolean()` is a yes/no select; `Filter::dateRange()` two date inputs, either side open. By default a select narrows `where(<name>, <value>)`, a boolean `where(<name>, true|false)`, a date range `where(<name>, >=, from)` and `where(<name>, <, the day after until)` (plain ranges, so the column's index stays in use). `query()` replaces the default. A value the filter did not offer, or a malformed date, is ignored: the browser cannot inject a raw value.
+The same `Filter` class as Kanban and Gantt, with the same types:
+
+| Filter | The field | What `query()` gets | The default |
+| --- | --- | --- | --- |
+| `Filter::select('column')` (or `make()`) | Filament's select, *All* for none | the option's key as a string (`"3"` for an id) | `where(column, value)` |
+| `->multiple()` | the same select taking several options | a list of keys | `whereIn(column, values)` |
+| `->searchable()` | the select with a search box | the typed key (any key: the query decides) | `where(column, value)` |
+| `Filter::boolean('column')` | a *Yes* / *No* select | `true` or `false` | `where(column, true\|false)` |
+| `Filter::toggle('name')` | one checkbox with the label | `true` (off, it is not called) | none: `query()` is required (the sheet refuses to render without it) |
+| `Filter::dateRange('column')` | Filament's date picker twice, *From* and *Until*, either side open | `['from' => ?string, 'until' => ?string]`, each `Y-m-d` | `where(column, >=, from)` and `where(column, <, the day after until)`, plain ranges so the column's index stays in use |
+
+`options()` takes an array or a closure (run once per request). A searchable select lists its options with the sheet (`preload()`, the default) and filters them on the server as the user types, by label unless `getSearchResultsUsing()` says otherwise; `preload(false)` sends nothing until the user types; `getOptionLabelUsing()` names a picked value the list does not hold; `optionsLimit()` caps what is listed or found (50), and also the values a searchable multiple filter accepts from the browser or the URL and the label lookups it answers (a value longer than 255 characters is dropped; a search term is read up to 200 characters). `label()` takes a string or a closure; the default is the name as a headline without `_id` / `_at`.
+
+A value the filter did not offer is ignored: a plain select takes one of its options and nothing else (per value for a multiple one), a boolean *1* or *0*, a toggle anything true, a date range real calendar days only (`2026-02-30` never reaches the query). The browser cannot inject a raw value.
+
+The browser holds each filter's state in the shape `Filter::state()` gives (`''` or a key, a list, `true` / `false`, `{from, until}`), and the component's `spreadsheetFilterOptions(name, search)`, `spreadsheetFilterOptionLabel(name, value)` and `spreadsheetFilterOptionLabels(name, values)` answer Filament's select renderless. A filter that narrows the rows wears the primary ring and counts on the funnel button.
 
 ## Pagination
 
@@ -48,17 +69,17 @@ The page size runs from 25 to `max_per_page` (1,000) in the footer under the gri
 
 ## Where the filters are
 
-Filters open from a funnel button in the toolbar by default, the number of active ones on the button and a *Reset filters* link in the panel, as a Filament table's do. `filtersLayout()` on the definition puts them elsewhere, and the config's `filters_layout` sets the default for every sheet:
+Filters open from a funnel button in the toolbar by default, the number of active ones on the button, the fields stacked under a *Filters* heading with a *Reset filters* link, as a Filament table's do. `filtersLayout()` on the definition puts them elsewhere, and the config's `filters_layout` sets the default for every sheet:
 
 ```php
 use Packstub\Spreadsheet\Enums\FiltersLayout;
 
-->filtersLayout(FiltersLayout::Toolbar)      // inline in the toolbar, after the search box
-->filtersLayout(FiltersLayout::AboveContent) // on a row of their own between the toolbar and the grid
+->filtersLayout(FiltersLayout::Toolbar)      // inline in the toolbar, after the search box, each label as its field's prefix
+->filtersLayout(FiltersLayout::AboveContent) // on a row of their own between the toolbar and the grid, with the heading and Reset
 ->filtersLayout(FiltersLayout::Dropdown)     // behind the funnel button (the default)
 ```
 
-The config takes the same three as strings: `dropdown`, `toolbar`, `above`.
+The config takes the same three as strings: `dropdown`, `toolbar`, `above`. A sheet without filters renders no funnel. The date pickers show the config's `date_format` and start the week on `first_day_of_week` (1 = Monday).
 
 ## When a request fails
 

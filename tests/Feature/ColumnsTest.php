@@ -10,6 +10,7 @@ use Packstub\Spreadsheet\Columns\NumberColumn;
 use Packstub\Spreadsheet\Columns\SelectColumn;
 use Packstub\Spreadsheet\Columns\TextColumn;
 use Packstub\Spreadsheet\Exceptions\InvalidValue;
+use Packstub\Spreadsheet\SavePayload;
 use Packstub\Spreadsheet\Tests\Fixtures\Product;
 use Packstub\Spreadsheet\Tests\Fixtures\Status;
 
@@ -170,8 +171,19 @@ it('adds the record to a unique rule, as a string or a Rule object, and leaves o
         // `nullable` sits between the column's rules and the type's: a cleared cell passes the type rules, a `required` one still fails.
         ->and(array_slice($rules, 5))->toBe(['nullable', 'string', 'max:16'])
         ->and($column->getRules(null)[1])->toBe('unique:products,sku')
-        ->and(TextColumn::make('name')->rules('required|min:2')->getRules(null))->toBe(['required', 'min:2', 'nullable', 'string'])
-        ->and(TextColumn::make('name')->rules(fn (?Product $p) => $p ? ['max:5'] : ['max:9'])->getRules($record))->toBe(['max:5', 'nullable', 'string']);
+        // without maxLength() the type's bound is a TEXT column's, so a value is never unbounded before the database
+        ->and(TextColumn::make('name')->rules('required|min:2')->getRules(null))->toBe(['required', 'min:2', 'nullable', 'string', 'max:65535'])
+        ->and(TextColumn::make('name')->rules(fn (?Product $p) => $p ? ['max:5'] : ['max:9'])->getRules($record))->toBe(['max:5', 'nullable', 'string', 'max:65535']);
+});
+
+it('refuses a text longer than 65535 characters on a column without maxLength()', function () {
+    $product = product('a-1', 'Hammer');
+
+    $result = sheet()->columns([TextColumn::make('name')])->save(SavePayload::fromArray(['changed' => [$product->id => ['name' => str_repeat('x', 65536)]], 'versions' => versions($product->id)]));
+
+    expect($result->ok())->toBeFalse()
+        ->and($result->errors[(string) $product->id]['name'])->toContain('65535')
+        ->and($product->fresh()->name)->toBe('Hammer');
 });
 
 it('labels columns from their name, reads a computed state and marks it read-only', function () {

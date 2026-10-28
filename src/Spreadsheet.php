@@ -940,7 +940,12 @@ class Spreadsheet
     /**
      * Whether the record changed since the browser loaded it. When it did, the
      * result gets the other user's value for every changed column and the current
-     * version, so the user can take theirs or save again to win.
+     * version, so the user can take theirs or save again to win. A row sent without
+     * its version while the record has one is a conflict too: the browser always
+     * sends the versions it loaded, so a payload without them did not come from the
+     * sheet, and the check is the server's, never opt-in from the browser. Without a
+     * version column (`versionColumn(false)`, a model without timestamps) there is
+     * nothing to compare and the last write wins.
      *
      * @param  array<string, mixed>  $values
      */
@@ -948,7 +953,7 @@ class Spreadsheet
     {
         $current = $this->version($record);
 
-        if ($seen === null || $current === null || $seen === $current) {
+        if ($current === null || $seen === $current) {
             return false;
         }
 

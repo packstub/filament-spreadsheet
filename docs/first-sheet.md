@@ -1,6 +1,6 @@
 # Your first sheet
 
-![The products list with Edit as sheet in its header](images/list-action.png)
+![The products list with Edit as sheet in its header](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/list-action.png)
 
 ## The resource page
 

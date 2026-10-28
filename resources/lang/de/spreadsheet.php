@@ -31,6 +31,7 @@ return [
     'open_sheet' => 'Als Tabelle bearbeiten',
     'filters' => 'Filter',
     'reset_filters' => 'Filter zurücksetzen',
+    'clear' => 'Leeren',
     'shortcuts' => 'Tastenkürzel',
     'shortcut_copy' => 'Markierte Zellen kopieren',
     'shortcut_paste' => 'An der markierten Zelle einfügen',

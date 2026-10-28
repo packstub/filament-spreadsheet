@@ -8,17 +8,18 @@ An inline-editable table for bulk editing Eloquent records in Filament v4 (4.13+
 - Packagist: [packstub/filament-spreadsheet](https://packagist.org/packages/packstub/filament-spreadsheet)
 - Support: [GitHub issues](https://github.com/packstub/filament-spreadsheet/issues)
 
-## What you get
+## Features
 
-| Feature | What it means for you |
-| --- | --- |
-| **One Save for hundreds of cells** | Changed cells wait in the browser, across pages, sorting and search, until you save. One transaction, one answer, the rows as saved. |
-| **Rules, policies and conflicts on the server** | Laravel rules per column (`unique` ignores the record), the model's policy per row, an `updated_at` check that refuses a row someone else changed. Errors land on the cell. |
-| **A keyboard grid** | Arrows, ranges, Enter/F2/typing to edit, Tab and Enter to move, Delete, Ctrl+D fill-down, a fill handle, Ctrl+Z/Y, Ctrl+S. |
-| **Paste from Excel or Sheets** | A block lands at the selection, each column reading it its own way; rows past the end become new records. |
-| **Column types** | Text, number, boolean, select (options, enum or relationship), date, date-time, computed. Rules, defaults, per-record read-only. |
-| **Resource page or standalone page** | `SpreadsheetResourcePage` with the resource's query and abilities and a `SheetAction` on the list page; `SpreadsheetPage` with your own query. |
-| **Light for the consumer** | Tabulator is bundled: `composer require`, `filament:assets`, done. Dark mode, RTL, four languages. |
+- **[One Save for hundreds of cells](saving.md)**: edits wait across pages, one transaction writes them.
+- **[Rules, policies and conflicts on the server](saving.md)**: every cell validated, every row authorized.
+- **[A keyboard grid](editing.md)**: ranges, fill down, undo and redo.
+- **[Paste from Excel or Sheets](editing.md)**: extra rows become new records.
+- **[Seven column types](columns.md)**: text, number, boolean, select, dates and formulas.
+- **[Add and delete rows](rows.md)**: behind your policy, written with the next Save.
+- **[Search, sort, filters and pages](browsing.md)**: on the server, unsaved cells kept.
+- **[A resource page or your own](first-sheet.md)**: an Edit as sheet button on any resource.
+- **[Events and hooks](events.md)**: `RowsSaved`, `RowSaveFailed`, before and after a save.
+- **[Dark mode, RTL and translations](styling.md)**: Tabulator bundled, nothing else to install.
 
 ## Guides
 

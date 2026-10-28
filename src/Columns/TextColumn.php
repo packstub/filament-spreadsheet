@@ -30,9 +30,10 @@ class TextColumn extends Column
         return is_bool($value) ? ($value ? '1' : '0') : (string) $value;
     }
 
+    /** `string` and a `max:` rule: `maxLength()`, or 65535 (a TEXT column's bound) so a value is never unbounded before the database. */
     protected function typeRules(): array
     {
-        return $this->maxLength === null ? ['string'] : ['string', "max:{$this->maxLength}"];
+        return ['string', 'max:'.($this->maxLength ?? 65535)];
     }
 
     public function toArray(): array

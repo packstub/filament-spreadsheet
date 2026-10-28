@@ -42,8 +42,9 @@ export const config = {
         { name: 'margin', label: 'Margin', type: 'computed', width: null, frozen: false, editable: false, readOnly: true, sortable: false, placeholder: null, default: null, formula: ['op', '-', ['ref', 'price'], ['ref', 'cost']], decimals: 2 },
     ],
     filters: [
-        { name: 'category_id', label: 'Category', type: 'select', options: [{ value: '1', label: 'Tools' }, { value: '2', label: 'Paint' }, { value: '3', label: 'Garden' }] },
-        { name: 'is_active', label: 'Active', type: 'select', options: [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }] },
+        { name: 'category_id', label: 'Category', type: 'select', multiple: false, searchable: false, optionsLimit: 50, options: [{ value: '1', label: 'Tools' }, { value: '2', label: 'Paint' }, { value: '3', label: 'Garden' }] },
+        { name: 'is_active', label: 'Active', type: 'boolean', multiple: false, searchable: false, optionsLimit: 50, options: [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }] },
+        { name: 'available_on', label: 'Available', type: 'dateRange', multiple: false, searchable: false, optionsLimit: 50, options: [] },
     ],
     perPage: 100, pageSizes: [25, 50, 100, 200, 500, 1000], sort: { column: 'sku', direction: 'asc' },
     searchable: true, creatable: true, deletable: true, readOnly: false, saveMode: 'all_or_nothing', versioned: true,
@@ -87,6 +88,8 @@ window.__server = (() => {
             const f = req.filters || {}
             if (f.category_id) list = list.filter((p) => p.category_id === String(f.category_id))
             if (f.is_active === '1' || f.is_active === '0') list = list.filter((p) => p.is_active === (f.is_active === '1'))
+            if (f.available_on?.from) list = list.filter((p) => p.available_on >= f.available_on.from)
+            if (f.available_on?.until) list = list.filter((p) => p.available_on <= f.available_on.until)
             const col = cols.includes(req.sort?.column) ? req.sort.column : 'sku'
             const dir = req.sort?.direction === 'desc' ? -1 : 1
             list.sort((a, b) => (a[col] > b[col] ? 1 : a[col] < b[col] ? -1 : 0) * dir || (Number(a.id) - Number(b.id)))
@@ -171,6 +174,10 @@ window.Livewire = (() => {
 window.__wire = {
     $id: 'harness-component',
     spreadsheetRows: async (req) => JSON.parse(JSON.stringify(window.__server.rows(req))),
+    // what Filament's select asks a filter for: its options, a search over their labels, a value's label
+    spreadsheetFilterOptions: async (name, search = null) => { const f = window.__config.filters.find((x) => x.name === name); const q = (search ?? '').toLowerCase(); return f ? f.options.filter((o) => ! q || o.label.toLowerCase().includes(q)) : [] },
+    spreadsheetFilterOptionLabel: async (name, value) => window.__config.filters.find((x) => x.name === name)?.options.find((o) => o.value === String(value))?.label ?? null,
+    spreadsheetFilterOptionLabels: async (name, values) => (values ?? []).map((v) => ({ value: String(v), label: window.__config.filters.find((x) => x.name === name)?.options.find((o) => o.value === String(v))?.label })).filter((o) => o.label),
     spreadsheetSave: async (payload) => JSON.parse(JSON.stringify(window.__server.save(payload))),
     spreadsheetDelete: async (ids) => JSON.parse(JSON.stringify(window.__server.save({ deleted: ids }))),
 }
@@ -186,22 +193,26 @@ body{font-family:ui-sans-serif,system-ui,sans-serif;margin:1rem;background:#fff;
 
 /**
  * The Blade view rendered through the test app (tests/Feature/HarnessRenderTest.php: Blade components and all, the
- * panel's colour variables beside it), the x-load attributes stripped and the config replaced by the harness's.
+ * panel's colour variables beside it), once per filters layout (the view renders the filters where the layout says),
+ * the root's x-load attributes stripped and the config replaced by the harness's.
  */
-let rendered = null
-export function render() {
-    if (rendered) return rendered
-    const target = join(tmpdir(), `ps-sheet-harness-${process.pid}.json`)
-    const r = spawnSync(join(root, 'vendor/bin/pest'), ['tests/Feature/HarnessRenderTest.php'], { cwd: root, env: { ...process.env, HARNESS_RENDER: target }, encoding: 'utf8' })
+const rendered = {}
+export function render(layout = config.filtersLayout) {
+    if (rendered[layout]) return rendered[layout]
+    const target = join(tmpdir(), `ps-sheet-harness-${process.pid}-${layout}.json`)
+    const r = spawnSync(join(root, 'vendor/bin/pest'), ['tests/Feature/HarnessRenderTest.php'], { cwd: root, env: { ...process.env, HARNESS_RENDER: target, HARNESS_FILTERS_LAYOUT: layout }, encoding: 'utf8' })
     if (r.status !== 0 || ! existsSync(target)) throw new Error('The view could not be rendered:\n' + r.stdout + r.stderr)
-    rendered = JSON.parse(readFileSync(target, 'utf8'))
+    rendered[layout] = JSON.parse(readFileSync(target, 'utf8'))
     unlinkSync(target)
-    return rendered
+    return rendered[layout]
 }
 
-export function viewHtml() {
-    let html = render().view
+export function viewHtml(layout = config.filtersLayout) {
+    let html = render(layout).view
+    // The root's own x-load (the component is imported below); the filters' selects and date pickers keep theirs,
+    // pointed at the forms package's built components, so the harness drives Filament's real fields.
     html = html.replace(/\s*x-load-src="[^"]*"/, '').replace(/\s*x-load-css="[^"]*"/, '').replace(/\s*x-load\b/, '')
+    html = html.replace(/x-load-src="[^"]*\/components\/(select|date-time-picker)\.js[^"]*"/g, 'x-load-src="/vendor/filament/forms/dist/components/$1.js"')
     html = html.replace(/x-data="packstubSpreadsheet\([^"]*\)"/, 'x-data="packstubSpreadsheet(window.__config)"')
     if (! html.includes('packstubSpreadsheet(window.__config)')) throw new Error('The rendered view has no packstubSpreadsheet(...) x-data to replace')
 
@@ -215,7 +226,10 @@ export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeig
     // addRowKey rebinds the add-row shortcut (?addrow=mod+shift+a), which leaves Ctrl+Enter to nobody.
     // lateCss adds the stylesheet after the component started, as Filament's x-load-css does in a panel: 300 ms, the number given, or when the case calls window.__loadCss() (`manual`).
     // inline sends the first page in the config (`state`), as the real view does: the grid renders it as it is built, before tableBuilt.
-    const cfg = { ...config, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height, keybindings: addRowKey ? { add_row: addRowKey } : config.keybindings, filtersLayout: filters ?? config.filtersLayout }
+    // The date range goes with the stacked layouts only: inline, its two pickers make the toolbar wrap at the harness's
+    // viewport once the Save group appears, and the cases that measure the grid's top would see it move.
+    const layout = filters ?? config.filtersLayout
+    const cfg = { ...config, filters: layout === 'toolbar' ? config.filters.filter((f) => f.type !== 'dateRange') : config.filters, readOnly, creatable: config.creatable && ! readOnly, deletable: config.deletable && ! readOnly, height: autoHeight ? null : config.height, keybindings: addRowKey ? { add_row: addRowKey } : config.keybindings, filtersLayout: layout }
     return `<!doctype html>
 <html lang="en"${rtl ? ' dir="rtl"' : ''} class="${dark ? 'dark' : ''}">
 <head>
@@ -223,7 +237,7 @@ export function pageHtml({ dark = false, rtl = false, readOnly = false, autoHeig
 <title>filament-spreadsheet harness</title>
 <link rel="stylesheet" href="/vendor/filament/filament/dist/theme.css">
 <link rel="stylesheet" href="/vendor/filament/support/dist/index.css">
-${render().styles}
+${render(cfg.filtersLayout).styles}
 <style>${tokens}</style>
 ${lateCss ? '' : '<link rel="stylesheet" href="/resources/dist/spreadsheet.css">'}
 <script src="/vendor/filament/support/dist/index.js"></script>
@@ -234,12 +248,12 @@ ${lateCss ? '' : '<link rel="stylesheet" href="/resources/dist/spreadsheet.css">
 <script>${serverSource}</script>
 ${inline ? '<script>window.__config.state = window.__server.rows({ page: 1, perPage: window.__config.perPage })</script>' : ''}
 <div id="harness-wrap"${hidden ? ' style="display:none"' : ''}>
-${viewHtml()}
+${viewHtml(cfg.filtersLayout)}
 </div>
 <script type="module">
 import packstubSpreadsheet from '/resources/dist/spreadsheet.js'
-import Alpine from 'https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/module.esm.js'
-import focus from 'https://cdn.jsdelivr.net/npm/@alpinejs/focus@3.14.8/dist/module.esm.js'
+import Alpine from 'https://unpkg.com/alpinejs@3.14.8/dist/module.esm.js'
+import focus from 'https://unpkg.com/@alpinejs/focus@3.14.8/dist/module.esm.js'
 Alpine.plugin(focus)
 Alpine.magic('wire', () => window.__wire)
 Alpine.data('packstubSpreadsheet', packstubSpreadsheet)

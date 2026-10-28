@@ -48,7 +48,7 @@ it('reads through the resource\'s query, the way a tenant scope narrows it, and 
     expect(array_column(array_column($component->instance()->getSpreadsheetConfig(withState: true)['state']['rows'], 'values'), 'sku'))->toBe(['A-1']);
 
     $component
-        ->call('spreadsheetSave', ['changed' => [$mine->id => ['name' => 'Changed'], $theirs->id => ['name' => 'Reached']]])
+        ->call('spreadsheetSave', ['changed' => [$mine->id => ['name' => 'Changed'], $theirs->id => ['name' => 'Reached']], 'versions' => versions($mine->id, $theirs->id)])
         ->assertReturned(fn ($r) => $r['ok'] === false && ((array) $r['rowErrors'])[$theirs->id] === 'This row is no longer in the sheet.');
 
     expect($theirs->fresh()->name)->toBe('Theirs')
@@ -70,7 +70,7 @@ it('goes through the resource\'s abilities for each row, create and delete', fun
         ->and($component->instance()->getSpreadsheetConfig()['creatable'])->toBeFalse();
 
     $component
-        ->call('spreadsheetSave', ['changed' => [$a->id => ['name' => 'Ok'], $b->id => ['name' => 'No']], 'created' => ['n1' => ['sku' => 'c-3', 'name' => 'New']], 'deleted' => [$a->id]])
+        ->call('spreadsheetSave', ['changed' => [$a->id => ['name' => 'Ok'], $b->id => ['name' => 'No']], 'versions' => versions($a->id, $b->id), 'created' => ['n1' => ['sku' => 'c-3', 'name' => 'New']], 'deleted' => [$a->id]])
         ->assertReturned(fn ($r) => $r['rolledBack'] === true
             && ((array) $r['rowErrors'])[$b->id] === 'You cannot change this row.'
             && ((array) $r['rowErrors'])['n1'] === 'You cannot add rows here.'
@@ -81,7 +81,7 @@ it('goes through the resource\'s abilities for each row, create and delete', fun
     ProductPolicy::$deletable = null;
 
     Livewire::test(ProductsSheet::class)
-        ->call('spreadsheetSave', ['changed' => [$a->id => ['name' => 'Ok']], 'created' => ['n1' => ['sku' => 'c-3', 'name' => 'New']], 'deleted' => [$b->id]])
+        ->call('spreadsheetSave', ['changed' => [$a->id => ['name' => 'Ok']], 'versions' => versions($a->id), 'created' => ['n1' => ['sku' => 'c-3', 'name' => 'New']], 'deleted' => [$b->id]])
         ->assertReturned(fn ($r) => $r['ok'] === true);
 
     expect(Product::query()->pluck('name', 'sku')->all())->toBe(['A-1' => 'Ok', 'C-3' => 'New']);

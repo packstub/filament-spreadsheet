@@ -1,6 +1,6 @@
 # Columns
 
-![A products sheet: text, select, number, computed, boolean and date columns](images/sheet.png)
+![A products sheet: text, select, number, computed, boolean and date columns](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/sheet.png)
 
 A column names an attribute of the model and says how it is read into the grid and written back. Every column lives in `Packstub\Spreadsheet\Columns`.
 
@@ -34,7 +34,7 @@ A column whose name contains a dot (`category.name`) reads through the relation 
 TextColumn::make('sku')->maxLength(32)
 ```
 
-Strings. `maxLength()` adds a `max:` rule and sets the editor's `maxlength`, so typing stops there (a paste is still validated, and refused with the rule's message).
+Strings. `maxLength()` adds a `max:` rule and sets the editor's `maxlength`, so typing stops there (a paste is still validated, and refused with the rule's message). Without `maxLength()` the rule is `max:65535` (a `TEXT` column's bound), so a value is never unbounded before the database; set a longer one yourself for a `MEDIUMTEXT` or `LONGTEXT` column.
 
 ## `NumberColumn`
 

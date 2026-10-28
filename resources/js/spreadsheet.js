@@ -67,7 +67,7 @@ export default function packstubSpreadsheet(config) {
         /* ------------------------------------------------------------ lifecycle */
 
         init() {
-            for (const f of this.filters) this.active[f.name] = f.type === 'dateRange' ? { from: '', until: '' } : ''
+            for (const f of this.filters) this.active[f.name] = S.emptyFilterState(f)
 
             this._req = 0
             // What the grid shows: the page, page size and sort of the last answer applied, and the search and
@@ -402,14 +402,52 @@ export default function packstubSpreadsheet(config) {
             this.refocus()
         },
 
-        /** A shortcut as the tooltip of its button reads it: the configured binding, ⌘ on a Mac. */
-        /** The filters that narrow the rows: a select with a value, a range with either date. */
+        /* ------------------------------------------------------------ filters */
+
+        /*
+         * `active[filter.name]` holds each filter's state in the shapes the server's Filter::state() gives
+         * ('' / a value, a list for a multiple select, true / false for a toggle, { from, until } for a date
+         * range); the fields are Filament's own components, which report a pick through these. The same names
+         * in Kanban and Gantt.
+         */
+
+        /** Whether a filter narrows the rows (its field wears the primary ring, the funnel counts it). */
+        isActive(filter) {
+            return S.filterIsActive(filter, this.active[filter.name])
+        },
+
+        /** A select's pick (Filament's select reports its state): one value, '' for none, a list for a multiple. */
+        pickSelect(name, value) {
+            const filter = this.filters.find((f) => f.name === name)
+            if (! filter) return
+            const next = S.filterSelection(filter, value)
+            if (JSON.stringify(next) === JSON.stringify(this.active[name])) return
+            this.active[name] = next
+            this.refresh()
+        },
+
+        /** A date range's side from its picker: the day as `Y-m-d` (the picker reports `Y-m-d H:i:s`), or null when cleared. */
+        pickFilter(name, side, value) {
+            if (side !== 'from' && side !== 'until') return
+            const day = S.filterDay(value)
+            const range = this.active[name] ?? { from: null, until: null }
+            if ((range[side] ?? null) === day) return
+            this.active[name] = { ...range, [side]: day }
+            this.refresh()
+        },
+
+        /** A toggle's checkbox: on or off. */
+        toggleFilter(filter) {
+            this.active[filter.name] = this.active[filter.name] !== true
+            this.refresh()
+        },
+
         activeFilterCount() {
-            return this.filters.filter((f) => f.type === 'dateRange' ? (this.active[f.name]?.from || this.active[f.name]?.until) : this.active[f.name]).length
+            return S.activeFilterCount(this.filters, this.active)
         },
 
         resetFilters() {
-            for (const f of this.filters) this.active[f.name] = f.type === 'dateRange' ? { from: '', until: '' } : ''
+            for (const f of this.filters) this.active[f.name] = S.emptyFilterState(f)
             this.refresh()
         },
 

@@ -1076,3 +1076,50 @@ export function shortcutLabel(spec, mac = false) {
 
     return parts.join(mac ? '' : '+')
 }
+
+/* ------------------------------------------------------------------ filters */
+
+/*
+ * What the toolbar's filters hold in the browser (`active[filter.name]`), the same shapes as
+ * `Filter::emptyState()` / `Filter::state()` on the server: '' or a value for a select and a
+ * boolean, a list for a multiple select, true / false for a toggle, { from, until } (each a
+ * `Y-m-d` day or null) for a date range. The same names in Kanban, Gantt and Spreadsheet.
+ */
+
+/** The empty state of a filter: what "no choice" looks like. */
+export function emptyFilterState(filter) {
+    if (filter.type === 'dateRange') return { from: null, until: null }
+    if (filter.type === 'toggle') return false
+    if (filter.multiple) return []
+
+    return ''
+}
+
+/** Whether a filter's state narrows the rows. */
+export function filterIsActive(filter, value) {
+    if (filter.type === 'dateRange') return !! (value?.from || value?.until)
+    if (filter.type === 'toggle') return value === true
+    if (filter.multiple) return Array.isArray(value) && value.length > 0
+
+    return value !== '' && value !== null && value !== undefined
+}
+
+/** The day of a picker's value (`Y-m-d H:i:s`, `Y-m-d`), or null for nothing. */
+export function filterDay(value) {
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(typeof value === 'string' ? value.trim() : '')
+
+    return m ? m[1] : null
+}
+
+/** A select's pick as the state holds it: '' for none, a string, a list of strings for a multiple. */
+export function filterSelection(filter, value) {
+    if (filter.multiple) return (Array.isArray(value) ? value : (value === null || value === undefined || value === '' ? [] : [value])).map((v) => String(v))
+    if (Array.isArray(value)) return value.length ? String(value[0]) : ''
+
+    return value === null || value === undefined ? '' : String(value)
+}
+
+/** How many of the filters narrow the rows. */
+export function activeFilterCount(filters, active) {
+    return filters.filter((f) => filterIsActive(f, active[f.name])).length
+}

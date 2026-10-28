@@ -204,7 +204,7 @@ it('hands the browser everything it needs in the config, the first page of rows 
         'height' => null,
     ])
         ->and($config['state']['rows'][0]['values']['sku'])->toBe('A-1')
-        ->and(array_column($config['filters'], 'type'))->toBe(['select', 'select', 'dateRange'])
+        ->and(array_column($config['filters'], 'type'))->toBe(['select', 'boolean', 'dateRange'])
         ->and($config['filters'][1]['options'])->toBe([['value' => '1', 'label' => 'Yes'], ['value' => '0', 'label' => 'No']])
         ->and($config['i18n']['save'])->toBe('Save');
 

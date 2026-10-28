@@ -2,6 +2,8 @@
 
 namespace Packstub\Spreadsheet\Tests\Fixtures;
 
+use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Contracts\HasSchemas;
 use Illuminate\Database\Eloquent\Collection;
 use Livewire\Component;
 use Packstub\Spreadsheet\Columns\BooleanColumn;
@@ -18,9 +20,10 @@ use Packstub\Spreadsheet\Filter;
 use Packstub\Spreadsheet\SavePayload;
 use Packstub\Spreadsheet\Spreadsheet;
 
-/** A plain Livewire component holding a sheet, the way an app page would. Static flags shape it per test. */
-class ProductSheet extends Component
+/** A plain Livewire component holding a sheet, the way an app page would (with schemas, for the filters' selects on Filament 4.16+ / 5.11+). Static flags shape it per test. */
+class ProductSheet extends Component implements HasSchemas
 {
+    use InteractsWithSchemas;
     use InteractsWithSpreadsheet;
 
     public static bool $creatable = true;
@@ -40,6 +43,9 @@ class ProductSheet extends Component
     public static bool $brokenQuery = false;
 
     public static ?string $height = null;
+
+    /** The filters instead of the fixture's three (null: the fixture's). @var list<Filter>|null */
+    public static ?array $filters = null;
 
     /** sku gets validationMessages() and validationAttribute(). */
     public static bool $ownMessages = false;
@@ -61,6 +67,7 @@ class ProductSheet extends Component
         static::$failInAfterSave = false;
         static::$brokenQuery = false;
         static::$height = null;
+        static::$filters = null;
         static::$ownMessages = false;
         static::$afterSave = [];
         static::$beforeSave = [];
@@ -88,7 +95,7 @@ class ProductSheet extends Component
             ->searchable(['sku', 'name', 'category.name'])
             ->defaultSort('sku')
             ->perPage(static::$perPage)
-            ->filters([
+            ->filters(static::$filters ?? [
                 Filter::select('category_id')->options(fn () => Category::query()->pluck('name', 'id')->all()),
                 Filter::boolean('is_active'),
                 Filter::dateRange('available_on'),

@@ -17,7 +17,7 @@ it('publishes the config file under the tag the docs name', function () {
         $this->artisan('vendor:publish', ['--tag' => 'packstub-spreadsheet-config'])->assertSuccessful();
 
         expect(File::exists($target))->toBeTrue()
-            ->and(require $target)->toHaveKeys(['per_page', 'max_per_page', 'max_rows_per_save', 'save_mode', 'version_column', 'confirm_leave', 'frozen_first_column', 'filters_layout', 'row_height', 'keybindings', 'date_format', 'datetime_format']);
+            ->and(require $target)->toHaveKeys(['per_page', 'max_per_page', 'max_rows_per_save', 'save_mode', 'version_column', 'confirm_leave', 'frozen_first_column', 'filters_layout', 'row_height', 'keybindings', 'date_format', 'datetime_format', 'first_day_of_week']);
     } finally {
         File::delete($target);
     }

@@ -1,6 +1,6 @@
 # Adding and deleting rows
 
-![A new row at the bottom marked with a plus, a row struck through for deletion](images/rows.png)
+![A new row at the bottom marked with a plus, a row struck through for deletion](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/rows.png)
 
 ## New rows
 

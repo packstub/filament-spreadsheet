@@ -1,12 +1,24 @@
 /*
- * packstub/filament-spreadsheet — Tabulator's base stylesheet, then the panel's
- * own palette (--gray-*, --primary-*, --danger-*…) over every coloured surface,
- * so the sheet follows the theme and dark mode without compiling the plugin's
- * views. Logical properties in the toolbar: it reads right-to-left with the page.
+ * packstub/filament-spreadsheet — Tabulator's base stylesheet, then the shell the
+ * sheet shares with Kanban and Gantt (a table-style container: the toolbar, the
+ * filters, the footer, the menu at the pointer) and the panel's own palette
+ * (--gray-*, --primary-*, --danger-*…) over every coloured surface of the grid, so
+ * the sheet follows the theme and dark mode without compiling the plugin's views.
+ * Logical properties in the toolbar: it reads right-to-left with the page.
  * Override the --ps-sheet-* variables on .ps-sheet to restyle it.
  */
 
 @import "tabulator-tables/dist/css/tabulator.min.css";
+
+/*
+ * Shared shell, identical in Kanban (ps-sheet = ps-kanban), Gantt (ps-gantt) and
+ * Spreadsheet (ps-sheet). The values are Filament's table container's (fi-ta-ctn,
+ * fi-ta-header-toolbar, fi-ta-filters, fi-ta-selection-indicator, fi-pagination), so
+ * the three sit on a page exactly like a table does. Only the layout and what
+ * Filament has no word for is here: the controls themselves are Filament's own
+ * components (fi-btn, fi-icon-btn, fi-input-wrp, fi-select-input, fi-fo-date-time-picker,
+ * fi-checkbox-input, fi-badge, fi-dropdown-panel, fi-tabs, fi-modal), styled by the panel.
+ */
 
 .ps-sheet {
     --ps-sheet-bg: #fff;
@@ -16,10 +28,152 @@
     --ps-sheet-text: var(--gray-950);
     --ps-sheet-muted: var(--gray-500);
     --ps-sheet-soft: var(--gray-600);
+    --ps-sheet-ring: var(--primary-500);
+    --ps-sheet-radius: 0.75rem;   /* the container's, as a table's (rounded-xl) */
+    --ps-sheet-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);  /* shadow-sm, as fi-ta-ctn */
+    --ps-sheet-outline: rgb(9 9 11 / 0.05);  /* ring-gray-950/5 */
+    --ps-sheet-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: var(--ps-sheet-radius);
+    background: var(--ps-sheet-bg);
+    box-shadow: var(--ps-sheet-shadow), 0 0 0 1px var(--ps-sheet-outline);
+    color: var(--ps-sheet-text);
+    font-size: 0.875rem;   /* text-sm, as a table's: unstyled text in the shell reads like a table's (the grid sets its own) */
+    line-height: 1.25rem;
+}
+
+.dark .ps-sheet {
+    --ps-sheet-bg: var(--gray-900);
+    --ps-sheet-surface: rgb(255 255 255 / 0.05);
+    --ps-sheet-border: rgb(255 255 255 / 0.1);
+    --ps-sheet-line: rgb(255 255 255 / 0.07);
+    --ps-sheet-text: #fff;
+    --ps-sheet-muted: var(--gray-400);
+    --ps-sheet-soft: var(--gray-300);
+    --ps-sheet-outline: rgb(255 255 255 / 0.1);
+}
+
+.ps-sheet [x-cloak] { display: none !important; }
+
+/* ------------------------------------------------------------------ toolbar (fi-ta-header-toolbar) */
+
+.ps-sheet-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--ps-sheet-border);
+}
+
+@media (min-width: 40rem) { .ps-sheet-toolbar { padding-inline: 1.5rem; } }
+
+/* two groups: the component's own controls at the start, search / filters / toggles at the end */
+.ps-sheet-toolbar-start, .ps-sheet-toolbar-end { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-height: 2.25rem; }
+.ps-sheet-toolbar-start { flex-shrink: 0; }
+.ps-sheet-toolbar-end { margin-inline-start: auto; }
+
+/* Filament centres a tab nav with auto margins; in a row that leaves a hole */
+.ps-sheet-toolbar .fi-tabs { margin: 0; }
+.ps-sheet-toolbar .fi-input-wrp { width: auto; }
+.ps-sheet-toolbar .fi-select-input { min-width: 11rem; }
+.ps-sheet-toolbar .fi-fo-date-time-picker-display-text-input { width: 8.5rem; }
+.ps-sheet-search .fi-input { width: 12rem; }
+
+/* a group of buttons that belong together (undo / redo, prev / next) */
+.ps-sheet-seg { display: inline-flex; gap: 0.25rem; }
+
+/* ------------------------------------------------------------------ filters */
+
+/* inline in the toolbar: fields in a row, the label as each wrapper's prefix */
+.ps-sheet-filters-inline { display: contents; }
+.ps-sheet-filter { display: flex; align-items: center; gap: 0.5rem; }
+.ps-sheet-range { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+.ps-sheet-toggle { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; }
+
+/* a filter that narrows the rows wears the primary ring, as an active state */
+.ps-sheet-filter-on .fi-input-wrp { --tw-ring-color: var(--ps-sheet-ring); box-shadow: 0 0 0 1px var(--ps-sheet-ring); }
+
+/* the funnel's dropdown panel and the "above" row: stacked, a label over each field (fi-ta-filters) */
+.ps-sheet-filters-panel, .ps-sheet-filters-above { display: grid; gap: 1rem; }
+.ps-sheet-filters-panel { padding: 1.5rem; }
+.ps-sheet-filters-above { padding: 1rem; border-bottom: 1px solid var(--ps-sheet-border); grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+@media (min-width: 40rem) { .ps-sheet-filters-above { padding-inline: 1.5rem; } }
+.ps-sheet-filters-header { display: flex; align-items: center; justify-content: space-between; }
+.ps-sheet-filters-heading { font-size: 1rem; line-height: 1.5rem; font-weight: 600; color: var(--ps-sheet-text); }
+.ps-sheet-filter-stacked { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+.ps-sheet-filter-stacked .fi-input-wrp, .ps-sheet-filter-stacked .ps-sheet-field, .ps-sheet-filter-stacked .fi-select-input { width: 100%; }
+.ps-sheet-filter-stacked .ps-sheet-range { display: grid; grid-template-columns: 1fr 1fr; }
+.ps-sheet-filter-label { font-size: 0.875rem; line-height: 1.5rem; font-weight: 500; color: var(--ps-sheet-text); }
+/* The wrapper takes the icon button's negative margin (fi-icon-btn is -m-2) and the button gives it up, so the wrapper
+   is the button's 36px box and the badge is laid out against it, as an icon button's own badge (fi-icon-btn >
+   .fi-icon-btn-badge-ctn) is: on the top-right corner, half over the edge. */
+.ps-sheet-filters-trigger { position: relative; display: inline-flex; margin: -0.5rem; }
+.ps-sheet-filters-trigger > .fi-icon-btn { margin: 0; }
+.ps-sheet-filters-trigger > .fi-icon-btn-badge-ctn { position: absolute; inset-inline-start: 100%; top: 0.25rem; z-index: 1; display: flex; width: max-content; translate: -50% -50%; border-radius: 0.375rem; background: var(--ps-sheet-bg); }
+[dir="rtl"] .ps-sheet-filters-trigger > .fi-icon-btn-badge-ctn { translate: 50% -50%; }
+.ps-sheet-filters-above .ps-sheet-filters-header { grid-column: 1 / -1; }
+
+/* ------------------------------------------------------------------ an indicator strip under the toolbar (fi-ta-selection-indicator) */
+
+.ps-sheet-indicator {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.375rem 0.75rem;
+    border-bottom: 1px solid var(--ps-sheet-border);
+    background: var(--ps-sheet-surface);
+    font-size: 0.875rem;
+    line-height: 1.5rem;
+    font-weight: 500;
+    color: var(--gray-700);
+}
+.dark .ps-sheet-indicator { color: var(--gray-200); }
+@media (min-width: 40rem) { .ps-sheet-indicator { padding-inline: 1.5rem; } }
+.ps-sheet-indicator-end { display: flex; align-items: center; gap: 0.75rem; margin-inline-start: auto; }
+
+/* ------------------------------------------------------------------ footer (fi-pagination) */
+
+.ps-sheet-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem;
+    border-top: 1px solid var(--ps-sheet-border);
+    font-size: 0.875rem;
+    color: var(--ps-sheet-muted);
+}
+@media (min-width: 40rem) { .ps-sheet-footer { padding-inline: 1.5rem; } }
+
+/* ------------------------------------------------------------------ menus at the pointer (fi-dropdown-panel, placed by the component) */
+
+.ps-sheet-menu { position: absolute; z-index: 40; width: max-content; min-width: 11rem; }
+.ps-sheet-menu-item { width: 100%; text-align: start; cursor: pointer; }
+
+/* ------------------------------------------------------------------ screen readers */
+
+.ps-sheet-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* ------------------------------------------------------------------ small screens */
+
+@media (max-width: 40rem) {
+    .ps-sheet-search .fi-input { width: 8rem; }
+}
+
+/* ------------------------------------------------------------------ the sheet's own variables */
+
+.ps-sheet {
     --ps-sheet-head: var(--gray-50);
     --ps-sheet-head-text: var(--gray-700);
     --ps-sheet-hover: color-mix(in oklab, var(--gray-100) 60%, transparent);
-    --ps-sheet-ring: var(--primary-500);
     --ps-sheet-range: color-mix(in oklab, var(--primary-500) 10%, transparent);
     --ps-sheet-dirty: var(--warning-500);
     --ps-sheet-dirty-bg: color-mix(in oklab, var(--warning-400) 14%, transparent);
@@ -29,27 +183,14 @@
     --ps-sheet-conflict-bg: color-mix(in oklab, #a855f7 12%, transparent);
     --ps-sheet-locked: color-mix(in oklab, var(--gray-100) 55%, transparent);
     --ps-sheet-created-bg: color-mix(in oklab, var(--success-500) 8%, transparent);
-    --ps-sheet-radius: 0.5rem;
     /* auto: measured by the sheet (the window below the grid's top edge, shrunk to the rows); a length fixes it */
     --ps-sheet-height: auto;
     --ps-sheet-font: inherit;
 
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    min-width: 0;
-    color: var(--ps-sheet-text);
     font-family: var(--ps-sheet-font);
 }
 
 .dark .ps-sheet {
-    --ps-sheet-bg: var(--gray-900);
-    --ps-sheet-surface: rgb(255 255 255 / 0.03);
-    --ps-sheet-border: rgb(255 255 255 / 0.1);
-    --ps-sheet-line: rgb(255 255 255 / 0.07);
-    --ps-sheet-text: #fff;
-    --ps-sheet-muted: var(--gray-400);
-    --ps-sheet-soft: var(--gray-300);
     --ps-sheet-head: rgb(255 255 255 / 0.04);
     --ps-sheet-head-text: var(--gray-200);
     --ps-sheet-hover: rgb(255 255 255 / 0.04);
@@ -61,50 +202,20 @@
     --ps-sheet-created-bg: color-mix(in oklab, var(--success-500) 12%, transparent);
 }
 
-.ps-sheet [x-cloak] { display: none !important; }
 .ps-sheet svg { width: 1rem; height: 1rem; flex: none; }
 
 /* ------------------------------------------------------------------ toolbar */
 
 /*
  * The buttons, the fields, the badges and the dialog are Filament's own components (fi-btn, fi-icon-btn,
- * fi-input-wrp, fi-select-input, fi-badge, fi-modal), styled by the panel's stylesheet: only the layout
- * and what Filament has no word for is here.
+ * fi-input-wrp, fi-select-input, fi-fo-date-time-picker, fi-checkbox-input, fi-badge, fi-modal), styled by the
+ * panel's stylesheet; the shell above lays them out. Only what Filament has no word for is here.
  */
-.ps-sheet-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.ps-sheet-spacer { flex: 1; }
-
 .ps-sheet-group { display: inline-flex; align-items: center; gap: 0.5rem; }
-.ps-sheet-seg { display: inline-flex; gap: 0.25rem; }
-
-.ps-sheet-field { width: auto; }
-.ps-sheet-search .fi-input { width: 12rem; }
-.ps-sheet-field .fi-input[type="date"] { width: 9rem; }
-
-.ps-sheet-range { display: inline-flex; align-items: center; gap: 0.25rem; }
-/* A filter that narrows the rows: its ring in the primary colour. */
-.ps-sheet-filter-on.fi-input-wrp,
-.ps-sheet-filter-on .fi-input-wrp { --tw-ring-color: var(--ps-sheet-ring); box-shadow: 0 0 0 1px var(--ps-sheet-ring); }
-.ps-sheet-dash { color: var(--ps-sheet-muted); }
 
 /* Delete rows: a gray button, the trash in the danger colour. */
 .ps-sheet-btn-danger .fi-icon { color: var(--danger-600); }
 .dark .ps-sheet-btn-danger .fi-icon { color: var(--danger-400); }
-
-/* The filters: inline in the toolbar, on a row above the grid, or stacked in the funnel button's dropdown panel. */
-.ps-sheet-filters-inline, .ps-sheet-filters-above { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.ps-sheet-filters-above { margin-top: 0.5rem; }
-.ps-sheet-filters-panel { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; }
-.ps-sheet-filters-panel .ps-sheet-field, .ps-sheet-filters-panel .fi-input-wrp { width: 100%; }
-.ps-sheet-filters-panel .ps-sheet-range { flex-wrap: wrap; }
-.ps-sheet-filters-trigger { position: relative; display: inline-flex; }
-.ps-sheet-filters-reset { align-self: flex-start; }
 
 /* The shortcuts list in the help modal. */
 .ps-sheet-shortcuts { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1.5rem; margin: 0; }
@@ -116,11 +227,11 @@
 .ps-sheet-pill { white-space: nowrap; }
 button.ps-sheet-pill { cursor: pointer; }
 
-/* Under the grid: the status line left, the pager right. */
-.ps-sheet-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 0.5rem; }
+/* The footer under the grid (the shell's): the status line left, the pager right. */
 .ps-sheet-status { display: flex; align-items: center; gap: 0.5rem; flex: 1 1 12rem; min-width: 0; }
 .ps-sheet-status .ps-sheet-hint { flex: 1; }
 .ps-sheet-pager { display: inline-flex; align-items: center; gap: 0.5rem; margin-inline-start: auto; }
+.ps-sheet-pager .fi-input-wrp { width: auto; }
 .ps-sheet-pager-text,
 .ps-sheet-count { font-size: 0.8125rem; color: var(--ps-sheet-muted); white-space: nowrap; }
 
@@ -140,18 +251,19 @@ button.ps-sheet-pill { cursor: pointer; }
 /*
  * Tabulator is built on .ps-sheet-grid itself and writes the same height inline
  * (grid.js: height: 'var(--ps-sheet-height)'): the grid has a height of its own,
- * scrolls inside it and renders only the rows around the visible window.
+ * scrolls inside it and renders only the rows around the visible window. It sits
+ * inside the container between the toolbar and the footer, so it has no border
+ * and no corners of its own.
  */
 .ps-sheet-grid {
     height: var(--ps-sheet-height);
     min-height: 8rem;
-    border-radius: var(--ps-sheet-radius);
     overflow: hidden;
 }
 
 .ps-sheet .tabulator {
-    border: 1px solid var(--ps-sheet-border);
-    border-radius: var(--ps-sheet-radius);
+    border: 0;
+    border-radius: 0;
     background: var(--ps-sheet-bg);
     color: var(--ps-sheet-text);
     font-size: 0.875rem;
@@ -295,13 +407,6 @@ button.ps-sheet-pill { cursor: pointer; }
 .ps-sheet .tabulator .tabulator-col-resize-handle:hover { background: var(--ps-sheet-ring); opacity: 0.4; }
 .ps-sheet .tabulator .tabulator-col-resize-guide { background: var(--ps-sheet-ring); }
 
-/* ------------------------------------------------------------------ context menu */
-
-/* Filament's dropdown panel and list items, placed at the pointer (the view binds left and top, relative to the root). */
-.ps-sheet { position: relative; }
-.ps-sheet-menu { position: absolute; z-index: 40; width: max-content; min-width: 11rem; }
-.ps-sheet-menu-item { width: 100%; text-align: start; cursor: pointer; }
-
 /* ------------------------------------------------------------------ states */
 
 .ps-sheet-is-loading .ps-sheet-grid { opacity: 0.6; transition: opacity 0.15s; }
@@ -312,7 +417,6 @@ button.ps-sheet-pill { cursor: pointer; }
 /* ------------------------------------------------------------------ small screens */
 
 @media (max-width: 40rem) {
-    .ps-sheet-search input { width: 8rem; }
     .ps-sheet-btn > span { display: none; }
     .ps-sheet-count { display: none; }
 }

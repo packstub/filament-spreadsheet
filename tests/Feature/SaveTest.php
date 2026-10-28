@@ -260,15 +260,36 @@ it('refuses a row that changed since the user loaded it, with their value and th
         ->and($product->fresh()->price)->toBe('11.00');
 });
 
-it('skips the conflict check without a version from the browser, or when versionColumn(false)', function () {
+it('refuses a changed row sent without its version as a conflict when the sheet has a version column', function () {
+    $product = product('a-1', 'Hammer', ['price' => 10]);
+
+    CarbonImmutable::setTestNow('2026-10-14 10:05:00');
+    $product->touch();
+
+    // The check is the server's: a payload that leaves the versions out (the sheet never does) does not skip it.
+    $result = sheet()->save(SavePayload::fromArray(['changed' => [$product->id => ['price' => '11']]]));
+
+    expect($result->ok())->toBeFalse()
+        ->and($result->conflicts)->toBe([(string) $product->id => ['price' => 10.0]])
+        ->and($result->versions[$product->id])->toBe('2026-10-14 10:05:00')
+        ->and($result->rowErrors)->toBe([])
+        ->and($product->fresh()->price)->toBe('10.00');
+
+    // With the current version it is saved; a row whose version is not asked for is left alone.
+    expect(save(['changed' => [$product->id => ['price' => '11']], 'versions' => [$product->id => '2026-10-14 10:05:00']])->ok())->toBeTrue()
+        ->and($product->fresh()->price)->toBe('11.00');
+});
+
+it('skips the conflict check when versionColumn(false): no version is sent and none is compared', function () {
     $product = product('a-1', 'Hammer', ['price' => 10]);
     $seen = $product->getAttributes()['updated_at'];
 
     CarbonImmutable::setTestNow('2026-10-14 10:05:00');
     $product->touch();
 
-    expect(save(['changed' => [$product->id => ['price' => '11']]])->ok())->toBeTrue()
-        ->and(sheet()->versionColumn(false)->save(SavePayload::fromArray(['changed' => [$product->id => ['price' => '12']], 'versions' => [$product->id => $seen]]))->ok())->toBeTrue()
+    expect(sheet()->versionColumn(false)->save(SavePayload::fromArray(['changed' => [$product->id => ['price' => '12']], 'versions' => [$product->id => $seen]]))->ok())->toBeTrue()
+        ->and(sheet()->versionColumn(false)->save(SavePayload::fromArray(['changed' => [$product->id => ['price' => '13']]]))->ok())->toBeTrue()
+        ->and($product->fresh()->price)->toBe('13.00')
         ->and(sheet()->versionColumn(false)->rows()['rows'][0]['version'])->toBeNull();
 });
 
@@ -402,13 +423,13 @@ it('reads a crafted payload strictly: bad keys, shapes and temporary ids are dro
             str_repeat('9', 200) => ['name' => 'too long'],
             $product->id.'x' => 'not an array',
         ],
-        'versions' => [$product->id => ['nested'], 'other' => 3],
+        'versions' => [$product->id => ['nested'], 'other' => 3, $product->id.'' => versions($product->id)[(string) $product->id]],
         'created' => ['n 1' => ['sku' => 'x'], 'n-1' => ['sku' => 'c-3', 'name' => 'New'], 'n2' => 'not an array'],
         'deleted' => [[1], null, '', 5, '5', 'abc'],
     ]);
 
     expect($payload->changed)->toBe([(string) $product->id => ['name' => 'Ok']])
-        ->and($payload->versions)->toBe(['other' => '3'])
+        ->and($payload->versions)->toBe([(string) $product->id => versions($product->id)[(string) $product->id], 'other' => '3'])
         ->and($payload->created)->toBe(['n-1' => ['sku' => 'c-3', 'name' => 'New']])
         ->and($payload->deleted)->toBe(['5', 'abc'])
         ->and($payload->rowCount())->toBe(4)
@@ -453,6 +474,7 @@ it('queries an integer key with integers only: a crafted key is answered as miss
 
     $result = sheet()->saveMode(SaveMode::PerRow)->save(SavePayload::fromArray([
         'changed' => array_fill_keys($crafted, ['name' => 'X']) + [$product->id => ['name' => 'Ok']],
+        'versions' => versions($product->id),
         'deleted' => $crafted,
     ]));
     // whereKey() inlines integer keys into the SQL (whereIntegerInRaw), so both the bindings and the query text are checked.
@@ -591,7 +613,7 @@ it('reports a database failure on one row in PerRow mode and keeps the others', 
 
     // A column the sheet writes but the schema refuses: the database enforces the SKU's unique index below the validator's radar.
     $definition = sheet()->mutateRowBeforeSave(fn (array $data, ?Product $record) => $record?->is($b) ? ['sku' => 'A-1'] : $data);
-    $result = $definition->save(SavePayload::fromArray(['changed' => [$a->id => ['name' => 'Fine'], $b->id => ['name' => 'Boom']]]));
+    $result = $definition->save(SavePayload::fromArray(['changed' => [$a->id => ['name' => 'Fine'], $b->id => ['name' => 'Boom']], 'versions' => versions($a->id, $b->id)]));
 
     expect(keys($result->saved))->toBe([(string) $a->id])
         ->and($result->rowErrors)->toBe([(string) $b->id => 'This row could not be saved.'])
@@ -628,7 +650,7 @@ it('reads the saved rows again through query(), its selects included', function 
         ]);
 
     CarbonImmutable::setTestNow('2026-10-14 10:00:05');
-    $result = $spreadsheet->save(SavePayload::fromArray(['changed' => [$a->id => ['name' => 'loud']]]));
+    $result = $spreadsheet->save(SavePayload::fromArray(['changed' => [$a->id => ['name' => 'loud']], 'versions' => versions($a->id)]));
 
     expect($result->saved[(string) $a->id]['values'])->toMatchArray(['name' => 'loud', 'shout' => 'LOUD']);
 });

@@ -1,6 +1,6 @@
 # Editing
 
-![Two prices typed in: amber corners on the changed cells, Save enabled with the count](images/edits.png)
+![Two prices typed in: amber corners on the changed cells, Save enabled with the count](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/edits.png)
 
 ## Keyboard
 

@@ -34,10 +34,32 @@ function sheet(): Spreadsheet
     return Livewire::test(ProductSheet::class)->instance()->getSpreadsheet();
 }
 
-/** One Save on the fixture's sheet. @param  array<string, mixed>  $payload */
+/**
+ * One Save on the fixture's sheet. As the browser does, the changed rows carry their
+ * current versions unless the payload names them (a row without one is a conflict).
+ *
+ * @param  array<string, mixed>  $payload
+ */
 function save(array $payload): SaveResult
 {
+    if (is_array($payload['changed'] ?? null)) {
+        // `+`, not a spread: a spread renumbers the ids (numeric string keys are ints to PHP)
+        $payload['versions'] = (is_array($payload['versions'] ?? null) ? $payload['versions'] : []) + versions(...array_keys($payload['changed']));
+    }
+
     return sheet()->save(SavePayload::fromArray($payload));
+}
+
+/**
+ * The current versions of products, keyed by id as the browser sends them (a `versions` payload).
+ *
+ * @return array<string, string>
+ */
+function versions(int|string ...$ids): array
+{
+    $sheet = sheet();
+
+    return Product::query()->whereKey($ids)->get()->mapWithKeys(fn (Product $product) => [(string) $product->getKey() => $sheet->version($product)])->all();
 }
 
 /**

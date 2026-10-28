@@ -111,7 +111,7 @@ it('answers errors and conflicts per cell without an exception, whatever the pay
     $product = product('a-1', 'Hammer');
 
     Livewire::test(ProductSheet::class)
-        ->call('spreadsheetSave', ['changed' => [$product->id => ['price' => 'abc', 'margin' => 1]]])
+        ->call('spreadsheetSave', ['changed' => [$product->id => ['price' => 'abc', 'margin' => 1]], 'versions' => versions($product->id)])
         ->assertReturned(fn ($r) => $r['ok'] === false && $r['rolledBack'] === true && ((array) $r['errors'])[$product->id] === ['price' => 'Not a number.', 'margin' => 'This cell cannot be edited.'])
         ->call('spreadsheetSave', ['changed' => 'garbage', 'created' => 'garbage', 'deleted' => 'y', 'versions' => 3])
         ->assertReturned(fn ($r) => $r['ok'] === true && (array) $r['saved'] === [] && (array) $r['created'] === [])
@@ -131,7 +131,7 @@ it('answers a refused save with its reason and a failed one with a generic messa
 
     ProductSheet::$readOnly = true;
     Livewire::test(ProductSheet::class)
-        ->call('spreadsheetSave', ['changed' => [$product->id => ['name' => 'X']]])
+        ->call('spreadsheetSave', ['changed' => [$product->id => ['name' => 'X']], 'versions' => versions($product->id)])
         ->assertReturned(fn ($r) => $r['ok'] === false && $r['message'] === 'This sheet is read-only.' && $r['rolledBack'] === true);
 
     ProductSheet::$readOnly = false;
@@ -141,7 +141,7 @@ it('answers a refused save with its reason and a failed one with a generic messa
     foreach ([SaveMode::AllOrNothing, SaveMode::PerRow] as $mode) {
         ProductSheet::$saveMode = $mode;
         Livewire::test(ProductSheet::class)
-            ->call('spreadsheetSave', ['changed' => [$product->id => ['name' => 'X']]])
+            ->call('spreadsheetSave', ['changed' => [$product->id => ['name' => 'X']], 'versions' => versions($product->id)])
             ->assertReturned(fn ($r) => $r['ok'] === false && $r['message'] === 'The save did not go through.' && $r['rolledBack'] === true);
 
         expect($product->fresh()->name)->toBe('Hammer', "{$mode->name}: the row was committed although the answer says it was not");
