@@ -30,7 +30,7 @@
     --ps-sheet-soft: var(--gray-600);
     --ps-sheet-ring: var(--primary-500);
     --ps-sheet-radius: 0.75rem;   /* the container's, as a table's (rounded-xl) */
-    --ps-sheet-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --ps-sheet-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);  /* shadow-sm, as fi-ta-ctn */
     --ps-sheet-outline: rgb(9 9 11 / 0.05);  /* ring-gray-950/5 */
     --ps-sheet-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
@@ -42,6 +42,8 @@
     background: var(--ps-sheet-bg);
     box-shadow: var(--ps-sheet-shadow), 0 0 0 1px var(--ps-sheet-outline);
     color: var(--ps-sheet-text);
+    font-size: 0.875rem;   /* text-sm, as a table's: unstyled text in the shell reads like a table's (the grid sets its own) */
+    line-height: 1.25rem;
 }
 
 .dark .ps-sheet {
@@ -108,7 +110,13 @@
 .ps-sheet-filter-stacked .fi-input-wrp, .ps-sheet-filter-stacked .ps-sheet-field, .ps-sheet-filter-stacked .fi-select-input { width: 100%; }
 .ps-sheet-filter-stacked .ps-sheet-range { display: grid; grid-template-columns: 1fr 1fr; }
 .ps-sheet-filter-label { font-size: 0.875rem; line-height: 1.5rem; font-weight: 500; color: var(--ps-sheet-text); }
-.ps-sheet-filters-trigger { position: relative; display: inline-flex; }
+/* The wrapper takes the icon button's negative margin (fi-icon-btn is -m-2) and the button gives it up, so the wrapper
+   is the button's 36px box and the badge is laid out against it, as an icon button's own badge (fi-icon-btn >
+   .fi-icon-btn-badge-ctn) is: on the top-right corner, half over the edge. */
+.ps-sheet-filters-trigger { position: relative; display: inline-flex; margin: -0.5rem; }
+.ps-sheet-filters-trigger > .fi-icon-btn { margin: 0; }
+.ps-sheet-filters-trigger > .fi-icon-btn-badge-ctn { position: absolute; inset-inline-start: 100%; top: 0.25rem; z-index: 1; display: flex; width: max-content; translate: -50% -50%; border-radius: 0.375rem; background: var(--ps-sheet-bg); }
+[dir="rtl"] .ps-sheet-filters-trigger > .fi-icon-btn-badge-ctn { translate: 50% -50%; }
 .ps-sheet-filters-above .ps-sheet-filters-header { grid-column: 1 / -1; }
 
 /* ------------------------------------------------------------------ an indicator strip under the toolbar (fi-ta-selection-indicator) */

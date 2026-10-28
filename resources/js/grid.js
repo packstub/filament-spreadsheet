@@ -148,7 +148,7 @@ function baseFormatter(column, locale, t = {}) {
 }
 
 function escapeHtml(s) {
-    return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+    return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
 /** The empty-table message as an element (a string would be set as innerHTML). */

@@ -45,7 +45,7 @@ In both modes a batch larger than `max_rows_per_save` (2,000 by default) is refu
 
 When a conflicting cell's value on the server is still the one the user loaded (someone changed another cell of that row), the line under the grid says so instead of showing two equal values. Every row the browser loads carries a **version**: the raw value of `updated_at` (or the column named by `versionColumn()` / the config's `version_column`, a `lock_version` integer for instance). A save sends, per changed row, the version the user saw. When it differs from the current one — someone else saved the record meanwhile — the row is refused as a conflict: the cell turns purple and shows the other user's value next to yours. Saving again wins (the browser now has the current version); undoing the cell keeps theirs.
 
-`->versionColumn(false)` turns the check off: the last write wins. A model without timestamps has no version and behaves the same. `updated_at` has whole seconds, so two saves within one second are told apart only with a dedicated version column.
+The check is the server's: a changed row that arrives without its version while the record has one is refused as a conflict too (the sheet always sends the versions it loaded, so such a payload did not come from it), never written. `->versionColumn(false)` turns the check off: the last write wins. A model without timestamps has no version and behaves the same. `updated_at` has whole seconds, so two saves within one second are told apart only with a dedicated version column.
 
 ## Refusing a save
 

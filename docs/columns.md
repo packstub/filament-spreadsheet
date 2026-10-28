@@ -34,7 +34,7 @@ A column whose name contains a dot (`category.name`) reads through the relation 
 TextColumn::make('sku')->maxLength(32)
 ```
 
-Strings. `maxLength()` adds a `max:` rule and sets the editor's `maxlength`, so typing stops there (a paste is still validated, and refused with the rule's message).
+Strings. `maxLength()` adds a `max:` rule and sets the editor's `maxlength`, so typing stops there (a paste is still validated, and refused with the rule's message). Without `maxLength()` the rule is `max:65535` (a `TEXT` column's bound), so a value is never unbounded before the database; set a longer one yourself for a `MEDIUMTEXT` or `LONGTEXT` column.
 
 ## `NumberColumn`
 
