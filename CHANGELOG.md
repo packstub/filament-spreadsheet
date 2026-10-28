@@ -2,7 +2,7 @@
 
 All notable changes to `packstub/filament-spreadsheet` are documented in this file.
 
-## 1.0.0 - Unreleased
+## 1.0.0-beta.1 - 2026-10-28
 
 First release: spreadsheet-style bulk editing of Eloquent records for Filament 4 (4.13+) and 5.
 
