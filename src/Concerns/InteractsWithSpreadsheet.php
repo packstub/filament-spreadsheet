@@ -2,6 +2,7 @@
 
 namespace Packstub\Spreadsheet\Concerns;
 
+use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Renderless;
@@ -106,6 +107,10 @@ trait InteractsWithSpreadsheet
      */
     public function mountInteractsWithSpreadsheet(): void
     {
+        if (! $this instanceof HasSchemas) {
+            throw new \LogicException(static::class.' must implement Filament\\Schemas\\Contracts\\HasSchemas and use Filament\\Schemas\\Concerns\\InteractsWithSchemas: the filters are Filament form components (the Spreadsheet pages do).');
+        }
+
         $this->getSchema('spreadsheetFiltersForm')?->fill();
     }
 
