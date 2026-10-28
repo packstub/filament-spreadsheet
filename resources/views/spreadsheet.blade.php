@@ -11,6 +11,11 @@
     // The dialog's heading and text are the component's (dialog.heading, dialog.text): spans for the modal's slots.
     $dialogHeading = new HtmlString('<span x-text="dialog ? dialog.heading : \'\'"></span>');
     $dialogText = new HtmlString('<span class="ps-sheet-dialog-text" x-text="dialog ? dialog.text : \'\'"></span>');
+
+    // The filters are Filament form components, rendered through a schema of the component.
+    if ($hasFilters && ! $this instanceof \Filament\Schemas\Contracts\HasSchemas) {
+        throw new \LogicException(static::class . ' must implement Filament\Schemas\Contracts\HasSchemas and use Filament\Schemas\Concerns\InteractsWithSchemas for its filters (the Spreadsheet pages do).');
+    }
 @endphp
 
 {{--
@@ -19,11 +24,14 @@
     wire:ignore keeps a page re-render (an action's modal, say) from resetting it,
     and such a render carries no rows at all (see getSpreadsheetConfig()).
     The root is a table-style container (the ring, the rounded corners, the toolbar
-    with a line under it, the footer with one over it) and the toolbar, the filters
-    and the dialog are Filament's own Blade components (button, icon-button, input
-    wrapper, the searchable select, the date picker, checkbox, badge, dropdown,
-    modal), rendered once and driven by Alpine; the ps-sheet-* classes beside
-    theirs are the sheet's hooks.
+    with a line under it, the footer with one over it) and the toolbar and the dialog
+    are Filament's own Blade components (button, icon-button, input wrapper, badge,
+    dropdown, modal), rendered once and driven by Alpine; the filters are Filament's
+    own form components (Select, Toggle, DatePicker) rendered through the component's
+    `spreadsheetFiltersForm` schema, each field dispatching its change as a
+    `ps-sheet-filter` event that setFilter() applies, the browser writing its state
+    back into the fields (syncFields()); the ps-sheet-* classes beside theirs are the
+    sheet's hooks.
     The stylesheet comes on request (x-load-css), after the markup is on screen:
     the sheet is kept invisible (visibility, so the layout is already there to
     measure) until the component sees the stylesheet (reveal()), the toolbar's
@@ -40,6 +48,7 @@
     x-on:keydown.escape.window="onEscape()"
     x-on:packstub-spreadsheet-refresh.window="refresh()"
     x-on:modal-closed="modalClosed($event)"
+    x-on:ps-sheet-filter="setFilter($event.detail.name, $event.detail.value, $event.detail.edge)"
     class="ps-sheet"
     style="visibility: hidden"
     :class="{ 'ps-sheet-is-readonly': readOnly, 'ps-sheet-is-saving': saving, 'ps-sheet-is-loading': loading, 'ps-sheet-is-dirty': dirty.total > 0 }"
@@ -75,9 +84,9 @@
                     x-bind:title="t.save + ' (' + keyLabel('save') + ')'"
                 >
                     <span x-text="t.save"></span>
-                    <div class="fi-btn-badge-ctn" x-show="dirty.total">
-                        <x-filament::badge size="xs" color="primary" class="ps-sheet-badge"><span x-text="dirty.total"></span></x-filament::badge>
-                    </div>
+                    <x-slot name="badge">
+                        <x-filament::badge size="xs" color="primary" class="ps-sheet-badge" x-show="dirty.total"><span x-text="dirty.total"></span></x-filament::badge>
+                    </x-slot>
                 </x-filament::button>
 
                 <x-filament::button color="gray" class="ps-sheet-btn" x-on:click="discard()" x-bind:disabled="saving || ! dirty.total">
@@ -116,9 +125,9 @@
                 x-bind:title="t.delete_rows"
             >
                 <span x-text="t.delete_rows"></span>
-                <div class="fi-btn-badge-ctn" x-show="selected">
-                    <x-filament::badge size="xs" color="danger" class="ps-sheet-badge"><span x-text="selected"></span></x-filament::badge>
-                </div>
+                <x-slot name="badge">
+                    <x-filament::badge size="xs" color="danger" class="ps-sheet-badge" x-show="selected"><span x-text="selected"></span></x-filament::badge>
+                </x-slot>
             </x-filament::button>
         </div>
 
@@ -134,9 +143,9 @@
             </div>
 
             @if ($hasFilters && $filtersLayout === 'toolbar')
-                {{-- the filters inline, after the search box --}}
+                {{-- the filters inline, after the search box: Filament's fields with the label as each one's prefix --}}
                 <div class="ps-sheet-filters ps-sheet-filters-inline">
-                    @include('packstub-spreadsheet::filters')
+                    {{ $this->getSchema('spreadsheetFiltersForm') }}
                 </div>
             @elseif ($hasFilters && $filtersLayout === 'dropdown')
                 {{-- the filters behind a funnel button: the count of active ones on the button, a heading and a Reset link in the panel --}}
@@ -144,21 +153,24 @@
                     {{-- a panel of fields, not a menu: Filament 5.10+ would take the keys typed in a select's search for menu navigation --}}
                     <x-filament::dropdown placement="bottom-end" width="xs" :menu="false">
                         <x-slot name="trigger">
+                            {{-- the count of active filters in the icon button's own badge slot, on its top-right corner --}}
                             <div class="ps-sheet-filters-trigger">
-                                <x-filament::icon-button color="gray" :icon="Heroicon::OutlinedFunnel" :label="__('packstub-spreadsheet::spreadsheet.filters')" class="ps-sheet-filters-btn" x-bind:title="t.filters" />
-                                <div class="fi-icon-btn-badge-ctn" x-show="activeFilterCount()">
-                                    <x-filament::badge size="xs" color="primary" class="ps-sheet-filters-count"><span x-text="activeFilterCount()"></span></x-filament::badge>
-                                </div>
+                                <x-filament::icon-button color="gray" :icon="Heroicon::OutlinedFunnel" :label="__('packstub-spreadsheet::spreadsheet.filters')" class="ps-sheet-filters-btn" x-bind:title="t.filters">
+                                    <x-slot name="badge">
+                                        <x-filament::badge size="xs" color="primary" class="ps-sheet-filters-count" x-show="activeFilterCount()"><span x-text="activeFilterCount()"></span></x-filament::badge>
+                                    </x-slot>
+                                </x-filament::icon-button>
                             </div>
                         </x-slot>
-                        <div class="ps-sheet-filters ps-sheet-filters-panel">
-                            <div class="ps-sheet-filters-header">
-                                <h4 class="ps-sheet-filters-heading" x-text="t.filters"></h4>
+                        {{-- a table's filters panel: its heading, the reset link, Filament's fields (spreadsheetFiltersForm) --}}
+                        <div class="fi-ta-filters ps-sheet-filters ps-sheet-filters-panel">
+                            <div class="fi-ta-filters-header ps-sheet-filters-header">
+                                <h4 class="fi-ta-filters-heading ps-sheet-filters-heading" x-text="t.filters"></h4>
                                 <x-filament::link tag="button" color="danger" size="sm" class="ps-sheet-filters-reset" x-show="activeFilterCount()" x-on:click="resetFilters()">
                                     <span x-text="t.reset_filters"></span>
                                 </x-filament::link>
                             </div>
-                            @include('packstub-spreadsheet::filters', ['stacked' => true])
+                            {{ $this->getSchema('spreadsheetFiltersForm') }}
                         </div>
                     </x-filament::dropdown>
                 </div>
@@ -170,14 +182,14 @@
 
     @if ($hasFilters && $filtersLayout === 'above')
         {{-- the filters on a row of their own between the toolbar and the grid, with the heading and the Reset link --}}
-        <div class="ps-sheet-filters ps-sheet-filters-above">
-            <div class="ps-sheet-filters-header">
-                <h4 class="ps-sheet-filters-heading" x-text="t.filters"></h4>
+        <div class="fi-ta-filters ps-sheet-filters ps-sheet-filters-above">
+            <div class="fi-ta-filters-header ps-sheet-filters-header">
+                <h4 class="fi-ta-filters-heading ps-sheet-filters-heading" x-text="t.filters"></h4>
                 <x-filament::link tag="button" color="danger" size="sm" class="ps-sheet-filters-reset" x-show="activeFilterCount()" x-on:click="resetFilters()">
                     <span x-text="t.reset_filters"></span>
                 </x-filament::link>
             </div>
-            @include('packstub-spreadsheet::filters', ['stacked' => true])
+            {{ $this->getSchema('spreadsheetFiltersForm') }}
         </div>
     @endif
 

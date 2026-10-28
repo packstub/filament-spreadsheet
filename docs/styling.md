@@ -46,7 +46,7 @@ The dark palette is set under `.dark .ps-sheet`. The grid's height is measured b
 | --- | --- |
 | `.ps-sheet`, `.ps-sheet-is-dirty`, `.ps-sheet-is-saving`, `.ps-sheet-is-loading`, `.ps-sheet-is-readonly` | the root |
 | `.ps-sheet-toolbar`, `.ps-sheet-toolbar-start`, `.ps-sheet-toolbar-end`, `.ps-sheet-btn`, `.ps-sheet-btn-primary`, `.ps-sheet-btn-danger`, `.ps-sheet-search`, `.ps-sheet-filters-btn`, `.ps-sheet-pill-dirty` | the toolbar |
-| `.ps-sheet-filter`, `.ps-sheet-filter-on`, `.ps-sheet-filter-stacked`, `.ps-sheet-range`, `.ps-sheet-toggle`, `.ps-sheet-filters-panel`, `.ps-sheet-filters-above`, `.ps-sheet-filters-inline`, `.ps-sheet-filters-header` | a filter (active, stacked), the date range, the toggle, where they are |
+| `.ps-sheet-filters-panel`, `.ps-sheet-filters-above`, `.ps-sheet-filters-inline`, `.ps-sheet-filters-header`, `.ps-sheet-filters-count` | where the filters are (the fields themselves are Filament's own `Select`, `Toggle` and `DatePicker`, styled by the panel), the count on the funnel |
 | `.ps-sheet-footer`, `.ps-sheet-status`, `.ps-sheet-hint`, `.ps-sheet-pill-errors`, `.ps-sheet-pager` | the footer under the grid |
 | `.ps-sheet-cell-dirty`, `.ps-sheet-cell-error`, `.ps-sheet-cell-conflict`, `.ps-sheet-cell-locked` | a cell |
 | `.ps-sheet-row-created`, `.ps-sheet-row-deleted`, `.ps-sheet-row-readonly`, `.ps-sheet-row-error` | a row |

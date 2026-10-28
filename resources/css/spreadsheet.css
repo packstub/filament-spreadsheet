@@ -90,34 +90,24 @@
 
 /* ------------------------------------------------------------------ filters */
 
-/* inline in the toolbar: fields in a row, the label as each wrapper's prefix */
+/* Filament's schema (spreadsheetFiltersForm) draws its fields on a grid; inline in the toolbar they sit on one
+   wrapping line, the label as each field's prefix, and on the "above" row too, each field at least 14rem wide */
 .ps-sheet-filters-inline { display: contents; }
-.ps-sheet-filter { display: flex; align-items: center; gap: 0.5rem; }
-.ps-sheet-range { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
-.ps-sheet-toggle { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; }
+.ps-sheet-filters-inline .fi-sc, .ps-sheet-filters-above > .fi-sc { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.ps-sheet-filters-above > .fi-sc { align-items: flex-start; gap: 1rem; }
+.ps-sheet-filters-above > .fi-sc > * { min-width: 14rem; }
+/* a date range's two pickers side by side */
+.ps-sheet-filters-inline .fi-sc .fi-sc-component .fi-grid { display: flex; gap: 0.35rem; }
 
-/* a filter that narrows the rows wears the primary ring, as an active state */
-.ps-sheet-filter-on .fi-input-wrp { --tw-ring-color: var(--ps-sheet-ring); box-shadow: 0 0 0 1px var(--ps-sheet-ring); }
-
-/* the funnel's dropdown panel and the "above" row: stacked, a label over each field (fi-ta-filters) */
+/* the funnel's panel and the "above" row wear a table's filters classes (fi-ta-filters): the heading with the reset link, then Filament's fields */
 .ps-sheet-filters-panel, .ps-sheet-filters-above { display: grid; gap: 1rem; }
 .ps-sheet-filters-panel { padding: 1.5rem; }
-.ps-sheet-filters-above { padding: 1rem; border-bottom: 1px solid var(--ps-sheet-border); grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+.ps-sheet .fi-ta-filters-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.ps-sheet .fi-ta-filters-heading { font-size: 1rem; line-height: 1.5rem; font-weight: 600; color: var(--ps-sheet-text); }
+.ps-sheet-filters-above { padding: 1rem; border-bottom: 1px solid var(--ps-sheet-border); }
 @media (min-width: 40rem) { .ps-sheet-filters-above { padding-inline: 1.5rem; } }
-.ps-sheet-filters-header { display: flex; align-items: center; justify-content: space-between; }
-.ps-sheet-filters-heading { font-size: 1rem; line-height: 1.5rem; font-weight: 600; color: var(--ps-sheet-text); }
-.ps-sheet-filter-stacked { flex-direction: column; align-items: stretch; gap: 0.5rem; }
-.ps-sheet-filter-stacked .fi-input-wrp, .ps-sheet-filter-stacked .ps-sheet-field, .ps-sheet-filter-stacked .fi-select-input { width: 100%; }
-.ps-sheet-filter-stacked .ps-sheet-range { display: grid; grid-template-columns: 1fr 1fr; }
-.ps-sheet-filter-label { font-size: 0.875rem; line-height: 1.5rem; font-weight: 500; color: var(--ps-sheet-text); }
-/* The wrapper takes the icon button's negative margin (fi-icon-btn is -m-2) and the button gives it up, so the wrapper
-   is the button's 36px box and the badge is laid out against it, as an icon button's own badge (fi-icon-btn >
-   .fi-icon-btn-badge-ctn) is: on the top-right corner, half over the edge. */
-.ps-sheet-filters-trigger { position: relative; display: inline-flex; margin: -0.5rem; }
-.ps-sheet-filters-trigger > .fi-icon-btn { margin: 0; }
-.ps-sheet-filters-trigger > .fi-icon-btn-badge-ctn { position: absolute; inset-inline-start: 100%; top: 0.25rem; z-index: 1; display: flex; width: max-content; translate: -50% -50%; border-radius: 0.375rem; background: var(--ps-sheet-bg); }
-[dir="rtl"] .ps-sheet-filters-trigger > .fi-icon-btn-badge-ctn { translate: 50% -50%; }
-.ps-sheet-filters-above .ps-sheet-filters-header { grid-column: 1 / -1; }
+/* the funnel: the count of active filters sits in the icon button's own badge slot (fi-icon-btn-badge-ctn), on its top-right corner */
+.ps-sheet-filters-trigger { display: inline-flex; }
 
 /* ------------------------------------------------------------------ an indicator strip under the toolbar (fi-ta-selection-indicator) */
 

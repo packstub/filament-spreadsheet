@@ -5,12 +5,12 @@ namespace Packstub\Spreadsheet\Concerns;
 use Filament\Schemas\Schema;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Renderless;
+use Packstub\Spreadsheet\Enums\FiltersLayout;
 use Packstub\Spreadsheet\Exceptions\SaveRejected;
 use Packstub\Spreadsheet\Filter;
 use Packstub\Spreadsheet\SavePayload;
 use Packstub\Spreadsheet\SaveResult;
 use Packstub\Spreadsheet\Spreadsheet;
-use Packstub\Spreadsheet\Support\FilterSelect;
 
 /**
  * The server side of a sheet, for any Livewire component (the plugin's pages use
@@ -90,97 +90,37 @@ trait InteractsWithSpreadsheet
     }
 
     /**
-     * A select filter's options (`{value, label}`, at most its limit), or the ones matching a
-     * search: what Filament's select asks for when it opens or when the user types.
+     * The filters' fields hold their state here (Filament's fields need a Livewire
+     * path); the browser owns the real state and keeps this one in step
+     * (`syncFields()`), never the other way round: a change is dispatched by the
+     * field (`Filter::toFormComponent()`) and applied by the Alpine component.
      *
-     * @return list<array{value: string, label: string}>
+     * @var array<string, mixed>
      */
-    #[Renderless]
-    public function spreadsheetFilterOptions(mixed $name, mixed $search = null): array
-    {
-        $filter = is_string($name) ? $this->spreadsheetFilter($name) : null;
-
-        if ($filter === null || ! ($filter->isSelect() || $filter->isBoolean()) || ($search !== null && ! is_string($search))) {
-            return [];
-        }
-
-        $search = $search === null ? '' : mb_substr(trim($search), 0, 200);
-
-        $options = $search === ''
-            ? array_slice($filter->getOptions(), 0, $filter->getOptionsLimit(), preserve_keys: true)
-            : $filter->getSearchResults($search);
-
-        return collect($options)->map(fn ($label, $value) => ['value' => (string) $value, 'label' => (string) $label])->values()->all();
-    }
-
-    /** The label of a select filter's value (one the listed options do not hold: a searchable filter's pick, a value from the URL). */
-    #[Renderless]
-    public function spreadsheetFilterOptionLabel(mixed $name, mixed $value = null): ?string
-    {
-        $filter = is_string($name) ? $this->spreadsheetFilter($name) : null;
-
-        return $filter === null || ! ($filter->isSelect() || $filter->isBoolean()) || ! is_string($value) || $value === '' ? null : $filter->getOptionLabel($value);
-    }
+    public array $spreadsheetFilters = [];
 
     /**
-     * The labels of a multiple select filter's values (ones restored from the URL),
-     * as the browser's select expects them; a value with no label is left out.
-     *
-     * @return list<array{value: string, label: string}>
+     * Every field's path exists before the browser entangles it (Livewire refuses a
+     * missing one), as a Filament page fills its form on mount. Livewire runs this
+     * trait hook on the first request only; later requests carry the browser's state.
      */
-    #[Renderless]
-    public function spreadsheetFilterOptionLabels(mixed $name, mixed $values = []): array
+    public function mountInteractsWithSpreadsheet(): void
     {
-        $filter = is_string($name) ? $this->spreadsheetFilter($name) : null;
-
-        if ($filter === null || ! ($filter->isSelect() || $filter->isBoolean()) || ! is_array($values)) {
-            return [];
-        }
-
-        $labels = [];
-
-        // At most optionsLimit() distinct values: each one not among the options costs a getOptionLabelUsing() call.
-        $values = array_slice(array_values(array_unique(array_filter($values, fn ($value) => (is_string($value) && $value !== '' && mb_strlen($value) <= 255) || is_int($value)))), 0, $filter->getOptionsLimit());
-
-        foreach ($values as $value) {
-            $label = $filter->getOptionLabel($value);
-
-            if ($label !== null) {
-                $labels[] = ['value' => (string) $value, 'label' => $label];
-            }
-        }
-
-        return $labels;
+        $this->getSchema('spreadsheetFiltersForm')?->fill();
     }
 
-    /**
-     * A schema never rendered, one FilterSelect per select filter, keyed
-     * `spreadsheetFilters.<filter>`: Filament 4.16+ and 5.11+ ask a select's options
-     * through `callSchemaComponentMethod` with that key (see partials/select).
-     * Filament caches it by name on the first call.
-     */
-    public function spreadsheetFiltersSchema(Schema $schema): Schema
+    /** The filters as Filament's own form components, where filtersLayout() puts them. */
+    public function spreadsheetFiltersForm(Schema $schema): Schema
     {
-        $components = [];
+        $sheet = $this->getSpreadsheet();
+        $inline = $sheet->getFiltersLayout() === FiltersLayout::Toolbar;
 
-        foreach ($this->getSpreadsheet()->getFilters() as $filter) {
-            if ($filter->isSelect() || $filter->isBoolean()) {
-                $components[] = FilterSelect::make($filter->getName())->key($filter->getName());
-            }
-        }
-
-        return $schema->components($components);
-    }
-
-    protected function spreadsheetFilter(string $name): ?Filter
-    {
-        foreach ($this->getSpreadsheet()->getFilters() as $filter) {
-            if ($filter->getName() === $name) {
-                return $filter;
-            }
-        }
-
-        return null;
+        return $schema
+            ->statePath('spreadsheetFilters')
+            ->components(array_map(
+                fn (Filter $filter) => $filter->toFormComponent($inline, (int) config('packstub-spreadsheet.first_day_of_week', 1), config('packstub-spreadsheet.date_format') ?? 'M j, Y'),
+                $sheet->getFilters(),
+            ));
     }
 
     /** @return array<string, mixed> */

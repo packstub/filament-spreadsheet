@@ -2,7 +2,9 @@
  * A stand-alone page for the sheet: the real Blade view turned into static HTML,
  * the built bundle, Alpine from a CDN, a fake $wire with an in-memory "server"
  * (250 products, paging, sorting, search, a save that validates and can fake a
- * conflict) and a fake Livewire (the commit hook, a commit that fails). Used by run.mjs (headless Chromium) and openable by hand:
+ * conflict; the component's data Filament's filter fields entangle, set without a
+ * request and watched, and the schema calls Filament's select makes) and a fake
+ * Livewire (the commit hook, a commit that fails, fireAction). Used by run.mjs (headless Chromium) and openable by hand:
  *
  *   node tests/browser/harness.mjs            writes tests/browser/.harness.html and serves it on :4177
  *
@@ -42,7 +44,7 @@ export const config = {
         { name: 'margin', label: 'Margin', type: 'computed', width: null, frozen: false, editable: false, readOnly: true, sortable: false, placeholder: null, default: null, formula: ['op', '-', ['ref', 'price'], ['ref', 'cost']], decimals: 2 },
     ],
     filters: [
-        { name: 'category_id', label: 'Category', type: 'select', multiple: false, searchable: false, optionsLimit: 50, options: [{ value: '1', label: 'Tools' }, { value: '2', label: 'Paint' }, { value: '3', label: 'Garden' }] },
+        { name: 'category_id', label: 'Category', type: 'select', multiple: false, searchable: true, optionsLimit: 50, options: [{ value: '1', label: 'Tools' }, { value: '2', label: 'Paint' }, { value: '3', label: 'Garden' }] },
         { name: 'is_active', label: 'Active', type: 'boolean', multiple: false, searchable: false, optionsLimit: 50, options: [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }] },
         { name: 'available_on', label: 'Available', type: 'dateRange', multiple: false, searchable: false, optionsLimit: 50, options: [] },
     ],
@@ -168,19 +170,59 @@ window.Livewire = (() => {
             for (const callback of listeners.commit ?? []) callback({ component: { id }, commit: { calls: methods.map((method) => ({ method, params: [] })) }, respond() {}, succeed() {}, fail: (f) => fails.push(f) })
             fails.forEach((f) => f())
         },
+        // Filament's schema script registers a message interceptor on load (dispatches awaiting a schema component); nothing is sent here
+        interceptMessage: () => () => {},
+        // Filament's select calls its schema component through this (callSchemaComponentMethod on the component)
+        fireAction: (instance, method, params = []) => Promise.resolve(window.__wire[method](...params)),
     }
 })()
 
-window.__wire = {
-    $id: 'harness-component',
-    spreadsheetRows: async (req) => JSON.parse(JSON.stringify(window.__server.rows(req))),
-    // what Filament's select asks a filter for: its options, a search over their labels, a value's label
-    spreadsheetFilterOptions: async (name, search = null) => { const f = window.__config.filters.find((x) => x.name === name); const q = (search ?? '').toLowerCase(); return f ? f.options.filter((o) => ! q || o.label.toLowerCase().includes(q)) : [] },
-    spreadsheetFilterOptionLabel: async (name, value) => window.__config.filters.find((x) => x.name === name)?.options.find((o) => o.value === String(value))?.label ?? null,
-    spreadsheetFilterOptionLabels: async (name, values) => (values ?? []).map((v) => ({ value: String(v), label: window.__config.filters.find((x) => x.name === name)?.options.find((o) => o.value === String(v))?.label })).filter((o) => o.label),
-    spreadsheetSave: async (payload) => JSON.parse(JSON.stringify(window.__server.save(payload))),
-    spreadsheetDelete: async (ids) => JSON.parse(JSON.stringify(window.__server.save({ deleted: ids }))),
-}
+// What the component sees of $wire: the renderless calls, and Livewire's own data API the filters' fields use
+// (Filament's Select, Toggle and DatePicker entangle a path of the component's data, the schema watches it for
+// afterStateUpdatedJs, the sheet writes its state into it with $set(path, value, false), no request).
+window.__wire = (() => {
+    const get = (obj, path) => path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj)
+    const set = (obj, path, value) => { const keys = path.split('.'); let o = obj; for (const k of keys.slice(0, -1)) { if (o[k] == null || typeof o[k] !== 'object') o[k] = {}; o = o[k] }; o[keys.at(-1)] = value }
+    const clone = (v) => v === undefined ? undefined : JSON.parse(JSON.stringify(v))
+    let store = null
+    // the component's data, reactive so the fields follow a $set (made once Alpine is there: the fields ask after Alpine.start())
+    const data = () => store ??= window.Alpine.reactive({})
+    const filterOf = (key) => window.__config.filters.find((f) => 'spreadsheetFiltersForm.' + f.name === key)
+    const options = (f, values) => f.options.filter((o) => values.map(String).includes(o.value)).map((o) => ({ label: o.label, value: o.value }))
+    const wire = {
+        $id: 'harness-component',
+        __instance: { id: 'harness-component' },
+        calls: { set: [], schema: [] },
+        data,
+        spreadsheetRows: async (req) => JSON.parse(JSON.stringify(window.__server.rows(req))),
+        spreadsheetSave: async (payload) => JSON.parse(JSON.stringify(window.__server.save(payload))),
+        spreadsheetDelete: async (ids) => JSON.parse(JSON.stringify(window.__server.save({ deleted: ids }))),
+        $get: (path) => get(data(), path),
+        $set: (path, value, live = true) => { wire.calls.set.push({ path, value: clone(value), live }); set(data(), path, clone(value)); return Promise.resolve() },
+        watch: (path, callback) => { let first = true, old; window.Alpine.effect(() => { const value = clone(get(data(), path) ?? null); if (first) { first = false; old = value; return } callback(value, old); old = value }) },
+        $entangle: (path, live = false) => window.Alpine.interceptor((initialValue, getter, setter) => {
+            queueMicrotask(() => window.Alpine.entangle({ get: () => get(data(), path), set: (value) => wire.$set(path, value, live) }, { get: getter, set: setter }))
+
+            return clone(get(data(), path)) ?? null
+        })(),
+        // what Filament's select asks its schema component for, by the field's key: the options, a search over their labels, the labels of what is chosen
+        callSchemaComponentMethod: async (key, method, args = {}) => {
+            wire.calls.schema.push({ key, method, args })
+            const f = filterOf(key)
+            if (! f) return null
+            const state = get(data(), 'spreadsheetFilters.' + f.name)
+            const q = (args.search ?? '').toLowerCase()
+            if (method === 'getOptionsForJs') return options(f, f.options.map((o) => o.value))
+            if (method === 'getSearchResultsForJs') return f.options.filter((o) => ! q || o.label.toLowerCase().includes(q)).map((o) => ({ label: o.label, value: o.value }))
+            if (method === 'getOptionLabelsForJs') return options(f, Array.isArray(state) ? state : [])
+            if (method === 'getOptionLabel') return options(f, state == null || state === '' ? [] : [state])[0]?.label ?? null
+
+            return null
+        },
+    }
+
+    return wire
+})()
 `
 
 const tokens = `
@@ -241,6 +283,7 @@ ${render(cfg.filtersLayout).styles}
 <style>${tokens}</style>
 ${lateCss ? '' : '<link rel="stylesheet" href="/resources/dist/spreadsheet.css">'}
 <script src="/vendor/filament/support/dist/index.js"></script>
+<script src="/vendor/filament/schemas/dist/index.js"></script>
 </head>
 <body>
 <h1 style="font-size:1.25rem;margin:0 0 .75rem">Products</h1>
@@ -260,6 +303,12 @@ Alpine.data('packstubSpreadsheet', packstubSpreadsheet)
 window.Alpine = Alpine
 window.sheet = () => Alpine.$data(document.querySelector('.ps-sheet'))
 Alpine.start()
+// Livewire's wire:model on a native field (a plain select filter): the element shows the component's data and a change sets it, no request
+for (const el of document.querySelectorAll('[wire\\\\:model]')) {
+    const path = el.getAttribute('wire:model')
+    Alpine.effect(() => { const value = window.__wire.$get(path); el.value = value == null ? '' : String(value) })
+    el.addEventListener('change', () => window.__wire.$set(path, el.value, false))
+}
 window.__ready = true
 ${lateCss ? "window.__loadCss = () => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/resources/dist/spreadsheet.css'; l.onload = () => window.dispatchEvent(new Event('packstub-spreadsheet-css')); document.head.append(l) }; " + (lateCss === 'manual' ? '' : 'setTimeout(window.__loadCss, ' + (Number(lateCss) || 300) + ')') : ''}
 </script>

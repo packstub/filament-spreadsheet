@@ -4,7 +4,14 @@ namespace Packstub\Spreadsheet;
 
 use Carbon\CarbonImmutable;
 use Closure;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Group;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Js;
 use LogicException;
 
 /**
@@ -26,6 +33,9 @@ use LogicException;
  */
 class Filter
 {
+    /** The browser event a field dispatches when its state changes (`{ name, value }`; a date range adds `edge`). */
+    public const EVENT = 'ps-sheet-filter';
+
     public const SELECT = 'select';
 
     public const BOOLEAN = 'boolean';
@@ -291,6 +301,80 @@ class Filter
         $label = $this->optionLabel ? ($this->optionLabel)((string) $value) : null;
 
         return $label === null ? null : (string) $label;
+    }
+
+    // ------------------------------------------------------------------ the field
+
+    /**
+     * The filter as Filament's own form component: a `Select` (native for one option,
+     * Filament's for several or a search), a `Toggle`, or two `DatePicker`s in a
+     * fieldset. Rendered by the component's filters schema; the state stays the
+     * browser's: every change is dispatched as a `ps-sheet-filter` event
+     * (`afterStateUpdatedJs`) and the Alpine component applies it, so no Livewire
+     * round trip and the same URL state as before. `$inline` is the toolbar layout:
+     * the label as the field's prefix instead of over it.
+     */
+    public function toFormComponent(bool $inline = false, ?int $firstDayOfWeek = null, ?string $displayFormat = null): Component
+    {
+        $label = $this->getLabel();
+        $event = Js::from(static::EVENT)->toHtml();
+        $name = Js::from($this->name)->toHtml();
+
+        if ($this->isToggle()) {
+            $this->assertUsable();
+
+            return Toggle::make($this->name)
+                ->label($label)
+                ->inline()
+                ->afterStateUpdatedJs("\$dispatch({$event}, { name: {$name}, value: \$state === true })");
+        }
+
+        if ($this->isDateRange()) {
+            $picker = fn (string $edge, string $prefix): DatePicker => DatePicker::make($edge)
+                ->label(__("packstub-spreadsheet::spreadsheet.{$edge}"))
+                ->hiddenLabel($inline)
+                ->prefix($inline ? $prefix : null)
+                ->native(false)
+                ->format('Y-m-d')
+                ->displayFormat($displayFormat)
+                ->firstDayOfWeek($firstDayOfWeek)
+                ->closeOnDateSelection()
+                ->afterStateUpdatedJs("\$dispatch({$event}, { name: {$name}, edge: '{$edge}', value: \$state })");
+
+            $fields = [$picker('from', $label), $picker('until', '–')];
+
+            return ($inline ? Group::make($fields) : Fieldset::make($label)->schema($fields))
+                ->statePath($this->name)
+                ->columns(2);
+        }
+
+        return Select::make($this->name)
+            ->label($label)
+            ->hiddenLabel($inline)
+            ->prefix($inline ? $label : null)
+            ->placeholder(__('packstub-spreadsheet::spreadsheet.all'))
+            ->options(fn (): array => $this->isBoolean()
+                ? ['1' => __('packstub-spreadsheet::spreadsheet.yes'), '0' => __('packstub-spreadsheet::spreadsheet.no')]
+                : array_slice($this->getOptions(), 0, $this->optionsLimit, preserve_keys: true))
+            ->multiple($this->isMultiple())
+            ->searchable($this->isSearchable())
+            ->preload($this->isPreloaded())
+            ->optionsLimit($this->optionsLimit)
+            ->getSearchResultsUsing(fn (string $search): array => $this->getSearchResults(mb_substr(trim($search), 0, 200)))
+            ->getOptionLabelUsing(fn ($value): ?string => (is_string($value) || is_int($value)) && $value !== '' ? $this->getOptionLabel($value) : null)
+            ->getOptionLabelsUsing(function (array $values): array {
+                $labels = [];
+
+                // At most optionsLimit() distinct values: each one not among the options costs a getOptionLabelUsing() call.
+                foreach (array_slice(array_values(array_unique(array_filter($values, fn ($value) => (is_string($value) && $value !== '' && mb_strlen($value) <= 255) || is_int($value)))), 0, $this->optionsLimit) as $value) {
+                    if (($label = $this->getOptionLabel($value)) !== null) {
+                        $labels[$value] = $label;
+                    }
+                }
+
+                return $labels;
+            })
+            ->afterStateUpdatedJs("\$dispatch({$event}, { name: {$name}, value: \$state })");
     }
 
     // ------------------------------------------------------------------ applying

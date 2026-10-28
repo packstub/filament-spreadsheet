@@ -38,13 +38,24 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   `query()` throws from `getSpreadsheetConfig()`), `Enums/{SaveMode,FiltersLayout}.php`, `Events/{RowsSaved,RowSaveFailed}.php`,
   `Exceptions/{SaveRejected,InvalidValue,RolledBack}.php`.
 - `resources/views/spreadsheet.blade.php` is the table-style container (`ps-sheet-toolbar` with `-start` / `-end`
-  groups, the grid, `ps-sheet-footer`); the filters are rendered once, in Blade, where `filtersLayout()` says (none
-  without filters): `filters.blade.php` (a row per filter, `$stacked` for the funnel panel and the "above" row) over
-  `partials/select.blade.php` (Filament's `selectFormComponent`, fed by the renderless `spreadsheetFilterOptions` /
-  `spreadsheetFilterOptionLabel` / `spreadsheetFilterOptionLabels`, a pick through `pickSelect()`) and
-  `partials/date-picker.blade.php` (Filament's `dateTimePickerFormComponent`, a pick through `pickFilter()`; the
-  config's `date_format` and `first_day_of_week`). The kit files and the shared `shared.css` block at the top of the
-  stylesheet are the same in Kanban and Gantt with their own prefix: change them there too.
+  groups, the grid, `ps-sheet-footer`); the filters are rendered once, where `filtersLayout()` says (none without
+  filters), as Filament's own form components (`Select`, `Toggle`, `DatePicker`, a `Fieldset` for a date range) built
+  by `Filter::toFormComponent()` and rendered through the component's `spreadsheetFiltersForm` schema (statePath
+  `spreadsheetFilters`, filled on mount by `mountInteractsWithSpreadsheet()`; the component needs `HasSchemas` /
+  `InteractsWithSchemas`, the pages have it, the view throws without). No copied Filament markup: a searchable select's
+  search goes through Filament's own `callSchemaComponentMethod`. The state stays the browser's: each field dispatches
+  its change with `afterStateUpdatedJs` (`ps-sheet-filter` `{name, value, edge?}`) to `setFilter()`, and the browser
+  writes its state back into the fields without a request (`syncFields()`: `$wire.$set('spreadsheetFilters', …,
+  false)`), so Reset shows in the fields; `pickSelect()` / `pickFilter()` ignore an echo equal to what they hold. The
+  funnel dropdown is `:menu="false"` (a menu would take the keys typed in a search) and its count sits in the icon
+  button's `badge` slot, as the Save and Delete rows counts sit in the button's. The dropdown panel and the "above" row
+  wear `fi-ta-filters` / `fi-ta-filters-header` / `fi-ta-filters-heading` beside the `ps-sheet-filters-*` hooks; the
+  config's `date_format` and `first_day_of_week` go to the date pickers. The browser's `isActive()`, `setFilter()`,
+  `pickSelect()`, `pickFilter()`, `resetFilters()`, `activeFilterCount()` have the same names in Kanban and Gantt. The
+  kit files and the shared `shared.css` block at the top of the stylesheet are the same in Kanban and Gantt with their
+  own prefix: change them there too. The browser harness fakes `$wire` (`$get`, `$set` with the deferred flag,
+  `watch`, `$entangle`, `callSchemaComponentMethod`) and `Livewire.fireAction`, and emulates `wire:model` on a native
+  select; `HarnessRenderTest` renders the fixture with a searchable Category so Filament's select component is driven.
 - `src/Columns/Column.php` + `Text|Number|Boolean|Select|Date|DateTime|ComputedColumn.php`: `present()` (record → wire),
   `coerce()` (wire → attribute, throws `InvalidValue` with the cell message), `getRules()` (own rules with `unique`
   ignoring the record + type rules), `toArray()` (what the grid needs). A `SelectColumn::relationship()` loads its

@@ -68,6 +68,8 @@ export default function packstubSpreadsheet(config) {
 
         init() {
             for (const f of this.filters) this.active[f.name] = S.emptyFilterState(f)
+            // Filament's fields (the filters) show what the browser holds from the start.
+            this.syncFields()
 
             this._req = 0
             // What the grid shows: the page, page size and sort of the last answer applied, and the search and
@@ -407,16 +409,54 @@ export default function packstubSpreadsheet(config) {
         /*
          * `active[filter.name]` holds each filter's state in the shapes the server's Filter::state() gives
          * ('' / a value, a list for a multiple select, true / false for a toggle, { from, until } for a date
-         * range); the fields are Filament's own components, which report a pick through these. The same names
-         * in Kanban and Gantt.
+         * range). The fields are Filament's own form components (the spreadsheetFiltersForm schema): each one
+         * dispatches its change as a `ps-sheet-filter` event that setFilter() applies, and the browser writes
+         * its state back into the fields without a request (syncFields()). The same names in Kanban and Gantt.
          */
 
-        /** Whether a filter narrows the rows (its field wears the primary ring, the funnel counts it). */
+        /** Whether a filter narrows the rows (the funnel counts it). */
         isActive(filter) {
             return S.filterIsActive(filter, this.active[filter.name])
         },
 
-        /** A select's pick (Filament's select reports its state): one value, '' for none, a list for a multiple. */
+        /**
+         * A filter's field changed (its `ps-sheet-filter` event): a select's value or list, a toggle's
+         * boolean, or one edge of a date range. The fields echo what syncFields() sets, so a value equal
+         * to the active one is nothing.
+         */
+        setFilter(name, value, edge = undefined) {
+            const filter = this.filters.find((f) => f.name === name)
+            if (! filter) return
+            if (filter.type === 'dateRange') return this.pickFilter(name, edge, value)
+            if (filter.type === 'toggle') {
+                const on = value === true
+                if ((this.active[name] === true) === on) return
+                this.active[name] = on
+                return this.refresh()
+            }
+            this.pickSelect(name, value)
+        },
+
+        /** The active filters in the shape the fields hold (null for "all"), set on the component without a request. */
+        fieldState() {
+            const out = {}
+            for (const f of this.filters) {
+                const v = this.active[f.name]
+                if (f.type === 'dateRange') out[f.name] = { from: v?.from || null, until: v?.until || null }
+                else if (f.type === 'toggle') out[f.name] = v === true
+                else if (f.multiple) out[f.name] = Array.isArray(v) ? v : []
+                else out[f.name] = v === '' || v === null || v === undefined ? null : v
+            }
+            return out
+        },
+
+        /** The fields follow the browser's state (Reset, a pick made elsewhere); no request is sent. */
+        syncFields() {
+            if (! this.filters.length) return
+            try { this.$wire.$set('spreadsheetFilters', this.fieldState(), false) } catch (e) {}
+        },
+
+        /** A select's pick (Filament's select reports its state): one value, '' or null for none, a list for a multiple; one equal to the active state is nothing. */
         pickSelect(name, value) {
             const filter = this.filters.find((f) => f.name === name)
             if (! filter) return
@@ -426,7 +466,7 @@ export default function packstubSpreadsheet(config) {
             this.refresh()
         },
 
-        /** A date range's side from its picker: the day as `Y-m-d` (the picker reports `Y-m-d H:i:s`), or null when cleared. */
+        /** A date range's side from its picker: the day as `Y-m-d`, or null when cleared; one equal to the active day is nothing. */
         pickFilter(name, side, value) {
             if (side !== 'from' && side !== 'until') return
             const day = S.filterDay(value)
@@ -436,18 +476,14 @@ export default function packstubSpreadsheet(config) {
             this.refresh()
         },
 
-        /** A toggle's checkbox: on or off. */
-        toggleFilter(filter) {
-            this.active[filter.name] = this.active[filter.name] !== true
-            this.refresh()
-        },
-
         activeFilterCount() {
             return S.activeFilterCount(this.filters, this.active)
         },
 
+        /** Every filter back to "all" (the fields too), then one reload. */
         resetFilters() {
             for (const f of this.filters) this.active[f.name] = S.emptyFilterState(f)
+            this.syncFields()
             this.refresh()
         },
 
