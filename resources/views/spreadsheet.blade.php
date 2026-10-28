@@ -141,7 +141,8 @@
             @elseif ($hasFilters && $filtersLayout === 'dropdown')
                 {{-- the filters behind a funnel button: the count of active ones on the button, a heading and a Reset link in the panel --}}
                 <div class="ps-sheet-filters-dropdown">
-                    <x-filament::dropdown placement="bottom-end" width="xs">
+                    {{-- a panel of fields, not a menu: Filament 5.10+ would take the keys typed in a select's search for menu navigation --}}
+                    <x-filament::dropdown placement="bottom-end" width="xs" :menu="false">
                         <x-slot name="trigger">
                             <div class="ps-sheet-filters-trigger">
                                 <x-filament::icon-button color="gray" :icon="Heroicon::OutlinedFunnel" :label="__('packstub-spreadsheet::spreadsheet.filters')" class="ps-sheet-filters-btn" x-bind:title="t.filters" />

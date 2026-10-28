@@ -5,14 +5,19 @@
     markup follows Filament's DateTimePicker::toEmbeddedHtml() so the forms stylesheet
     styles it; only the state binding and the pick event differ.
 
+    Two shapes of the component are served: up to Filament 5.9 / 4.15 the panel is an
+    `x-float` popover (`$refs.panel.toggle()`) over a flat list of days; from 5.10 / 4.16
+    the component keeps `isPanelOpen` itself, positions the panel, lays the month out
+    in rows of seven (`weeksInFocusedMonth`), focuses a day by its `data-date` and
+    handles the keys on the trigger and the grid. Each attribute below asks which one
+    it is talking to, so one partial serves both.
+
     @param  string  $model  the expression holding a `Y-m-d` string (`active[filter.name].from`)
     @param  string  $pick   what to run on a pick, with `$event.detail`
     @param  string  $label  a JS expression for the accessible name
 --}}
 @php
-    // The sheet's date format (what a date cell shows, the config's `date_format`) and first day of the week.
     $displayFormat = convert_date_format(config('packstub-spreadsheet.date_format') ?? 'M j, Y')->to('day.js');
-    $firstDayOfWeek ??= (int) config('packstub-spreadsheet.first_day_of_week', 1);
 @endphp
 <div
     x-load
@@ -28,7 +33,10 @@
     })"
     x-effect="state = ({{ $model }}) || null"
     x-on:ps-sheet-pick="{{ $pick }}"
-    x-on:keydown.esc="isOpen() && $event.stopPropagation()"
+    {{-- 5.10+ closes its own panel; before, x-float closes on a click outside --}}
+    x-on:click.outside="typeof isPanelOpen !== 'undefined' && isOpen() && closePanel()"
+    x-on:focusout="typeof handleFocusOut === 'function' ? handleFocusOut($event) : (isOpen() && ! $el.contains($event.relatedTarget) && $refs.panel.close())"
+    x-on:keydown.esc="if (isOpen()) { $event.stopPropagation(); if (typeof isPanelOpen !== 'undefined') { $event.preventDefault(); closePanel(true) } }"
     class="fi-fo-date-time-picker"
 >
     <input x-ref="maxDate" type="hidden" value="" />
@@ -39,13 +47,15 @@
         x-ref="button"
         x-on:click="togglePanelVisibility()"
         x-on:keydown.enter.prevent.stop="isOpen() ? (selectDate(), $dispatch('ps-sheet-pick', state)) : togglePanelVisibility()"
-        x-on:keydown.arrow-left.prevent.stop="focusPreviousDay()"
-        x-on:keydown.arrow-right.prevent.stop="focusNextDay()"
-        x-on:keydown.arrow-up.prevent.stop="focusPreviousWeek()"
-        x-on:keydown.arrow-down.prevent.stop="focusNextWeek()"
+        x-on:keydown.space.prevent.stop="typeof handleTriggerKeydown === 'function' ? handleTriggerKeydown($event) : togglePanelVisibility()"
+        x-on:keydown.arrow-left.prevent.stop="typeof handleTriggerKeydown === 'function' ? handleTriggerKeydown($event) : focusPreviousDay()"
+        x-on:keydown.arrow-right.prevent.stop="typeof handleTriggerKeydown === 'function' ? handleTriggerKeydown($event) : focusNextDay()"
+        x-on:keydown.arrow-up.prevent.stop="typeof handleTriggerKeydown === 'function' ? handleTriggerKeydown($event) : focusPreviousWeek()"
+        x-on:keydown.arrow-down.prevent.stop="typeof handleTriggerKeydown === 'function' ? handleTriggerKeydown($event) : focusNextWeek()"
         x-on:keydown.backspace.prevent.stop="clearState(); $dispatch('ps-sheet-pick', null)"
         x-on:keydown.delete.prevent.stop="clearState(); $dispatch('ps-sheet-pick', null)"
         x-bind:aria-label="{{ $label }}"
+        x-bind:aria-expanded="isOpen() ? 'true' : 'false'"
         type="button"
         class="fi-fo-date-time-picker-trigger"
     >
@@ -55,7 +65,11 @@
     <div
         x-ref="panel"
         x-cloak
+        role="dialog"
+        x-bind:aria-label="{{ $label }}"
         x-float.placement.bottom-start.offset.flip.shift="{ offset: 8 }"
+        {{-- 5.10+ shows the panel from isPanelOpen and sets left/top itself; before, x-float toggles the display --}}
+        x-bind:style="typeof isPanelOpen === 'undefined' ? {} : { display: isPanelOpen ? 'block' : 'none' }"
         class="fi-fo-date-time-picker-panel"
     >
         <div class="fi-fo-date-time-picker-panel-header">
@@ -73,7 +87,13 @@
             </template>
         </div>
 
-        <div role="grid" class="fi-fo-date-time-picker-calendar">
+        <div
+            x-ref="calendar"
+            role="grid"
+            tabindex="-1"
+            x-on:keydown="typeof handleCalendarKeydown === 'function' && handleCalendarKeydown($event)"
+            class="fi-fo-date-time-picker-calendar"
+        >
             {{-- Filament 5.10+ and 4.16+ lay the month out in rows of seven (null for a blank cell) --}}
             <template x-if="typeof weeksInFocusedMonth !== 'undefined'">
                 <div style="display: contents">
@@ -83,7 +103,10 @@
                                 <div
                                     role="gridcell"
                                     x-text="day"
-                                    x-on:click="day && ! dayIsDisabled(day) && (selectDate(day), $dispatch('ps-sheet-pick', state))"
+                                    x-bind:data-date="day ? focusedDate.date(day).format('YYYY-MM-DD') : null"
+                                    x-bind:tabindex="day ? (focusedDate.date() === day ? 0 : -1) : null"
+                                    x-on:focus="day && setFocusedDay(day)"
+                                    x-on:click="if (day && ! dayIsDisabled(day)) { $el.focus(); selectDate(day); $dispatch('ps-sheet-pick', state) }"
                                     x-on:mouseenter="day && setFocusedDay(day)"
                                     x-bind:aria-selected="day && dayIsSelected(day) ? 'true' : 'false'"
                                     x-bind:aria-disabled="day && dayIsDisabled(day) ? 'true' : 'false'"
