@@ -50,14 +50,14 @@ The same `Filter` class as Kanban and Gantt, with the same types:
 | `->multiple()` | the same select taking several options | a list of keys | `whereIn(column, values)` |
 | `->searchable()` | the select with a search box | the typed key (any key: the query decides) | `where(column, value)` |
 | `Filter::boolean('column')` | a *Yes* / *No* select | `true` or `false` | `where(column, true\|false)` |
-| `Filter::toggle('name')` | one checkbox with the label | `true` (off, it is not called) | none: `query()` is required (the sheet refuses to render without it) |
+| `Filter::toggle('name')` | Filament's toggle with the label | `true` (off, it is not called) | none: `query()` is required (the sheet refuses to render without it) |
 | `Filter::dateRange('column')` | Filament's date picker twice, *From* and *Until*, either side open | `['from' => ?string, 'until' => ?string]`, each `Y-m-d` | `where(column, >=, from)` and `where(column, <, the day after until)`, plain ranges so the column's index stays in use |
 
 `options()` takes an array or a closure (run once per request). A searchable select lists its options with the sheet (`preload()`, the default) and filters them on the server as the user types, by label unless `getSearchResultsUsing()` says otherwise; `preload(false)` sends nothing until the user types; `getOptionLabelUsing()` names a picked value the list does not hold; `optionsLimit()` caps what is listed or found (50), and also the values a searchable multiple filter accepts from the browser or the URL and the label lookups it answers (a value longer than 255 characters is dropped; a search term is read up to 200 characters). `label()` takes a string or a closure; the default is the name as a headline without `_id` / `_at`.
 
 A value the filter did not offer is ignored: a plain select takes one of its options and nothing else (per value for a multiple one), a boolean *1* or *0*, a toggle anything true, a date range real calendar days only (`2026-02-30` never reaches the query). The browser cannot inject a raw value.
 
-The browser holds each filter's state in the shape `Filter::state()` gives (`''` or a key, a list, `true` / `false`, `{from, until}`), and the component's `spreadsheetFilterOptions(name, search)`, `spreadsheetFilterOptionLabel(name, value)` and `spreadsheetFilterOptionLabels(name, values)` answer Filament's select renderless. A filter that narrows the rows wears the primary ring and counts on the funnel button.
+The fields are Filament's own form components (`Select`, `Toggle`, `DatePicker`), built by `Filter::toFormComponent()` and rendered through the component's `spreadsheetFiltersForm` schema, so they look and behave exactly like a form's; a searchable select's search goes through the component's schema (`callSchemaComponentMethod`), nothing on the page re-renders. The browser holds each filter's state in the shape `Filter::state()` gives (`''` or a key, a list, `true` / `false`, `{from, until}`): a field dispatches its change to the sheet, which reloads the rows renderless and writes its state back into the fields, so Reset clears the fields as well as the rows. A filter that narrows the rows counts on the funnel button.
 
 ## Pagination
 

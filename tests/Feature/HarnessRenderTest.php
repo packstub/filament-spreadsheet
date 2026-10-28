@@ -2,6 +2,8 @@
 
 use Filament\Support\Facades\FilamentAsset;
 use Livewire\Livewire;
+use Packstub\Spreadsheet\Filter;
+use Packstub\Spreadsheet\Tests\Fixtures\Category;
 use Packstub\Spreadsheet\Tests\Fixtures\ProductSheet;
 
 /**
@@ -21,7 +23,23 @@ it('renders the sheet view for the browser harness', function (): void {
         config()->set('packstub-spreadsheet.filters_layout', $layout);
     }
 
-    $html = Livewire::mount(ProductSheet::class);
+    // The harness's three filters: a searchable Category (Filament's own select component, so the harness drives it),
+    // a Yes / No boolean (a native select) and a date range; the categories are the harness's own, by id.
+    foreach (['Tools', 'Paint', 'Garden'] as $name) {
+        category($name);
+    }
+
+    ProductSheet::$filters = [
+        Filter::select('category_id')->searchable()->options(fn () => Category::query()->orderBy('id')->pluck('name', 'id')->all()),
+        Filter::boolean('is_active'),
+        Filter::dateRange('available_on'),
+    ];
+
+    try {
+        $html = Livewire::mount(ProductSheet::class);
+    } finally {
+        ProductSheet::$filters = null;
+    }
     $start = strpos($html, '<div', strpos($html, '<div') + 1); // the fixture wraps the sheet in one div
     $end = strrpos($html, '</div>', -7); // the last </div> is the wrapper's, the one before it the sheet root's
     $view = substr($html, $start, $end + 6 - $start);

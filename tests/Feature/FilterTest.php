@@ -213,66 +213,97 @@ it('sends the browser each filter\'s shape: name, label, type, multiple, searcha
         ->and(array_keys(Filter::dateRange('available_on')->toArray()))->toBe(['name', 'label', 'type', 'multiple', 'searchable', 'optionsLimit', 'options']);
 });
 
-it('answers a select filter\'s options, a search, a value\'s label and several labels renderless', function (): void {
-    $tools = category('Tools');
-    $paint = category('Paint');
+/* ------------------------------------------------------------------ the fields: Filament's own components */
 
-    Livewire::test(ProductSheet::class)
-        ->call('spreadsheetFilterOptions', 'category_id')
-        ->assertReturned([['value' => (string) $tools->id, 'label' => 'Tools'], ['value' => (string) $paint->id, 'label' => 'Paint']])
-        ->call('spreadsheetFilterOptions', 'category_id', 'pai')
-        ->assertReturned([['value' => (string) $paint->id, 'label' => 'Paint']])
-        ->call('spreadsheetFilterOptions', 'is_active')
-        ->assertReturned([['value' => '1', 'label' => 'Yes'], ['value' => '0', 'label' => 'No']])
-        ->call('spreadsheetFilterOptions', 'available_on')
-        ->assertReturned([])
-        ->call('spreadsheetFilterOptions', 'nope')
-        ->assertReturned([])
-        ->call('spreadsheetFilterOptions', ['category_id'])
-        ->assertReturned([])
-        ->call('spreadsheetFilterOptions', 'category_id', ['x'])
-        ->assertReturned([])
-        ->call('spreadsheetFilterOptionLabel', 'category_id', (string) $tools->id)
-        ->assertReturned('Tools')
-        ->call('spreadsheetFilterOptionLabel', 'category_id', '999')
-        ->assertReturned(null)
-        ->call('spreadsheetFilterOptionLabel', 'category_id', ['x'])
-        ->assertReturned(null)
-        ->call('spreadsheetFilterOptionLabel', 'available_on', '2026-10-05')
-        ->assertReturned(null)
-        ->call('spreadsheetFilterOptionLabels', 'category_id', [(string) $paint->id, '999', $tools->id, ['x']])
-        ->assertReturned([['value' => (string) $paint->id, 'label' => 'Paint'], ['value' => (string) $tools->id, 'label' => 'Tools']])
-        ->call('spreadsheetFilterOptionLabels', 'category_id', 'not-a-list')
-        ->assertReturned([])
-        ->call('spreadsheetFilterOptionLabels', 'nope', ['1'])
-        ->assertReturned([]);
+it('renders every filter as Filament\'s own field, each dispatching its change to the browser', function (): void {
+    category('Tools');
+    ProductSheet::$filters = [
+        Filter::select('category_id')->options(fn () => Category::query()->pluck('name', 'id')->all()),
+        Filter::select('owner')->multiple()->searchable()->options(['a' => 'A']),
+        Filter::boolean('is_active'),
+        Filter::toggle('mine')->query(fn ($q) => $q),
+        Filter::dateRange('available_on')->label('Available'),
+    ];
+
+    try {
+        $html = Livewire::test(ProductSheet::class)->html();
+    } finally {
+        ProductSheet::$filters = null;
+    }
+
+    // a native select for a plain filter, Filament's select for a multiple or searchable one, a toggle, two date pickers in a
+    // fieldset, each watching its state path and dispatching the plugin's event with the filter's name (and the edge of a range)
+    expect($html)->toContain('fi-fo-select-native')
+        ->and($html)->toContain('fi-fo-select-wrp')
+        ->and($html)->toContain('selectFormComponent(')
+        ->and($html)->toContain('fi-fo-toggle')
+        ->and(substr_count($html, 'fi-fo-date-time-picker-trigger'))->toBeGreaterThanOrEqual(2)
+        ->and($html)->toContain('Available')
+        ->and($html)->toContain('spreadsheetFiltersForm')
+        ->and($html)->toContain('$wire.watch(\'spreadsheetFilters.category_id\'')
+        ->and($html)->toContain('$wire.watch(\'spreadsheetFilters.owner\'')
+        ->and($html)->toContain('$wire.watch(\'spreadsheetFilters.is_active\'')
+        ->and($html)->toContain('$wire.watch(\'spreadsheetFilters.mine\'')
+        ->and($html)->toContain('$wire.watch(\'spreadsheetFilters.available_on.from\'')
+        ->and($html)->toContain('$wire.watch(\'spreadsheetFilters.available_on.until\'')
+        ->and($html)->toContain('ps-sheet-filter\\u0027, { name: \\u0027category_id\\u0027')
+        ->and($html)->toContain('ps-sheet-filter\\u0027, { name: \\u0027available_on\\u0027, edge: \\u0027until\\u0027')
+        ->and($html)->toContain('x-on:ps-sheet-filter="setFilter($event.detail.name, $event.detail.value, $event.detail.edge)"')
+        ->not->toContain('spreadsheetFilterOptions');
 });
 
-it('renders the filters where the layout says, Filament\'s select and date picker in them, and nothing without filters', function (): void {
-    $html = Livewire::mount(ProductSheet::class);
+it('answers a searchable select\'s search and labels through Filament\'s own select, by its schema key', function (): void {
+    $tools = category('Tools');
+    $paint = category('Paint');
+    ProductSheet::$filters = [Filter::select('category_id')->multiple()->searchable()->options(fn () => Category::query()->orderBy('name')->pluck('name', 'id')->all())];
 
-    expect($html)->toContain('ps-sheet-filters-dropdown', 'ps-sheet-filters-btn', 'ps-sheet-filters-panel', 'ps-sheet-filters-header', 'ps-sheet-filters-heading', 'ps-sheet-filters-reset', 'ps-sheet-filter-stacked', 'selectFormComponent(', 'dateTimePickerFormComponent(', 'fi-select-input', 'fi-fo-date-time-picker', 'fi-checkbox-input', '$wire.spreadsheetFilterOptions(', 'pickSelect(filter.name', 'pickFilter(filter.name, &#039;from&#039;', 'toggleFilter(filter)')
-        ->not->toContain('ps-sheet-filters-inline', 'ps-sheet-filters-above', '<input type="date"', 'fi-select-input"></select');
-
-    config()->set('packstub-spreadsheet.filters_layout', 'toolbar');
-    $html = Livewire::mount(ProductSheet::class);
-    expect($html)->toContain('ps-sheet-toolbar-end', 'ps-sheet-filters-inline')->not->toContain('ps-sheet-filters-btn', 'ps-sheet-filters-above', 'ps-sheet-filter-stacked');
-
-    config()->set('packstub-spreadsheet.filters_layout', 'above');
-    $html = Livewire::mount(ProductSheet::class);
-    expect($html)->toContain('ps-sheet-filters-above', 'ps-sheet-filters-header', 'ps-sheet-filter-stacked')->not->toContain('ps-sheet-filters-btn', 'ps-sheet-filters-inline');
-
-    config()->set('packstub-spreadsheet.filters_layout', 'dropdown');
-    ProductSheet::$filters = [];
     try {
-        $html = Livewire::mount(ProductSheet::class);
-        expect($html)->toContain('ps-sheet-toolbar-start', 'ps-sheet-search')->not->toContain('ps-sheet-filters-btn', 'ps-sheet-filters-inline', 'ps-sheet-filters-above', 'ps-sheet-filter');
+        Livewire::test(ProductSheet::class)
+            ->call('callSchemaComponentMethod', 'spreadsheetFiltersForm.category_id', 'getSearchResultsForJs', ['search' => 'too'])
+            ->assertReturned(fn ($options) => collect($options)->pluck('label')->all() === ['Tools'] && (string) collect($options)->first()['value'] === (string) $tools->id)
+            ->call('callSchemaComponentMethod', 'spreadsheetFiltersForm.category_id', 'getOptionsForJs')
+            ->assertReturned(fn ($options) => collect($options)->pluck('label')->all() === ['Paint', 'Tools'])
+            ->set('spreadsheetFilters.category_id', [(string) $paint->id, '999', (string) $tools->id])
+            ->call('callSchemaComponentMethod', 'spreadsheetFiltersForm.category_id', 'getOptionLabelsForJs')
+            ->assertReturned(fn ($labels) => collect($labels)->pluck('label', 'value')->all() == [$paint->id => 'Paint', $tools->id => 'Tools'])
+            ->call('callSchemaComponentMethod', 'spreadsheetFiltersForm.nope', 'getOptionsForJs')
+            ->assertReturned(null);
     } finally {
         ProductSheet::$filters = null;
     }
 });
 
-/* ------------------------------------------------------------------ bounds and the schema route (Filament 4.16+ / 5.11+) */
+it('fills the fields\' state on mount, every path there before the browser entangles it', function (): void {
+    Livewire::test(ProductSheet::class)
+        ->assertSet('spreadsheetFilters', ['category_id' => null, 'is_active' => null, 'available_on' => ['from' => null, 'until' => null]]);
+});
+
+it('renders the filters where the layout says, Filament\'s fields in them, and nothing without filters', function (): void {
+    $html = Livewire::mount(ProductSheet::class);
+
+    expect($html)->toContain('ps-sheet-filters-dropdown', 'ps-sheet-filters-btn', 'ps-sheet-filters-count', 'fi-icon-btn-badge-ctn', 'ps-sheet-filters-panel', 'fi-ta-filters', 'fi-ta-filters-header', 'fi-ta-filters-heading', 'ps-sheet-filters-header', 'ps-sheet-filters-heading', 'ps-sheet-filters-reset', 'fi-sc', 'fi-fo-select', 'dateTimePickerFormComponent(', 'fi-fo-date-time-picker', 'fi-fieldset', 'fi-fo-field-label')
+        ->not->toContain('ps-sheet-filters-inline', 'ps-sheet-filters-above', 'fi-input-wrp-prefix-has-label', '<input type="date"');
+
+    config()->set('packstub-spreadsheet.filters_layout', 'toolbar');
+    $html = Livewire::mount(ProductSheet::class);
+    // inline: the label as the field's prefix, no label over it, the date pickers without a fieldset
+    expect($html)->toContain('ps-sheet-toolbar-end', 'ps-sheet-filters-inline', 'fi-input-wrp-prefix-has-label', 'fi-sr-only')->not->toContain('ps-sheet-filters-btn', 'ps-sheet-filters-above', 'fi-fieldset');
+
+    config()->set('packstub-spreadsheet.filters_layout', 'above');
+    $html = Livewire::mount(ProductSheet::class);
+    expect($html)->toContain('ps-sheet-filters-above', 'fi-ta-filters-header', 'ps-sheet-filters-header', 'fi-fieldset')->not->toContain('ps-sheet-filters-btn', 'ps-sheet-filters-inline', 'fi-input-wrp-prefix-has-label');
+
+    config()->set('packstub-spreadsheet.filters_layout', 'dropdown');
+    ProductSheet::$filters = [];
+    try {
+        $html = Livewire::mount(ProductSheet::class);
+        expect($html)->toContain('ps-sheet-toolbar-start', 'ps-sheet-search')->not->toContain('ps-sheet-filters-btn', 'ps-sheet-filters-inline', 'ps-sheet-filters-above', 'spreadsheetFiltersForm');
+    } finally {
+        ProductSheet::$filters = null;
+    }
+});
+
+/* ------------------------------------------------------------------ bounds */
 
 it('caps the values a searchable multiple filter, a label lookup and a search take', function (): void {
     $lookups = 0;
@@ -301,32 +332,14 @@ it('caps the values a searchable multiple filter, a label lookup and a search ta
         expect($applied)->toBe(['ok']);
 
         Livewire::test(ProductSheet::class)
-            ->call('spreadsheetFilterOptionLabels', 'category_id', array_merge(array_map('strval', range(1, 40)), ['1', '1']))
-            ->assertReturned([['value' => '1', 'label' => 'L1'], ['value' => '2', 'label' => 'L2'], ['value' => '3', 'label' => 'L3'], ['value' => '4', 'label' => 'L4'], ['value' => '5', 'label' => 'L5']])
-            ->call('spreadsheetFilterOptions', 'category_id', str_repeat('q', 500))
-            ->assertReturned([['value' => 's', 'label' => '200']]);
+            ->set('spreadsheetFilters.category_id', array_merge(array_map('strval', range(1, 40)), ['1', '1']))
+            ->call('callSchemaComponentMethod', 'spreadsheetFiltersForm.category_id', 'getOptionLabelsForJs')
+            ->assertReturned(fn ($labels) => collect($labels)->pluck('label')->all() === ['L1', 'L2', 'L3', 'L4', 'L5'])
+            ->call('callSchemaComponentMethod', 'spreadsheetFiltersForm.category_id', 'getSearchResultsForJs', ['search' => str_repeat('q', 500)])
+            ->assertReturned(fn ($options) => array_map('strval', collect($options)->pluck('label')->all()) === ['200']);
 
-        expect($lookups)->toBe(5);
-    } finally {
-        ProductSheet::$filters = null;
-    }
-});
-
-it('answers Filament 4.16+ option requests through the spreadsheetFilters schema by key', function (): void {
-    $tools = category('Tools');
-    $paint = category('Paint');
-    ProductSheet::$filters = [Filter::select('category_id')->searchable()->options(fn () => Category::query()->orderBy('name')->pluck('name', 'id')->all())];
-
-    try {
-        Livewire::test(ProductSheet::class)
-            ->call('callSchemaComponentMethod', 'spreadsheetFilters.category_id', 'getOptionsForJs')
-            ->assertReturned([['value' => (string) $paint->id, 'label' => 'Paint'], ['value' => (string) $tools->id, 'label' => 'Tools']])
-            ->call('callSchemaComponentMethod', 'spreadsheetFilters.category_id', 'getSearchResultsForJs', ['search' => 'too'])
-            ->assertReturned([['value' => (string) $tools->id, 'label' => 'Tools']])
-            ->call('callSchemaComponentMethod', 'spreadsheetFilters.category_id', 'getOptionLabelsForJs')
-            ->assertReturned([])
-            ->call('callSchemaComponentMethod', 'spreadsheetFilters.nope', 'getOptionsForJs')
-            ->assertReturned(null);
+        // five labels looked up per call (Filament reads the labels twice while answering)
+        expect($lookups)->toBeLessThanOrEqual(10);
     } finally {
         ProductSheet::$filters = null;
     }
