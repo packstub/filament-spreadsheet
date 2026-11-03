@@ -8,11 +8,14 @@
 [![Tests](https://img.shields.io/github/actions/workflow/status/packstub/filament-spreadsheet/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/packstub/filament-spreadsheet/actions/workflows/tests.yml)
 [![Total Downloads](https://img.shields.io/packagist/dt/packstub/filament-spreadsheet.svg?style=flat-square)](https://packagist.org/packages/packstub/filament-spreadsheet)
 [![License](https://img.shields.io/packagist/l/packstub/filament-spreadsheet.svg?style=flat-square)](https://github.com/packstub/filament-spreadsheet/blob/main/LICENSE.md)
+[![Listed on filamentphp.com](https://img.shields.io/badge/filamentphp.com-listed-fb7185?style=flat-square&logo=filament&logoColor=white)](https://filamentphp.com/plugins/packstub-spreadsheet)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?style=flat-square&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/icaliman)
 
 </div>
 
 An **inline-editable table** for bulk editing Eloquent records in Filament: a sheet page for any resource where you edit cells in place with the keyboard, paste rows from Excel or Google Sheets, fill down, undo, and press **Save** once. The server validates every cell with your rules, checks your policies row by row, detects conflicts, and writes the whole batch in one transaction. Edit multiple records at once without a form per record.
+
+![Editing products in a Filament sheet: two prices typed in with the margin recomputed, a stock value filled down with Ctrl+D, one Save for all five rows](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/spreadsheet.gif)
 
 ## Features
 

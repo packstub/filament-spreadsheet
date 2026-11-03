@@ -8,6 +8,8 @@ An inline-editable table for bulk editing Eloquent records in Filament v4 (4.13+
 - Packagist: [packstub/filament-spreadsheet](https://packagist.org/packages/packstub/filament-spreadsheet)
 - Support: [GitHub issues](https://github.com/packstub/filament-spreadsheet/issues)
 
+![Editing products in a Filament sheet: two prices typed in with the margin recomputed, a stock value filled down with Ctrl+D, one Save for all five rows](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/spreadsheet.gif)
+
 ## Features
 
 - **[One Save for hundreds of cells](saving.md)**: edits wait across pages, one transaction writes them.
