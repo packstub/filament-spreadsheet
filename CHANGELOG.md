@@ -2,6 +2,10 @@
 
 All notable changes to `packstub/filament-spreadsheet` are documented in this file.
 
+## Unreleased
+
+- Tabulator 6.7.1 in the bundle
+
 ## 1.0.0-beta.1 - 2026-10-28
 
 First beta of Filament Spreadsheet: edit hundreds of Eloquent records in a grid and save them in one validated batch. Works with Filament 4.13+ and 5.

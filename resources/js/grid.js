@@ -232,6 +232,10 @@ if (! SelectRangeModule.prototype.findJumpItem._psPatched) {
     SelectRangeModule.prototype.findJumpItem._psPatched = true
 }
 
+// Enter after an edit moves the active cell in the component (onKeydown, then navigate()). Tabulator 6.7 moves it too,
+// from a listener of its own on every editor, and one Enter went down two rows.
+SelectRangeModule.prototype._handleEditKeyDown = function () {}
+
 export function createGrid(element, options) {
     const { columns, t, locale = 'en', readOnly = false, on = {} } = options
     const sortState = options.sortState ?? (() => ({ column: null, direction: 'asc' }))
