@@ -212,3 +212,29 @@ it('hands the browser everything it needs in the config, the first page of rows 
     expect($component->instance()->getSpreadsheetConfig()['state'])->toBeNull()
         ->and($component->instance()->spreadsheetRendered)->toBeTrue();
 });
+
+it('offers the page sizes of the definition or the config, up to max_per_page, with the sheet\'s own among them', function () {
+    expect(sheet()->perPageOptions([50, 200, 500])->getPerPageOptions())->toBe([50, 100, 200, 500])
+        ->and(sheet()->perPage(75)->perPageOptions([0, -5, 50, 50, 25])->getPerPageOptions())->toBe([25, 50, 75]);
+
+    config()->set('packstub-spreadsheet.per_page_options', [10, 100, 300, 5000]);
+    config()->set('packstub-spreadsheet.max_per_page', 300);
+
+    expect(sheet()->getPerPageOptions())->toBe([10, 100, 300])
+        ->and(Livewire::test(ProductSheet::class)->instance()->getSpreadsheetConfig()['pageSizes'])->toBe([10, 100, 300]);
+});
+
+it('reads creatable() and deletable() from a closure each time it asks', function () {
+    $allowed = true;
+    $sheet = sheet()->creatable(function () use (&$allowed) {
+        return $allowed;
+    })->deletable(fn () => false);
+
+    expect($sheet->isCreatable())->toBeTrue()
+        ->and($sheet->isDeletable())->toBeFalse();
+
+    $allowed = false;
+
+    expect($sheet->isCreatable())->toBeFalse()
+        ->and($sheet->canCreate())->toBeFalse();
+});

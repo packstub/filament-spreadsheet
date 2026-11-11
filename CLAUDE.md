@@ -17,7 +17,7 @@ npm run dev                 # rebuild on change
 node tests/browser/run.mjs  # headless Chromium harness (also the `browser` CI job, through the repo's own playwright-core): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, keys on a boolean cell, Alt+arrows, a keyboard-only pass
 ```
 
-CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.2 / 4.* / 5.*, and checks that `npm run build`
+CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.3 / 4.* / 5.*, and checks that `npm run build`
 leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so the built bundle is committed.
 
 ## Layout
@@ -198,7 +198,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   conflict with both values through `plain()`, or row error; `updateStatus()` from the grid's `select` callback and
   `sync()`). The errors pill is a button: `nextError()` walks the page's rows by `grid.ids()` × the visible columns,
   picks the mark after the active cell (wrapping; `errors_elsewhere` when the page has none but the buffer does),
-  `scrollTo()`s, `select()`s and `refocus()`es. `paint()` sets `aria-invalid`; `redrawHeader()` sets `aria-sort`
+  `scrollTo()`s, `select()`s and `refocus()`es. `paint()` sets `aria-invalid`; the row-number formatter sets the row's `aria-rowindex` (offset + position + 1, the header row is 1), `rowCount()` (from `sync()`: `total` + new rows) the grid's `aria-rowcount`, and the grid carries `aria-label` from `t.grid_label`; `redrawHeader()` sets `aria-sort`
   (`none` on the others, as Tabulator writes it at build) and runs once after `tableBuilt`. Tooltips come from
   `keyLabel(name)` → `S.shortcutLabel(spec, mac)` over the merged bindings; `mac` is read from
   `navigator.userAgentData.platform` (`"macOS"`, so the test is case-insensitive) or `navigator.platform`.

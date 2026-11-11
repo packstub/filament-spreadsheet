@@ -59,9 +59,12 @@ class Spreadsheet
 
     protected FiltersLayout|string|null $filtersLayout = null;
 
-    protected bool $creatable = false;
+    protected bool|Closure $creatable = false;
 
-    protected bool $deletable = false;
+    protected bool|Closure $deletable = false;
+
+    /** @var list<int>|null */
+    protected ?array $perPageOptions = null;
 
     protected ?SaveMode $saveMode = null;
 
@@ -145,16 +148,29 @@ class Spreadsheet
         return $this;
     }
 
-    /** Whether rows may be added (the toolbar button, Ctrl+Enter, a paste past the last row). Policy `create` still applies. */
-    public function creatable(bool $condition = true): static
+    /**
+     * The page sizes the pager offers (default: the config's `per_page_options`);
+     * sizes above `max_per_page` are left out, the sheet's own perPage() is always one.
+     *
+     * @param  list<int>|null  $options
+     */
+    public function perPageOptions(?array $options): static
+    {
+        $this->perPageOptions = $options === null ? null : array_values(array_filter(array_map('intval', $options), fn (int $n) => $n > 0));
+
+        return $this;
+    }
+
+    /** Whether rows may be added (the toolbar button, Ctrl+Enter, a paste past the last row): a bool or a closure. Policy `create` still applies. */
+    public function creatable(bool|Closure $condition = true): static
     {
         $this->creatable = $condition;
 
         return $this;
     }
 
-    /** Whether rows may be deleted. Policy `delete` still applies to each. */
-    public function deletable(bool $condition = true): static
+    /** Whether rows may be deleted: a bool or a closure. Policy `delete` still applies to each. */
+    public function deletable(bool|Closure $condition = true): static
     {
         $this->deletable = $condition;
 
@@ -279,6 +295,24 @@ class Spreadsheet
         return $this->clampPerPage($this->perPage ?? (int) config('packstub-spreadsheet.per_page', 100));
     }
 
+    /**
+     * The page sizes the pager offers: the options up to `max_per_page`, sorted,
+     * with the sheet's own page size among them.
+     *
+     * @return list<int>
+     */
+    public function getPerPageOptions(): array
+    {
+        $options = $this->perPageOptions ?? (array) config('packstub-spreadsheet.per_page_options', [25, 50, 100, 200, 500, 1000]);
+        $max = $this->getMaxPerPage();
+        $sizes = array_filter(array_map('intval', $options), fn (int $n) => $n > 0 && $n <= $max);
+        $sizes[] = $this->getPerPage();
+        $sizes = array_values(array_unique($sizes));
+        sort($sizes);
+
+        return $sizes;
+    }
+
     public function getMaxPerPage(): int
     {
         return max(1, (int) config('packstub-spreadsheet.max_per_page', 1000));
@@ -325,12 +359,12 @@ class Spreadsheet
 
     public function isCreatable(): bool
     {
-        return $this->creatable && ! $this->isReadOnly();
+        return $this->evaluate($this->creatable) && ! $this->isReadOnly();
     }
 
     public function isDeletable(): bool
     {
-        return $this->deletable && ! $this->isReadOnly();
+        return $this->evaluate($this->deletable) && ! $this->isReadOnly();
     }
 
     public function getSaveMode(): SaveMode
@@ -342,7 +376,7 @@ class Spreadsheet
 
     public function isReadOnly(): bool
     {
-        return (bool) ($this->readOnly instanceof Closure ? app()->call($this->readOnly) : $this->readOnly);
+        return $this->evaluate($this->readOnly);
     }
 
     public function getVersionColumn(): ?string
@@ -418,6 +452,12 @@ class Spreadsheet
      * The model's policy, when it has one with that ability; a model without a
      * policy is open, the page's own access check being the gate then.
      */
+    /** A flag set as a bool or a closure (resolved through the container). */
+    protected function evaluate(bool|Closure $condition): bool
+    {
+        return (bool) ($condition instanceof Closure ? app()->call($condition) : $condition);
+    }
+
     protected function gate(string $ability, ?Model $record): bool
     {
         $model = $this->getModel();
