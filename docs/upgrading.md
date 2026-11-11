@@ -8,5 +8,7 @@ The changelog lives in the repository: [CHANGELOG.md](https://github.com/packstu
 
 ## Planned
 
-- 1.1: a `Spreadsheet` form field on the same grid (rows × typed columns stored as JSON or on a relation, "paste into a repeater").
-- 1.2: an "Edit as sheet" action for relation managers.
+Ideas for later 1.x releases, in no promised order:
+
+- A `Spreadsheet` form field on the same grid (rows × typed columns stored as JSON or on a relation, "paste into a repeater").
+- An "Edit as sheet" action for relation managers.
