@@ -19,6 +19,8 @@ TextColumn::make('sku')->default(fn () => Sku::next()),
 
 New rows travel with the next Save. The server validates each over **every** editable column (a `required` name is required even if the user never touched the cell), runs `mutateRowBeforeSave($data, null)`, creates the record with `forceFill()` and answers with the row as saved (its real key, its defaults from the database, its version); the browser replaces the pending row with it. `RowsSaved::$created` lists them.
 
+`creatable()` and `deletable()` also take a closure, `->creatable(fn () => auth()->user()->isAdmin())`, resolved through the container whenever the sheet is drawn or saved.
+
 Creating needs `creatable()` **and** the policy's `create` (or `authorizeCreate()`); otherwise the button is hidden and the server answers "You cannot add rows here." for every new row.
 
 ## Deleting rows

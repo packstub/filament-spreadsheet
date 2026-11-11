@@ -9,7 +9,7 @@ A column names an attribute of the model and says how it is read into the grid a
 ```php
 TextColumn::make('name')
     ->label('Product name')                  // default: the name, headlined ("category_id" → "Category")
-    ->width(220)                             // pixels; default: what the content needs
+    ->width(220)                             // pixels, or '14rem', '20%'; default: what the content needs
     ->frozen()                               // pinned while scrolling sideways (`frozen_first_column` in the config pins the first one)
     ->readOnly()                             // never editable
     ->readOnly(fn (Product $p) => $p->is_locked) // not for some records: the cell is greyed and refused
@@ -21,6 +21,8 @@ TextColumn::make('name')
     ->sortable(false)                        // no sorting from the header (a computed column never sorts)
     ->placeholder('Optional')
 ```
+
+`frozen()`, `sortable()`, `readOnly()` and `hidden()` take a bool or a closure, as Filament's own options do. A `width()` string is a number with `px`, `rem` / `em` (counted from the page's root font size) or `%` (a share of the grid's width); any other string throws.
 
 Rules are validated with Laravel's validator, with the type's own rules added. A `unique` rule, as a string (`unique:products,sku`) or as `Rule::unique('products', 'sku')`, ignores the record being updated, so an unchanged SKU never conflicts with itself.
 

@@ -20,7 +20,7 @@ class ComputedColumn extends Column
 
     protected ?int $decimals = null;
 
-    protected bool $sortable = false;
+    protected bool|Closure $sortable = false;
 
     public function state(Closure $callback): static
     {

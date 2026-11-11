@@ -173,21 +173,13 @@ trait InteractsWithSpreadsheet
             $state = null;
         }
 
-        $max = $sheet->getMaxPerPage();
-        $sizes = array_values(array_filter([25, 50, 100, 200, 500, 1000], fn (int $n) => $n <= $max));
-
-        if (! in_array($sheet->getPerPage(), $sizes, true)) {
-            $sizes[] = $sheet->getPerPage();
-            sort($sizes);
-        }
-
         return [
             'columns' => array_map(fn ($column) => $column->toArray(), $sheet->getColumns()),
             // A toggle without a query() throws here, at the first render, not the first time a user turns it on.
             'filters' => array_map(fn (Filter $filter) => tap($filter)->assertUsable()->toArray(), $sheet->getFilters()),
             'filtersLayout' => $sheet->getFiltersLayout()->value,
             'perPage' => $sheet->getPerPage(),
-            'pageSizes' => $sizes,
+            'pageSizes' => $sheet->getPerPageOptions(),
             'sort' => $sheet->getDefaultSort(),
             'searchable' => $sheet->getSearchable() !== [],
             'creatable' => $sheet->canCreate(),
