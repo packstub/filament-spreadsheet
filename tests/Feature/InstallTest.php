@@ -62,5 +62,5 @@ it('registers the built assets, with Tabulator\'s copyright and permission notic
         expect(substr($bundle, 0, 2000))->toContain('Copyright (c) 2015-2026 Oli Folkerd', 'Permission is hereby granted, free of charge');
     }
 
-    expect(File::get("{$root}/LICENSE.md"))->toContain('Third-party', 'Tabulator', 'Oli Folkerd');
+    expect(File::get("{$root}/NOTICE.md"))->toContain('Tabulator', 'Oli Folkerd');
 });
