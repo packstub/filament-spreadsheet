@@ -22,7 +22,7 @@ TextColumn::make('name')
     ->placeholder('Optional')
 ```
 
-`frozen()`, `sortable()`, `readOnly()` and `hidden()` take a bool or a closure, as Filament's own options do. A `width()` string is a number with `px`, `rem` / `em` (counted from the page's root font size) or `%` (a share of the grid's width); any other string throws.
+`frozen()`, `sortable()`, `readOnly()` and `hidden()` take a bool or a closure, as Filament's own options do. The `frozen()`, `sortable()` and `hidden()` closures get no record and no component, and are asked again on every request; only `readOnly()` is decided per record, its closure receiving it ([Authorization](authorization.md)). A `width()` string is a number with `px`, `rem` / `em` (counted from the page's root font size) or `%` (a share of the grid's width); any other string throws.
 
 Rules are validated with Laravel's validator, with the type's own rules added. A `unique` rule, as a string (`unique:products,sku`) or as `Rule::unique('products', 'sku')`, ignores the record being updated, so an unchanged SKU never conflicts with itself.
 
