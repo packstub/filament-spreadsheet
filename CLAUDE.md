@@ -17,7 +17,7 @@ npm run dev                 # rebuild on change
 node tests/browser/run.mjs  # headless Chromium harness (also the `browser` CI job, through the repo's own playwright-core): typing, paste, fill-down, undo, paging, save, failed requests, conflicts, the row window, editor keys, the select list, a date typed on the cell, Ctrl+Enter, the active cell after Add row, keys on a boolean cell, Alt+arrows, a keyboard-only pass
 ```
 
-CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.3 / 4.* / 5.*, and checks that `npm run build`
+CI runs Pint, Pest and the JS suite on Laravel 12/13 × Filament 4.13.3 / 4.* / 5.8.3 / 5.*, and checks that `npm run build`
 leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so the built bundle is committed.
 
 ## Layout
