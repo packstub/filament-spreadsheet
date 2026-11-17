@@ -13,6 +13,8 @@ The first stable release. The public API (the `Spreadsheet` definition, the colu
 - A date cell no longer takes a five-digit year
 - Tabulator 6.7.1 in the bundle; Filament 4.13.3 and 5.8.3 are the lowest supported versions (the releases before them carry security advisories)
 
+**Upgrading:** from 1.0.0-beta.1, a subclass that overrides `creatable()`, `deletable()`, `frozen()`, `sortable()` or `width()`, or redeclares their properties, must take the wider types (`bool|Closure`; `int|string|null` for `width()`), and Filament must be at least 4.13.3 or 5.8.3.
+
 ## 1.0.0-beta.1 - 2026-10-28
 
 First beta of Filament Spreadsheet: edit hundreds of Eloquent records in a grid and save them in one validated batch. Works with Filament 4.13+ and 5.
