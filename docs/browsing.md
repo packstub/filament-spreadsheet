@@ -4,7 +4,7 @@
 
 The sheet sits in a table-style container, as a Filament table does: the toolbar on top with the sheet's own controls at the start and the search, the filters and the shortcuts button at the end, the grid under it, the status line and the pager in a footer. The controls are Filament's own components (its buttons, the search field a table has, its searchable select, its date picker, its checkbox, in Filament's input wrapper), so it looks like the rest of the panel and like Kanban and Gantt, which share the same shell; what does not apply is not shown: Save, Discard, Undo and Redo appear once something was changed, Delete rows once rows are selected, the errors badge once a save refused cells.
 
-Everything the toolbar does happens on the server, one renderless call per change (`spreadsheetRows`), and none of it touches the unsaved cells.
+Everything the toolbar does happens on the server, one renderless request per change, and none of it touches the unsaved cells.
 
 ## Search
 
@@ -57,7 +57,7 @@ The same `Filter` class as Kanban and Gantt, with the same types:
 
 A value the filter did not offer is ignored: a plain select takes one of its options and nothing else (per value for a multiple one), a boolean *1* or *0*, a toggle anything true, a date range real calendar days only (`2026-02-30` never reaches the query). The browser cannot inject a raw value.
 
-The fields are Filament's own form components (`Select`, `Toggle`, `DatePicker`), built by `Filter::toFormComponent()` and rendered through the component's `spreadsheetFiltersForm` schema, so they look and behave exactly like a form's; a searchable select's search goes through the component's schema (`callSchemaComponentMethod`), nothing on the page re-renders. The browser holds each filter's state in the shape `Filter::state()` gives (`''` or a key, a list, `true` / `false`, `{from, until}`): a field dispatches its change to the sheet, which reloads the rows renderless and writes its state back into the fields, so Reset clears the fields as well as the rows. A filter that narrows the rows counts on the funnel button.
+The fields are Filament's own form components (`Select`, `Toggle`, `DatePicker`), built from each `Filter` and rendered through a schema on the component, so they look and behave exactly like a form's; a searchable select's search goes through the component's schema (`callSchemaComponentMethod`), nothing on the page re-renders. The browser holds each filter's state in one shape per type (`''` or a key, a list, `true` / `false`, `{from, until}`): a field dispatches its change to the sheet, which reloads the rows renderless and writes its state back into the fields, so Reset clears the fields as well as the rows. A filter that narrows the rows counts on the funnel button.
 
 ## Pagination
 

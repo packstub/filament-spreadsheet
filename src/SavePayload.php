@@ -82,11 +82,7 @@ final class SavePayload
         return $this->versions[$id] ?? null;
     }
 
-    /**
-     * @return array<string, mixed>
-     *
-     * @internal built from the request by the Livewire trait; its shape may change in a minor
-     */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return ['changed' => $this->changed, 'versions' => $this->versions, 'created' => $this->created, 'deleted' => $this->deleted];

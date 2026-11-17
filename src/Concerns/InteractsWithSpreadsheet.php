@@ -83,7 +83,7 @@ trait InteractsWithSpreadsheet
     }
 
     /**
-     * Delete rows by key, through the same checks as a Save.
+     * Delete rows by key, through the same checks as a Save; answers SaveResult::toArray().
      *
      * @param  array<int, mixed>  $ids
      * @return array<string, mixed>

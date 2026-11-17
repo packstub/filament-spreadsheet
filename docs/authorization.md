@@ -46,4 +46,4 @@ The whole sheet becomes a viewer: no editing, no paste, no Save, no adding or de
 
 ## What the browser can never do
 
-Every renderless call is checked again by `Spreadsheet`: a record is loaded through the sheet's `query()` (never by key alone), a column must be one of the definition's and editable for that record, a sort must be on a sortable column, a filter value one the filter offered, a page size within the config. `SavePayload::fromArray()` keeps only well-formed keys and rows. Nothing a public Livewire method answers holds a model.
+Every renderless call is checked again by `Spreadsheet`: a record is loaded through the sheet's `query()` (never by key alone), a column must be one of the definition's and editable for that record, a sort must be on a sortable column, a filter value one the filter offered, a page size within the config. The save payload is read strictly: only well-formed keys and rows are kept. Nothing a public Livewire method answers holds a model.

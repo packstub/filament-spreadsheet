@@ -67,9 +67,9 @@ final class SaveResult
     }
 
     /**
-     * @return array<string, mixed>
+     * The result as plain arrays: what spreadsheetSave() and spreadsheetDelete() answer.
      *
-     * @internal the answer on the wire; its shape may change in a minor
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
