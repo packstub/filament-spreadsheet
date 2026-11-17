@@ -5,6 +5,7 @@ All notable changes to `packstub/filament-spreadsheet` are documented in this fi
 ## Unreleased
 
 - Tabulator 6.7.1 in the bundle
+- `composer.json`'s homepage points at the package's page on packstub.dev
 
 ## 1.0.0-beta.1 - 2026-10-28
 
