@@ -70,7 +70,7 @@ leaves `resources/dist` unchanged: **consumers run only `filament:assets`**, so 
   `resources/css/spreadsheet.css` imports Tabulator's base stylesheet and lays Filament tokens over it. `build.mjs`
   bundles both into `resources/dist/spreadsheet.{js,css}` (esbuild, ESM, minified; ~312 KB / 81 KB gzip, 42 KB / 7 KB),
   each headed by Tabulator's copyright and permission notice (read from its `LICENSE` at build time; `InstallTest`
-  checks it is there, `LICENSE.md` has the third-party section).
+  checks it is there, `NOTICE.md` names Tabulator).
 - `tests/js/sheet.test.mjs` (node:test, imports `resources/js/sheet.js` directly: never Tabulator); `tests/browser/`
   (`harness.mjs` turns the real Blade view into a static page, rendered once per filters layout (`?filters=dropdown|above|toolbar`, `HARNESS_FILTERS_LAYOUT` into `HarnessRenderTest`) with the filters' `x-load-src` pointed at `vendor/filament/forms/dist/components/`, so Filament's real select and date picker run (`pickOption()` in `run.mjs` opens one and clicks an option), with a fake `$wire` (the filter calls answered from the config) and a fake `Livewire` whose `failCommit([methods])` runs the commit hook's `fail` callbacks; `?autoheight` sends `height: null`, the real default; `?hidden` builds the sheet inside `#harness-wrap` with `display:none`, shown by the case; `run.mjs` drives it in Chromium
   through a sibling project's `playwright-core`; screenshots in `tests/browser/screenshots`, ignored). The grid
