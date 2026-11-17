@@ -38,11 +38,13 @@ final class SaveResult
     /** Whether nothing was written because of an error (AllOrNothing). */
     public bool $rolledBack = false;
 
+    /** @internal filled by Spreadsheet::save(); its shape may change in a minor */
     public function cellError(string $key, string $column, string $message): void
     {
         $this->errors[$key][$column] = $message;
     }
 
+    /** @internal filled by Spreadsheet::save(); its shape may change in a minor */
     public function rowError(string $key, string $message): void
     {
         $this->rowErrors[$key] = $message;
@@ -64,7 +66,11 @@ final class SaveResult
         return ! $this->hasFailures() && $this->message === null;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     *
+     * @internal the answer on the wire; its shape may change in a minor
+     */
     public function toArray(): array
     {
         return [

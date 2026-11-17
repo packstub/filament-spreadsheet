@@ -264,6 +264,8 @@ class Filter
      * config is built (the first render), not the first time a user turns it on.
      *
      * @throws LogicException
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
      */
     public function assertUsable(): void
     {
@@ -276,6 +278,8 @@ class Filter
      * The options matching what the user typed, at most optionsLimit() of them.
      *
      * @return array<string|int, string>
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
      */
     public function getSearchResults(string $search): array
     {
@@ -289,7 +293,11 @@ class Filter
         return array_slice($results, 0, $this->optionsLimit, preserve_keys: true);
     }
 
-    /** The label of a value: from the options, else from getOptionLabelUsing(), else null. */
+    /**
+     * The label of a value: from the options, else from getOptionLabelUsing(), else null.
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
+     */
     public function getOptionLabel(string|int $value): ?string
     {
         $options = $this->getOptions();
@@ -313,6 +321,8 @@ class Filter
      * (`afterStateUpdatedJs`) and the Alpine component applies it, so no Livewire
      * round trip and the same URL state as before. `$inline` is the toolbar layout:
      * the label as the field's prefix instead of over it.
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
      */
     public function toFormComponent(bool $inline = false, ?int $firstDayOfWeek = null, ?string $displayFormat = null): Component
     {
@@ -383,6 +393,8 @@ class Filter
      * Narrow the query with what the browser sent, if it is something this filter
      * offers. Anything else is ignored, in whole for a select and per value for a
      * multiple one.
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
      */
     public function apply(Builder $query, mixed $value): void
     {
@@ -502,6 +514,8 @@ class Filter
      * toggle, `['from' => ?string, 'until' => ?string]` for a date range.
      *
      * @return string|list<string>|bool|array{from: ?string, until: ?string}
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
      */
     public function state(mixed $value): string|array|bool
     {
@@ -523,7 +537,11 @@ class Filter
         return blank($value) || is_array($value) ? '' : ($this->known([$value])[0] ?? '');
     }
 
-    /** The empty state of this filter, what "no choice" looks like in the browser. */
+    /**
+     * The empty state of this filter, what "no choice" looks like in the browser.
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
+     */
     public function emptyState(): string|array|bool
     {
         return match (true) {
@@ -543,6 +561,8 @@ class Filter
      * A `Y-m-d` string naming a real calendar date, or null for anything else: the
      * browser cannot inject a raw value, and a rolled-over date from a hand-edited
      * URL (`2026-02-30`, which some databases refuse) never reaches the query.
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
      */
     public static function date(mixed $value): ?string
     {
@@ -559,6 +579,8 @@ class Filter
      * sends no options (the search fetches them); a date range and a toggle have none.
      *
      * @return array{name: string, label: string, type: string, multiple: bool, searchable: bool, optionsLimit: int, options: list<array{value: string, label: string}>}
+     *
+     * @internal called by the definition and the Livewire trait; its shape may change in a minor
      */
     public function toArray(): array
     {

@@ -208,12 +208,17 @@ abstract class Column
         return $this->readOnly === true;
     }
 
-    /** Whether the read-only decision depends on the record. */
+    /**
+     * Whether the read-only decision depends on the record.
+     *
+     * @internal called by the definition; its shape may change in a minor
+     */
     public function hasRecordReadOnly(): bool
     {
         return $this->readOnly instanceof Closure;
     }
 
+    /** @internal called by the definition; its shape may change in a minor */
     public function isReadOnlyFor(Model $record): bool
     {
         if (! $this->isEditable()) {
@@ -233,7 +238,11 @@ abstract class Column
         return $this->default instanceof Closure ? app()->call($this->default) : $this->default;
     }
 
-    /** The value on the wire for a record (after casts and accessors); a dotted name reads through the relation. */
+    /**
+     * The value on the wire for a record (after casts and accessors); a dotted name reads through the relation.
+     *
+     * @internal called by the definition; its shape may change in a minor
+     */
     public function present(Model $record): mixed
     {
         return $this->presentValue(str_contains($this->name, '.') ? data_get($record, $this->name) : $record->getAttribute($this->name));

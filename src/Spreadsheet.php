@@ -448,16 +448,16 @@ class Spreadsheet
         return $this->authorizeDelete ? (bool) ($this->authorizeDelete)($record) : $this->gate('delete', $record);
     }
 
-    /**
-     * The model's policy, when it has one with that ability; a model without a
-     * policy is open, the page's own access check being the gate then.
-     */
     /** A flag set as a bool or a closure (resolved through the container). */
     protected function evaluate(bool|Closure $condition): bool
     {
         return (bool) ($condition instanceof Closure ? app()->call($condition) : $condition);
     }
 
+    /**
+     * The model's policy, when it has one with that ability; a model without a
+     * policy is open, the page's own access check being the gate then.
+     */
     protected function gate(string $ability, ?Model $record): bool
     {
         $model = $this->getModel();

@@ -64,6 +64,8 @@ class DateColumn extends Column
     /**
      * "Y-m-d" (a time after it is dropped), a real calendar date in the years
      * 1000–9999. Nothing Carbon would guess at.
+     *
+     * @internal a helper of coerce(); its shape may change in a minor
      */
     public static function parseDate(string $value): ?string
     {
@@ -80,6 +82,8 @@ class DateColumn extends Column
 
     /**
      * "Y-m-d H:i[:s]" (a T between is fine) as "Y-m-d H:i:s", a date alone as midnight.
+     *
+     * @internal a helper of coerce(); its shape may change in a minor
      */
     public static function parseDateTime(string $value): ?string
     {

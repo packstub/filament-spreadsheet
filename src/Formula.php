@@ -22,6 +22,8 @@ use InvalidArgumentException;
  * An empty cell is null and arithmetic with it is null (`coalesce(stock, 0)` reads
  * it as zero; sum(), min() and max() skip it); so is text that is not a number,
  * a division by zero and anything not finite.
+ *
+ * @internal the engine behind ComputedColumn::formula(); its methods and the tree it sends may change in a minor
  */
 final class Formula
 {

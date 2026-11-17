@@ -15,6 +15,8 @@ final class SavePayload
      * @param  array<string, string|null>  $versions  record key => the version the browser saw
      * @param  array<string, array<string, mixed>>  $created  temporary key => attribute => value
      * @param  list<string>  $deleted  record keys
+     *
+     * @internal built from the request by the Livewire trait; its shape may change in a minor
      */
     public function __construct(
         public readonly array $changed = [],
@@ -23,7 +25,11 @@ final class SavePayload
         public readonly array $deleted = [],
     ) {}
 
-    /** @param  array<string, mixed>  $raw */
+    /**
+     * @param  array<string, mixed>  $raw
+     *
+     * @internal built from the request by the Livewire trait; its shape may change in a minor
+     */
     public static function fromArray(array $raw): self
     {
         $changed = [];
@@ -76,7 +82,11 @@ final class SavePayload
         return $this->versions[$id] ?? null;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     *
+     * @internal built from the request by the Livewire trait; its shape may change in a minor
+     */
     public function toArray(): array
     {
         return ['changed' => $this->changed, 'versions' => $this->versions, 'created' => $this->created, 'deleted' => $this->deleted];

@@ -49,6 +49,8 @@ trait InteractsWithSpreadsheet
      *
      * @param  array<string, mixed>  $request
      * @return array<string, mixed>
+     *
+     * @internal called by the browser side of the sheet; its shape may change in a minor
      */
     #[Renderless]
     public function spreadsheetRows(array $request = []): array
@@ -71,6 +73,8 @@ trait InteractsWithSpreadsheet
      *
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
+     *
+     * @internal called by the browser side of the sheet; its shape may change in a minor
      */
     #[Renderless]
     public function spreadsheetSave(array $payload = []): array
@@ -114,7 +118,11 @@ trait InteractsWithSpreadsheet
         $this->getSchema('spreadsheetFiltersForm')?->fill();
     }
 
-    /** The filters as Filament's own form components, where filtersLayout() puts them. */
+    /**
+     * The filters as Filament's own form components, where filtersLayout() puts them.
+     *
+     * @internal the schema the view renders the filters through; its shape may change in a minor
+     */
     public function spreadsheetFiltersForm(Schema $schema): Schema
     {
         $sheet = $this->getSpreadsheet();
@@ -161,6 +169,8 @@ trait InteractsWithSpreadsheet
      * rows makes the browser ask for its first page itself.
      *
      * @return array<string, mixed>
+     *
+     * @internal read by the view; its shape may change in a minor
      */
     public function getSpreadsheetConfig(?bool $withState = null): array
     {
