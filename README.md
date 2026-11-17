@@ -34,7 +34,7 @@ An **inline-editable table** for bulk editing Eloquent records in Filament: a sh
 
 | Plugin | Filament | Laravel | PHP |
 | --- | --- | --- | --- |
-| 1.x | 4.13+, 5.x | 12.x, 13.x | 8.3+ |
+| 1.x | 4.13.3+, 5.8.3+ | 12.x, 13.x | 8.3+ |
 
 1.x is built for a desktop browser: keyboard, pointer and clipboard. On a touch screen a sheet can be read, searched, filtered and paged; editing cells by touch is planned.
 

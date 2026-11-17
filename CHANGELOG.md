@@ -11,7 +11,7 @@ The first stable release. The public API (the `Spreadsheet` definition, the colu
 - Choose the page sizes the pager offers: `perPageOptions()` or the `per_page_options` config key
 - Screen readers hear "row 58 of 240": the grid has a name, a row count and each row's place
 - A date cell no longer takes a five-digit year
-- Tabulator 6.7.1 in the bundle; Filament 4.13.3 is the lowest supported 4.x (4.13.0 to 4.13.2 carry security advisories)
+- Tabulator 6.7.1 in the bundle; Filament 4.13.3 and 5.8.3 are the lowest supported versions (the releases before them carry security advisories)
 
 ## 1.0.0-beta.1 - 2026-10-28
 
