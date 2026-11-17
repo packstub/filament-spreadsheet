@@ -25,6 +25,7 @@ return [
     'deleted_rows' => '{1} :count rând de șters|[2,*] :count rânduri de șters',
     'read_only_badge' => 'Doar citire',
     'empty' => 'Nimic de afișat',
+    'grid_label' => 'Foaie de calcul',
     'row_menu' => 'Acțiuni pe rând',
     'delete_row' => 'Șterge rândul',
     'restore_row' => 'Păstrează rândul',

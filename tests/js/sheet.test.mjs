@@ -660,3 +660,16 @@ test('filter state: the empty shapes, what counts as active, a picker\'s day and
 
     assert.equal(S.activeFilterCount([select, multiple, toggle, range], { category_id: '1', tags: [], mine: true, available_on: { from: '2026-01-01', until: null } }), 3)
 })
+
+test('columnWidth hands Tabulator pixels or a percentage', () => {
+    assert.equal(S.columnWidth(null), undefined)
+    assert.equal(S.columnWidth(undefined), undefined)
+    assert.equal(S.columnWidth(220), 220)
+    assert.equal(S.columnWidth('180px'), 180)
+    assert.equal(S.columnWidth('14rem', 16), 224)
+    assert.equal(S.columnWidth('12.5em', 16), 200)
+    assert.equal(S.columnWidth('1rem', 16), 40)
+    assert.equal(S.columnWidth('14rem'), 224)
+    assert.equal(S.columnWidth('20%'), '20%')
+    assert.equal(S.columnWidth('wide'), undefined)
+})

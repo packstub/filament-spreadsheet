@@ -1123,3 +1123,19 @@ export function filterSelection(filter, value) {
 export function activeFilterCount(filters, active) {
     return filters.filter((f) => filterIsActive(f, active[f.name])).length
 }
+
+/**
+ * A column's width as Tabulator takes it: pixels as a number, a share of the grid as a percentage string.
+ * `rem` / `em` are turned into pixels with the page's root font size (Tabulator would read `12rem` as 12 px).
+ */
+export function columnWidth(width, rootFontSize = null) {
+    if (width === null || width === undefined || width === '') return undefined
+    if (typeof width === 'number') return width
+    const m = /^(\d+(?:\.\d+)?)(px|rem|em|%)$/.exec(String(width).trim())
+    if (! m) return undefined
+    if (m[2] === '%') return `${m[1]}%`
+    if (m[2] === 'px') return Math.round(Number(m[1]))
+    const base = rootFontSize ?? (typeof document === 'undefined' ? 16 : parseFloat(getComputedStyle(document.documentElement).fontSize) || 16)
+
+    return Math.max(40, Math.round(Number(m[1]) * base))
+}

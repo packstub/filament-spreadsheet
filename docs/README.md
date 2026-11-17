@@ -2,7 +2,7 @@
 
 ![Filament Spreadsheet](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/banner.jpg)
 
-An inline-editable table for bulk editing Eloquent records in Filament v4 (4.13+) and v5. A sheet page for any resource: edit cells with the keyboard, paste rows from Excel or Google Sheets, fill down, undo, and press Save once; the server validates every cell with your rules, checks your policies row by row, detects conflicts and writes the batch in one transaction. Free and open source (MIT), built on [Tabulator](https://tabulator.info) (MIT).
+An inline-editable table for bulk editing Eloquent records in Filament v4 (4.13.3+) and v5 (5.8.3+). A sheet page for any resource: edit cells with the keyboard, paste rows from Excel or Google Sheets, fill down, undo, and press Save once; the server validates every cell with your rules, checks your policies row by row, detects conflicts and writes the batch in one transaction. Free and open source (MIT), built on [Tabulator](https://tabulator.info) (MIT).
 
 - Repository: [github.com/packstub/filament-spreadsheet](https://github.com/packstub/filament-spreadsheet)
 - Packagist: [packstub/filament-spreadsheet](https://packagist.org/packages/packstub/filament-spreadsheet)
@@ -79,7 +79,7 @@ class ProductsSheet extends SpreadsheetResourcePage
 
 ## Requirements
 
-PHP 8.3+, Laravel 12 or 13, Filament 4.13+ or 5.
+PHP 8.3+, Laravel 12 or 13, Filament 4.13.3+ or 5.8.3+.
 
 ---
 

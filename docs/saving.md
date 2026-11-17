@@ -59,4 +59,4 @@ This holds on both Filament lines. Livewire 4 (Filament 5) rejects the call; Liv
 
 ## Deleting through the API
 
-`spreadsheetDelete(ids)` on the component and `Spreadsheet::delete(ids)` on the definition delete by key through the same checks as a Save (`deletable()`, the policy, the save mode). The toolbar itself marks rows and deletes them with the next Save, so a deletion can be undone until then.
+`spreadsheetDelete(array $ids)` on the component (the page or Livewire component that uses `InteractsWithSpreadsheet`) deletes by key through the same checks as a Save (`deletable()`, the policy, the save mode) and answers as a Save does: the deleted keys, and a reason for each row it refused. Call it from the browser with `$wire.spreadsheetDelete([3, 7])` or from your own action with `$this->spreadsheetDelete([3, 7])`. The toolbar itself marks rows and deletes them with the next Save, so a deletion can be undone until then.

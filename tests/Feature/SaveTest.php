@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
+use Livewire\Livewire;
 use Packstub\Spreadsheet\Columns\ComputedColumn;
 use Packstub\Spreadsheet\Columns\TextColumn;
 use Packstub\Spreadsheet\Enums\SaveMode;
@@ -212,6 +213,35 @@ it('creates rows only when creatable and the policy allows, deletes only when de
     ProductSheet::$deletable = false;
     expect(save(['deleted' => [$b->id]])->rowErrors)->toBe([(string) $b->id => 'You cannot delete this row.'])
         ->and(Product::query()->count())->toBe(2);
+});
+
+it('refuses a crafted create and a crafted delete sent to the component when creatable() and deletable() are closures answering false', function () {
+    $a = product('a-1');
+    ProductSheet::$closureFlags = true;
+    ProductSheet::$creatable = false;
+    ProductSheet::$deletable = false;
+
+    Livewire::test(ProductSheet::class)
+        ->call('spreadsheetSave', ['created' => ['n1' => ['sku' => 'c-3', 'name' => 'New']]])
+        ->assertReturned(fn ($r) => $r['ok'] === false && (array) $r['created'] === [] && (array) $r['rowErrors'] === ['n1' => 'You cannot add rows here.'])
+        ->call('spreadsheetSave', ['deleted' => [$a->id]])
+        ->assertReturned(fn ($r) => $r['ok'] === false && $r['deleted'] === [] && (array) $r['rowErrors'] === [(string) $a->id => 'You cannot delete this row.'])
+        ->call('spreadsheetDelete', [(string) $a->id])
+        ->assertReturned(fn ($r) => $r['ok'] === false && $r['deleted'] === [] && (array) $r['rowErrors'] === [(string) $a->id => 'You cannot delete this row.']);
+
+    expect(Product::query()->pluck('sku')->all())->toBe(['A-1']);
+
+    // The closure is asked on every request: both go through once it answers true.
+    ProductSheet::$creatable = true;
+    ProductSheet::$deletable = true;
+
+    Livewire::test(ProductSheet::class)
+        ->call('spreadsheetSave', ['created' => ['n1' => ['sku' => 'c-3', 'name' => 'New']]])
+        ->assertReturned(fn ($r) => $r['ok'] === true)
+        ->call('spreadsheetDelete', [(string) $a->id])
+        ->assertReturned(fn ($r) => $r['deleted'] === [(string) $a->id]);
+
+    expect(Product::query()->pluck('sku')->all())->toBe(['C-3']);
 });
 
 it('validates a new row over every editable column, defaults included', function () {

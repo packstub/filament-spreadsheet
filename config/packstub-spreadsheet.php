@@ -8,12 +8,16 @@ return [
     |--------------------------------------------------------------------------
     |
     | Rows per page a sheet opens with (a definition's perPage() wins), the
-    | most a user may ask for from the page-size control, and the most rows
-    | one Save may carry (updates, creates and deletes together).
+    | sizes the page-size control offers (a definition's perPageOptions()
+    | wins; sizes above max_per_page are left out), the most a user may ask
+    | for, and the most rows one Save may carry (updates, creates and deletes
+    | together).
     |
     */
 
     'per_page' => 100,
+
+    'per_page_options' => [25, 50, 100, 200, 500, 1000],
 
     'max_per_page' => 1000,
 

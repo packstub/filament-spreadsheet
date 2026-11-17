@@ -20,7 +20,7 @@ class ComputedColumn extends Column
 
     protected ?int $decimals = null;
 
-    protected bool $sortable = false;
+    protected bool|Closure $sortable = false;
 
     public function state(Closure $callback): static
     {
@@ -51,6 +51,7 @@ class ComputedColumn extends Column
         return $this;
     }
 
+    /** @internal called by the definition; its shape may change in a minor */
     public function getFormula(): ?Formula
     {
         return $this->formula;
@@ -85,6 +86,8 @@ class ComputedColumn extends Column
      * The formula's value for a row.
      *
      * @param  Closure(string): mixed  $value  a column's value in the row
+     *
+     * @internal called by the definition; its shape may change in a minor
      */
     public function compute(Closure $value): mixed
     {

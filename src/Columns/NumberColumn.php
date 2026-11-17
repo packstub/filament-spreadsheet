@@ -116,6 +116,8 @@ class NumberColumn extends Column
     /**
      * The decimal mark a lone separator is read by: the config's `decimal_separator`
      * when it is `,` or `.`, else the app locale's (via intl), else `.`.
+     *
+     * @internal a helper of coerce(); its shape may change in a minor
      */
     public static function decimalSeparator(): string
     {
@@ -143,6 +145,8 @@ class NumberColumn extends Column
     /**
      * A pasted number ("1 234,50", "1,234.50", "-3", "1e3"), or null when it is not
      * one. `$decimal` is the mark a lone separator is read by (`.` by default).
+     *
+     * @internal a helper of coerce(); its shape may change in a minor
      */
     public static function parse(string $value, string $decimal = '.'): int|float|null
     {
