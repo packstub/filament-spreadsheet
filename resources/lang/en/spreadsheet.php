@@ -25,6 +25,7 @@ return [
     'deleted_rows' => '{1} :count row to delete|[2,*] :count rows to delete',
     'read_only_badge' => 'Read-only',
     'empty' => 'Nothing to show',
+    'grid_label' => 'Spreadsheet',
     'row_menu' => 'Row actions',
     'delete_row' => 'Delete row',
     'restore_row' => 'Keep row',

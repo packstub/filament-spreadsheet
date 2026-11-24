@@ -206,6 +206,12 @@ try {
     s = await state()
     check('the next page loads and the unsaved cells stay', s.page === 2 && s.dirty.total === dirtyBefore && (await page.locator('.ps-sheet-count').innerText()) === '250 rows')
     check('row numbers continue on page 2', (await page.locator('.tabulator-tableholder .tabulator-row').first().locator('.ps-sheet-rownum').innerText()) === '101')
+    const aria = await page.evaluate(() => {
+        const grid = document.querySelector('.ps-sheet-grid')
+        const first = grid.querySelector('.tabulator-tableholder .tabulator-row')
+        return { label: grid.getAttribute('aria-label'), role: grid.getAttribute('role'), count: grid.getAttribute('aria-rowcount'), header: grid.querySelector('.tabulator-header [role="row"]')?.getAttribute('aria-rowindex'), first: first.getAttribute('aria-rowindex'), created: window.sheet().dirty.created }
+    })
+    check('screen readers get the grid\'s name, the row count of every page and each row\'s place (row 101 is aria-rowindex 102, the header 1)', aria.label === 'Spreadsheet' && aria.role === 'grid' && aria.count === String(251 + aria.created) && aria.header === '1' && aria.first === '102', JSON.stringify(aria))
     await cell(0, 'stock').click()
     await page.keyboard.type('3')
     await page.keyboard.press('Enter')
@@ -1904,6 +1910,14 @@ try {
         e = await inEditor()
         check(`Tab commits a typed ${label} and moves right`, clean() && ! e.editing && (await valueOf(20, field)) === typed && e.active !== `20/${field}` && e.active?.startsWith('20/'), JSON.stringify({ e, value: await valueOf(20, field) }))
     }
+    // a year of more than four digits: the field's max stops the year part at four (it took 20271 before, the cell went red)
+    await (await cellOf(25, 'available_on')).click()
+    await press('F2')
+    const max = await page.evaluate(() => document.activeElement.getAttribute('max'))
+    for (const digit of '1111202777') await press(digit, 40)
+    await press('Enter')
+    const longYear = await valueOf(25, 'available_on')
+    check('a date editor stops the year at four digits (max 9999-12-31)', clean() && max === '9999-12-31' && /^\d{4}-\d{2}-\d{2}$/.test(String(longYear)), JSON.stringify({ max, longYear, errors: errors.slice(errorsSeen) }))
     await discardAll()
     await page.waitForTimeout(100)
 

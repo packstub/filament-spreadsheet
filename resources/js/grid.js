@@ -27,7 +27,7 @@ import {
     SelectRangeModule,
     Tabulator,
 } from 'tabulator-tables'
-import { display, phpDate } from './sheet.js'
+import { columnWidth, display, phpDate } from './sheet.js'
 
 Tabulator.registerModule([
     AccessorModule, ClipboardModule, EditModule, ExportModule, FormatModule,
@@ -41,6 +41,8 @@ function isoEditor(withTime) {
     return function (cell, onRendered, success, cancel) {
         const input = document.createElement('input')
         input.type = withTime ? 'datetime-local' : 'date'
+        // A four-digit year: without max the year part takes five or six digits (the cell went red "Not a date").
+        input.max = withTime ? '9999-12-31T23:59' : '9999-12-31'
         input.className = 'ps-sheet-editor'
         const value = cell.getValue()
         if (value) {
@@ -256,7 +258,7 @@ export function createGrid(element, options) {
         const def = {
             title: column.label,
             field: column.name,
-            width: column.width ?? undefined,
+            width: columnWidth(column.width),
             minWidth: { number: 90, date: 120, datetime: 160, boolean: 70 }[column.type] ?? 80,
             frozen: column.frozen || (options.frozenFirstColumn && i === 0),
             hozAlign: column.type === 'number' || (column.type === 'computed' && column.decimals != null) ? 'right' : column.type === 'boolean' ? 'center' : 'left',
@@ -332,9 +334,13 @@ export function createGrid(element, options) {
                 const el = cell.getElement()
                 if (el && m.rowError) el.setAttribute('title', m.rowError)
                 else if (el) el.removeAttribute('title')
+                const number = (options.rowOffset?.() ?? 0) + cell.getRow().getPosition()
+                // The row's place among all the sheet's rows (the header is row 1), so a screen reader can say
+                // "row 58 of 240" although only the rows around the window are in the DOM.
+                cell.getRow().getElement()?.setAttribute('aria-rowindex', String(number + 1))
                 if (m.created) return '+'
 
-                return String((options.rowOffset?.() ?? 0) + cell.getRow().getPosition())
+                return String(number)
             },
         },
         selectableRange: 1,
@@ -913,6 +919,12 @@ export function createGrid(element, options) {
             restoreRange(kept)
         },
 
+        /** The number of rows the sheet holds (all pages, new rows too), for aria-rowcount; the header row is added. */
+        rowCount(count) {
+            if (destroyed) return
+            element.setAttribute('aria-rowcount', String(Math.max(0, Number(count) || 0) + 1))
+        },
+
         /** Refresh the sort arrows in the header (title formatters run once, at column creation). */
         redrawHeader() {
             const s = sortState()
@@ -952,7 +964,14 @@ export function createGrid(element, options) {
     }
     table.on('columnResized', frozenWidth)
     table.on('renderComplete', frozenWidth)
-    ready.then(() => { if (! destroyed) { api.redrawHeader(); frozenWidth() } })
+    ready.then(() => {
+        if (destroyed) return
+        api.redrawHeader()
+        frozenWidth()
+        element.querySelector('.tabulator-header [role="row"]')?.setAttribute('aria-rowindex', '1')
+    })
+    // The grid's accessible name (role="grid" is Tabulator's).
+    element.setAttribute('aria-label', t.grid_label ?? 'Spreadsheet')
 
     return api
 }

@@ -117,7 +117,11 @@ class SelectColumn extends Column
         return $this->optionsCache = $strings;
     }
 
-    /** Fill the options cache with the sheet's model before rows are read or saved. */
+    /**
+     * Fill the options cache with the sheet's model before rows are read or saved.
+     *
+     * @internal called by the definition; its shape may change in a minor
+     */
     public function prepare(Model $model): void
     {
         $this->getOptions($model);

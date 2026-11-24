@@ -30,6 +30,9 @@ class ProductSheet extends Component implements HasSchemas
 
     public static bool $deletable = true;
 
+    /** Hand creatable() and deletable() a closure instead of the bool. */
+    public static bool $closureFlags = false;
+
     public static bool $readOnly = false;
 
     public static ?SaveMode $saveMode = null;
@@ -60,6 +63,7 @@ class ProductSheet extends Component implements HasSchemas
     {
         static::$creatable = true;
         static::$deletable = true;
+        static::$closureFlags = false;
         static::$readOnly = false;
         static::$saveMode = null;
         static::$perPage = null;
@@ -100,8 +104,8 @@ class ProductSheet extends Component implements HasSchemas
                 Filter::boolean('is_active'),
                 Filter::dateRange('available_on'),
             ])
-            ->creatable(static::$creatable)
-            ->deletable(static::$deletable)
+            ->creatable(static::$closureFlags ? fn () => static::$creatable : static::$creatable)
+            ->deletable(static::$closureFlags ? fn () => static::$deletable : static::$deletable)
             ->readOnly(fn () => static::$readOnly)
             ->saveMode(static::$saveMode)
             ->beforeSave(function (SavePayload $payload): void {

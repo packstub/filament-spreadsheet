@@ -216,3 +216,20 @@ it('reads a dotted name through the relation and never writes it', function () {
         ->and(ComputedColumn::make('category.name')->present($product))->toBe('Tools')
         ->and(save(['changed' => [$product->id => ['category.name' => 'X']]])->errors[$product->id])->toBe(['category.name' => 'This cell cannot be edited.']);
 });
+
+it('takes a width in pixels, rem, em or a percentage, and closures for frozen and sortable', function () {
+    expect(TextColumn::make('name')->width(220)->getWidth())->toBe(220)
+        ->and(TextColumn::make('name')->width('180px')->getWidth())->toBe(180)
+        ->and(TextColumn::make('name')->width('10px')->getWidth())->toBe(40)
+        ->and(TextColumn::make('name')->width(' 14rem ')->getWidth())->toBe('14rem')
+        ->and(TextColumn::make('name')->width('12.5em')->getWidth())->toBe('12.5em')
+        ->and(TextColumn::make('name')->width('20%')->toArray()['width'])->toBe('20%')
+        ->and(TextColumn::make('name')->width(null)->getWidth())->toBeNull()
+        ->and(TextColumn::make('name')->frozen(fn () => true)->toArray()['frozen'])->toBeTrue()
+        ->and(TextColumn::make('name')->frozen(fn () => false)->isFrozen())->toBeFalse()
+        ->and(TextColumn::make('name')->sortable(fn () => false)->isSortable())->toBeFalse()
+        ->and(TextColumn::make('name')->sortable(fn () => true)->isSortable())->toBeTrue();
+
+    expect(fn () => TextColumn::make('name')->width('wide'))->toThrow(InvalidArgumentException::class, 'Column [name]: width [wide]')
+        ->and(fn () => TextColumn::make('name')->width('12vw'))->toThrow(InvalidArgumentException::class);
+});

@@ -258,6 +258,7 @@ export default function packstubSpreadsheet(config) {
             this.canUndo = this.buffer.undo.length > 0
             this.canRedo = this.buffer.redo.length > 0
             this.errorCount = S.errorCount(this.buffer)
+            this.grid?.rowCount(this.total + this.dirty.created)
             this.updateStatus()
             this.fit()
         },

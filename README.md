@@ -34,7 +34,7 @@ An **inline-editable table** for bulk editing Eloquent records in Filament: a sh
 
 | Plugin | Filament | Laravel | PHP |
 | --- | --- | --- | --- |
-| 1.x | 4.13+, 5.x | 12.x, 13.x | 8.3+ |
+| 1.x | 4.13.3+, 5.8.3+ | 12.x, 13.x | 8.3+ |
 
 1.x is built for a desktop browser: keyboard, pointer and clipboard. On a touch screen a sheet can be read, searched, filtered and paged; editing cells by touch is planned.
 
@@ -170,7 +170,8 @@ Read more: [Search, sort, filters, pagination](https://packstub.dev/docs/filamen
 
 ```php
 $spreadsheet
-    ->perPage(200)                       // rows per page (25 to 1,000)
+    ->perPage(200)                       // rows per page (up to `max_per_page`, 1,000)
+    ->perPageOptions([50, 200, 500])     // the sizes the pager offers
     ->searchable(['sku', 'name'])        // what the search box looks in
     ->defaultSort('sku')                 // a header click sorts by any column
     ->creatable()->deletable()           // Add row, paste past the end, mark rows for deletion
@@ -181,7 +182,7 @@ $spreadsheet
     ->key('products');                   // the sheet's name in RowsSaved / RowSaveFailed
 ```
 
-`config/packstub-spreadsheet.php` holds the defaults: rows per page and the maximum, the most rows one Save may carry, the save mode, the version column, whether leaving with unsaved changes asks first, a pinned first column (off by default), where the filters are (a dropdown, the toolbar or a row above the grid), the row height, the keyboard shortcuts, the date formats and the first day of the week in the filters' calendars.
+`config/packstub-spreadsheet.php` holds the defaults: rows per page, the sizes the pager offers and the maximum, the most rows one Save may carry, the save mode, the version column, whether leaving with unsaved changes asks first, a pinned first column (off by default), where the filters are (a dropdown, the toolbar or a row above the grid), the row height, the keyboard shortcuts, the date formats, the first day of the week in the filters' calendars and the decimal mark a typed number is read by.
 
 ![The sheet in dark mode](https://raw.githubusercontent.com/packstub/art/main/filament-spreadsheet/docs/dark.png)
 

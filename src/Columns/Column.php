@@ -21,15 +21,15 @@ abstract class Column
 
     protected string|Closure|null $label = null;
 
-    protected ?int $width = null;
+    protected int|string|null $width = null;
 
-    protected bool $frozen = false;
+    protected bool|Closure $frozen = false;
 
     protected bool|Closure $readOnly = false;
 
     protected bool|Closure $hidden = false;
 
-    protected bool $sortable = true;
+    protected bool|Closure $sortable = true;
 
     /** @var array<int, mixed>|string|Closure */
     protected array|string|Closure $rules = [];
@@ -59,16 +59,32 @@ abstract class Column
         return $this;
     }
 
-    /** Column width in pixels (default: what the content needs, at least 80). */
-    public function width(?int $width): static
+    /**
+     * Column width (default: what the content needs, at least 80): pixels as an
+     * int or `'120px'`, `'12rem'` / `'12em'` (the page's root font size), or a
+     * share of the grid's width (`'20%'`).
+     *
+     * @throws \InvalidArgumentException for any other string
+     */
+    public function width(int|string|null $width): static
     {
-        $this->width = $width === null ? null : max(40, $width);
+        if (is_string($width)) {
+            $width = trim($width);
+
+            if (! preg_match('/^(\d+(?:\.\d+)?)(px|rem|em|%)$/', $width, $m)) {
+                throw new \InvalidArgumentException("Column [{$this->name}]: width [{$width}] is not a number of px, rem, em or %.");
+            }
+
+            $width = $m[2] === 'px' ? (int) round((float) $m[1]) : $m[1].$m[2];
+        }
+
+        $this->width = is_int($width) ? max(40, $width) : $width;
 
         return $this;
     }
 
-    /** Pinned at the start while the sheet scrolls sideways. */
-    public function frozen(bool $condition = true): static
+    /** Pinned at the start while the sheet scrolls sideways: a bool or a closure. */
+    public function frozen(bool|Closure $condition = true): static
     {
         $this->frozen = $condition;
 
@@ -91,8 +107,8 @@ abstract class Column
         return $this;
     }
 
-    /** Whether a header click sorts by this attribute (default yes; a computed column cannot). */
-    public function sortable(bool $condition = true): static
+    /** Whether a header click sorts by this attribute (default yes; a computed column cannot): a bool or a closure. */
+    public function sortable(bool|Closure $condition = true): static
     {
         $this->sortable = $condition;
 
@@ -164,19 +180,20 @@ abstract class Column
         return (string) ($label ?? str($this->name)->beforeLast('_id')->beforeLast('_at')->headline());
     }
 
-    public function getWidth(): ?int
+    /** Pixels as an int, or a string with its unit (`'12rem'`, `'20%'`). */
+    public function getWidth(): int|string|null
     {
         return $this->width;
     }
 
     public function isFrozen(): bool
     {
-        return $this->frozen;
+        return (bool) ($this->frozen instanceof Closure ? app()->call($this->frozen) : $this->frozen);
     }
 
     public function isSortable(): bool
     {
-        return $this->sortable && $this->isEditable();
+        return (bool) ($this->sortable instanceof Closure ? app()->call($this->sortable) : $this->sortable) && $this->isEditable();
     }
 
     /** Whether the column can ever be written (a computed column cannot, nor a dotted path through a relation). */
@@ -191,12 +208,17 @@ abstract class Column
         return $this->readOnly === true;
     }
 
-    /** Whether the read-only decision depends on the record. */
+    /**
+     * Whether the read-only decision depends on the record.
+     *
+     * @internal called by the definition; its shape may change in a minor
+     */
     public function hasRecordReadOnly(): bool
     {
         return $this->readOnly instanceof Closure;
     }
 
+    /** @internal called by the definition; its shape may change in a minor */
     public function isReadOnlyFor(Model $record): bool
     {
         if (! $this->isEditable()) {
@@ -216,7 +238,11 @@ abstract class Column
         return $this->default instanceof Closure ? app()->call($this->default) : $this->default;
     }
 
-    /** The value on the wire for a record (after casts and accessors); a dotted name reads through the relation. */
+    /**
+     * The value on the wire for a record (after casts and accessors); a dotted name reads through the relation.
+     *
+     * @internal called by the definition; its shape may change in a minor
+     */
     public function present(Model $record): mixed
     {
         return $this->presentValue(str_contains($this->name, '.') ? data_get($record, $this->name) : $record->getAttribute($this->name));
@@ -331,7 +357,7 @@ abstract class Column
             'label' => $this->getLabel(),
             'type' => $this->getType(),
             'width' => $this->width,
-            'frozen' => $this->frozen,
+            'frozen' => $this->isFrozen(),
             'editable' => $this->isEditable(),
             'readOnly' => $this->isReadOnly(),
             'sortable' => $this->isSortable(),

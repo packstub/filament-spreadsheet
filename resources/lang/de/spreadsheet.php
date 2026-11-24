@@ -25,6 +25,7 @@ return [
     'deleted_rows' => '{1} :count Zeile zu löschen|[2,*] :count Zeilen zu löschen',
     'read_only_badge' => 'Nur lesen',
     'empty' => 'Nichts anzuzeigen',
+    'grid_label' => 'Tabelle',
     'row_menu' => 'Zeilenaktionen',
     'delete_row' => 'Zeile löschen',
     'restore_row' => 'Zeile behalten',

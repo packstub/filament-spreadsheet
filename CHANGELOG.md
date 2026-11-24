@@ -2,10 +2,18 @@
 
 All notable changes to `packstub/filament-spreadsheet` are documented in this file.
 
-## Unreleased
+## 1.0.0 - Unreleased
 
-- Tabulator 6.7.1 in the bundle
-- `composer.json`'s homepage points at the package's page on packstub.dev
+The first stable release. The public API (the `Spreadsheet` definition, the columns, `Filter`, the events, the config keys and the pages) now follows semantic versioning; methods marked `@internal` are not part of it.
+
+- `creatable()`, `deletable()` and a column's `frozen()` / `sortable()` take a closure, as Filament's options do
+- A column `width()` in `rem`, `em` or `%` as well as pixels
+- Choose the page sizes the pager offers: `perPageOptions()` or the `per_page_options` config key
+- Screen readers hear "row 58 of 240": the grid has a name, a row count and each row's place
+- A date cell no longer takes a five-digit year
+- Tabulator 6.7.1 in the bundle; Filament 4.13.3 and 5.8.3 are the lowest supported versions (the releases before them carry security advisories)
+
+**Upgrading:** from 1.0.0-beta.1, a subclass that overrides `creatable()`, `deletable()`, `frozen()`, `sortable()` or `width()`, or redeclares their properties, must take the wider types (`bool|Closure`; `int|string|null` for `width()`), and Filament must be at least 4.13.3 or 5.8.3.
 
 ## 1.0.0-beta.1 - 2026-10-28
 

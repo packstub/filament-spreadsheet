@@ -4,7 +4,7 @@
 
 - PHP 8.3 or newer
 - Laravel 12 or 13
-- Filament 4.13 or newer, or Filament 5
+- Filament 4.13.3 or newer on the 4.x line, or Filament 5.8.3 or newer
 - A desktop browser for editing (keyboard, pointer, clipboard); on a touch screen 1.x reads, searches, filters and pages a sheet, editing by touch is planned
 
 ## 1. Require the package
@@ -35,7 +35,8 @@ A sheet lives on a page. `SpreadsheetResourcePage` sits next to a resource's lis
 | Key | Default | What it does |
 | --- | --- | --- |
 | `per_page` | `100` | Rows per page a sheet opens with (`perPage()` on a definition wins) |
-| `max_per_page` | `1000` | The most rows the page-size control offers |
+| `per_page_options` | `[25, 50, 100, 200, 500, 1000]` | The sizes the page-size control offers (`perPageOptions()` on a definition wins; sizes above `max_per_page` are left out) |
+| `max_per_page` | `1000` | The most rows a page may hold, whatever the browser asks for |
 | `max_rows_per_save` | `2000` | The most rows (updates + creates + deletes) one Save may carry; a paste past the last row stops creating rows there |
 | `save_mode` | `all_or_nothing` | `all_or_nothing` or `per_row` (see [Saving](saving.md)); any other value throws |
 | `version_column` | `updated_at` | The attribute compared before a row is written; `null` turns the check off |
@@ -46,4 +47,5 @@ A sheet lives on a page. `SpreadsheetResourcePage` sits next to a resource's lis
 | `keybindings` | `[]` | Overrides: `save`, `fill_down`, `undo`, `redo`, `add_row`, `cut` as `mod+s`-style strings (`mod` is Ctrl or ⌘) |
 | `date_format` | `Y-m-d` | PHP format a date cell shows (`format()` on a column wins) |
 | `datetime_format` | `Y-m-d H:i` | PHP format a date-time cell shows |
+| `first_day_of_week` | `1` | The day the filters' calendars start the week on: `1` Monday, `0` Sunday |
 | `decimal_separator` | `null` | The decimal mark a typed or pasted number with one separator is read by (`0,125`): `null` follows `app()->getLocale()`, or `','` / `'.'` |
