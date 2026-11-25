@@ -2,7 +2,7 @@
 
 All notable changes to `packstub/filament-spreadsheet` are documented in this file.
 
-## 1.0.0 - Unreleased
+## 1.0.0 - 2026-11-25
 
 The first stable release. The public API (the `Spreadsheet` definition, the columns, `Filter`, the events, the config keys and the pages) now follows semantic versioning; methods marked `@internal` are not part of it.
 
